@@ -20,6 +20,30 @@ fn validate_username(name: &str) -> bool {
         && name != "root"
 }
 
+fn validate_device_id(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
+}
+
+fn parse_owner_record<'a>(contents: &'a str, device_id: &str) -> io::Result<&'a str> {
+    let mut lines = contents.lines();
+    let username = lines.next().and_then(|line| line.strip_prefix("username="));
+    let recorded_id = lines.next().and_then(|line| line.strip_prefix("device-id="));
+    match (username, recorded_id, lines.next()) {
+        (Some(name), Some(id), None) if validate_username(name) && id == device_id => Ok(name),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Owner record is invalid",
+        )),
+    }
+}
+
 fn verify_linos_host() -> io::Result<()> {
     if rustix::process::geteuid().as_raw() != 0 {
         return Err(io::Error::new(
@@ -47,7 +71,7 @@ fn verify_linos_host() -> io::Result<()> {
 fn read_state(name: &str) -> io::Result<String> {
     let path = Path::new(STATE_DIR).join(name);
     let meta = fs::symlink_metadata(&path)?;
-    if !meta.file_type().is_file() || meta.uid() != 0 {
+    if !meta.file_type().is_file() || meta.uid() != 0 || meta.mode() & 0o077 != 0 {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Unsafe state file",
@@ -71,7 +95,8 @@ fn create_state(name: &str, value: &str) -> io::Result<()> {
         .mode(0o600)
         .open(path)?;
     writeln!(file, "{value}")?;
-    file.sync_all()
+    file.sync_all()?;
+    fs::File::open(STATE_DIR)?.sync_all()
 }
 
 fn commit_provisioned_state() -> io::Result<()> {
@@ -96,7 +121,7 @@ fn commit_provisioned_state() -> io::Result<()> {
     file.write_all(b"provisioned\n")?;
     file.sync_all()?;
     fs::rename(&temporary, path)?;
-    Ok(())
+    fs::File::open(STATE_DIR)?.sync_all()
 }
 
 fn run(command: &str, args: &[&str]) -> io::Result<()> {
@@ -134,7 +159,7 @@ fn prompt_username() -> io::Result<String> {
 fn enroll() -> io::Result<()> {
     verify_linos_host()?;
     let device_id = read_state("device-id")?;
-    if device_id.len() != 36 {
+    if !validate_device_id(&device_id) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "Device identity missing",
@@ -144,12 +169,7 @@ fn enroll() -> io::Result<()> {
     let owner_path = Path::new(STATE_DIR).join("owner");
     if owner_path.exists() {
         let owner = read_state("owner")?;
-        if !owner.starts_with("username=") || !owner.contains(&format!("device-id={device_id}")) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Owner record is invalid",
-            ));
-        }
+        let _username = parse_owner_record(&owner, &device_id)?;
         commit_provisioned_state()?;
         let pending = Path::new(STATE_DIR).join("pending-owner");
         if pending.exists() {
@@ -236,5 +256,28 @@ mod tests {
             assert!(!validate_username(value));
         }
         assert!(!validate_username(&"a".repeat(33)));
+    }
+
+    #[test]
+    fn rejects_invalid_device_identifiers() {
+        assert!(validate_device_id("4b879a42-536a-4d36-a815-4dd87c21fd01"));
+        assert!(!validate_device_id("invalid-device-identifier"));
+        assert!(!validate_device_id("4b879a42_536a-4d36-a815-4dd87c21fd01"));
+    }
+
+    #[test]
+    fn validates_exact_owner_record_and_device_binding() {
+        let id = "4b879a42-536a-4d36-a815-4dd87c21fd01";
+        let record = format!("username=niina\ndevice-id={id}");
+        assert_eq!(parse_owner_record(&record, id).unwrap(), "niina");
+        for invalid in [
+            format!("username=root\ndevice-id={id}"),
+            format!("username=niina\ndevice-id=wrong-{id}"),
+            format!("username=niina\ndevice-id={id}\nextra=true"),
+            format!("prefix=username=niina\ndevice-id={id}"),
+            format!("username=niina\nwrong=device-id={id}"),
+        ] {
+            assert!(parse_owner_record(&invalid, id).is_err());
+        }
     }
 }
