@@ -59,7 +59,7 @@ fi
 STAGING_DIR="$(mktemp -d /tmp/linos-image.XXXXXXXX)"
 STAGED_PACKAGE="$STAGING_DIR/$(basename "$PACKAGE")"
 STAGED_ISSUE="$STAGING_DIR/issue"
-trap 'rm -f -- "$STAGED_PACKAGE" "$STAGED_ISSUE"; rmdir -- "$STAGING_DIR"' EXIT
+trap 'rm -f -- "$STAGED_PACKAGE" "$STAGED_ISSUE" "$STAGING_DIR/debian-keyring.gpg"; rmdir -- "$STAGING_DIR"' EXIT
 chmod 755 "$STAGING_DIR"
 install -m 644 "$PACKAGE" "$STAGED_PACKAGE"
 install -m 644 system/base/identity/issue "$STAGED_ISSUE"
@@ -79,7 +79,8 @@ if [[ -n "${LINOS_KEYRING:-}" ]]; then
         echo "Configured Debian archive keyring is not readable: $LINOS_KEYRING" >&2
         exit 1
     fi
-    KEYRING_ARGS+=(--keyring="$LINOS_KEYRING")
+    install -m 644 "$LINOS_KEYRING" "$STAGING_DIR/debian-keyring.gpg"
+    KEYRING_ARGS+=(--keyring="$STAGING_DIR/debian-keyring.gpg")
 fi
 
 mmdebstrap \
