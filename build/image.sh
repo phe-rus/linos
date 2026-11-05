@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Debian admin utilities may be absent from an unprivileged user PATH.
+export PATH="/usr/sbin:/sbin:$PATH"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -8,7 +11,7 @@ ARCH="${LINOS_ARCH:-$(dpkg --print-architecture)}"
 SUITE="${LINOS_SUITE:-trixie}"
 
 RELEASE_FILE="packages/release/usr/lib/linos/release"
-PACKAGE="packages/dist/linos-release_1.0.0_all.deb"
+PACKAGE="$(./build/package.sh --print-path)"
 
 BUILD_ID="$(
     sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE_FILE"
@@ -26,8 +29,8 @@ fi
 
 PACKAGE_VERSION="$(dpkg-deb -f "$PACKAGE" Version)"
 
-if [[ "$PACKAGE_VERSION" != "1.0.0" ]]; then
-    echo "Unexpected release package version: $PACKAGE_VERSION"
+if [[ "$PACKAGE_VERSION" != "$(awk '/^Version:/ { print $2 }' packages/release/DEBIAN/control)" ]]; then
+    echo "Release package version does not match control metadata: $PACKAGE_VERSION"
     exit 1
 fi
 

@@ -66,7 +66,7 @@ Create the package output directory before packaging:
 
 ```bash
 mkdir -p packages/dist
-dpkg-deb --root-owner-group --build packages/release packages/dist/linos-release_1.0.0_all.deb
+./build/package.sh
 ./build/image.sh
 ```
 
@@ -105,7 +105,7 @@ These commands run inside the Debian container. The AMD64 image uses Debian's ke
 sudo apt update
 sudo apt install mmdebstrap dpkg-dev e2fsprogs qemu-system-x86 qemu-utils ca-certificates
 mkdir -p packages/dist
-dpkg-deb --root-owner-group --build packages/release packages/dist/linos-release_1.0.0_all.deb
+./build/package.sh
 ./build/image.sh
 ./build/smoke.sh amd64
 ```

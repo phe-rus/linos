@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+export PATH="/usr/sbin:/sbin:$PATH"
+
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -30,6 +32,12 @@ for path in "$KERNEL" "$INITRAMFS" "$DISK"; do
         exit 2
     fi
 done
+
+if ! dumpe2fs -h "$DISK" >/dev/null 2>&1; then
+    echo "Disk image is not a formatted ext filesystem: $DISK" >&2
+    echo "Complete ./build/image.sh before running the smoke test." >&2
+    exit 2
+fi
 
 if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
