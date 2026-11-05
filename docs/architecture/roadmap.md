@@ -32,7 +32,7 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 
 - [ ] Encode dependency versions and build inputs in a reproducible recipe.
 - [ ] Run and verify the new local QEMU boot smoke script on ARM64 and AMD64, then add CI automation.
-- [ ] Build and boot an AMD64 QEMU image on the ChromeOS Debian 13 development host; retain architecture autodetection.
+- [x] Build and boot an AMD64 QEMU image on the ChromeOS Debian 13 development host; retain architecture autodetection.
 - [ ] Distinguish system package architecture from SoC-specific firmware and device trees.
 - [ ] Add explicit hardware support manifests for real boards, including RK3588.
 - [ ] Create an installer that discovers storage and asks for confirmation before formatting.

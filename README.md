@@ -28,7 +28,7 @@ Canonical release metadata is in `packages/release/usr/lib/linos/release`. The c
 - Rust `detect` executable reports host architecture, kernel, model, firmware, CPU count and RAM.
 - `mmdebstrap` assembles a minimal Debian 13-based root filesystem and installs a Linos release package.
 - The image builder extracts the selected Debian kernel and initramfs and assembles a 3 GiB ext4 image.
-- ARM64 QEMU boot has reached `multi-user.target`, started systemd services and shown a serial login prompt.
+- ARM64 and AMD64 QEMU boots have reached `multi-user.target`, started systemd services and shown a serial login prompt. The AMD64 boot was verified on a Debian 13 ChromeOS Linux development host.
 - Rust `init` creates an independent, persistent hostname in a specified *offline* root directory. It rejects `/`, preserves existing values, records an `unclaimed` provisioning state and tests restart recovery.
 - Thirteen offline initialization tests are defined (pending verification of the latest changes on the development host). Code has passed Cargo formatting and Clippy checks.
 

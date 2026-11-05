@@ -42,12 +42,12 @@ fi
 if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
         qemu-system-x86_64
-        -machine q35 -cpu max -smp 2 -m 2048
-        -display none -serial stdio -monitor none
+        -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048
+        -nographic -no-reboot -monitor none
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-pci,drive=rootfs
-        -append "root=/dev/vda rootwait rw console=ttyS0 systemd.unit=multi-user.target"
+        -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 systemd.unit=multi-user.target"
     )
 else
     COMMAND=(
@@ -68,7 +68,7 @@ timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >
 STATUS=$?
 set -e
 
-if grep -Eq '(^|[[:space:]])login:[[:space:]]*$' "$LOG"; then
+if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG"; then
     echo "PASS: serial login prompt observed"
     exit 0
 fi
