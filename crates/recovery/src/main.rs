@@ -1,6 +1,6 @@
 mod layout;
-mod planner;
 mod payload;
+mod planner;
 
 use std::{
     fs,
@@ -133,7 +133,9 @@ fn run(args: &[String]) -> io::Result<()> {
     match args {
         [] => interactive(),
         [flag] if flag == "--help" || flag == "-h" => {
-            println!("Usage: linos-recovery [status|disks|profile|payload|plan /dev/DEVICE|--help]");
+            println!(
+                "Usage: linos-recovery [status|disks|profile|payload|plan /dev/DEVICE|--help]"
+            );
             println!("Linos Server recovery console. All commands are read-only.");
             Ok(())
         }

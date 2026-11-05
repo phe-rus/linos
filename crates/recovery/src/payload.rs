@@ -75,7 +75,10 @@ pub fn verify() -> io::Result<()> {
     println!("Linos Server offline payload");
     println!("  Edition: server");
     println!("  Architecture: amd64");
-    println!("  Build: {}", value(&manifest, "build").unwrap_or("unknown"));
+    println!(
+        "  Build: {}",
+        value(&manifest, "build").unwrap_or("unknown")
+    );
     println!("  Checksums: valid");
     println!("  Authenticity: NOT VERIFIED (development payload is unsigned)");
     println!("  Installation: DISABLED");
@@ -97,11 +100,12 @@ mod tests {
     #[test]
     fn checksum_list_does_not_allow_extra_paths() {
         let hash = "a".repeat(64);
-        let checksums = format!(
-            "{hash}  rootfs.tar.gz\n{hash}  kernel\n{hash}  initramfs\n{hash}  manifest\n"
-        );
+        let checksums =
+            format!("{hash}  rootfs.tar.gz\n{hash}  kernel\n{hash}  initramfs\n{hash}  manifest\n");
         assert!(expected_checksums(&checksums));
-        assert!(!expected_checksums(&checksums.replace("kernel", "../secret")));
+        assert!(!expected_checksums(
+            &checksums.replace("kernel", "../secret")
+        ));
     }
 
     #[test]
