@@ -1,5 +1,7 @@
 # Linos
 
+![Linos baby penguin mascot](assets/brand/linos-230.png)
+
 **Linos 13** is an experimental Linux-based operating system developed by Pherus. Its goal is an independently designed, coherent experience for servers and personal devices. Apple's approach to integration, consistency and user experience is an influence, alongside other ideas, but Linos will define its own interfaces, system services, security model and behavior.
 
 The first bootstrap uses the Linux kernel, Debian 13 repositories, packages and `apt` to move quickly. This is a **temporary foundation**, not an intention to remain a Debian rebrand. Linos will progressively own its build, base-system packages, policies, services, release lifecycle and eventual package/distribution strategy while preserving intentional Linux application compatibility. The first target is a headless server image; a graphical environment comes later.
@@ -53,6 +55,18 @@ images/                   Generated output, ignored by Git
 ```
 
 ## Development
+
+### Continuous integration
+
+GitHub Actions runs Rust formatting, Clippy, unit tests, package creation, image construction and an isolated QEMU serial boot test on both AMD64 and ARM64. The workflow runs on pushes to `main`, pull requests and manual dispatch. It uses standard GitHub-hosted Ubuntu runners, never boots or formats the runner's host disk, and uploads only diagnostic logs on failure (not multi-gigabyte images).
+
+The ARM64 job is a separate validation target: a green virtual-machine boot does not prove Rockchip RK3588 / Orange Pi firmware or device-tree support. Interactive owner enrollment also requires its own persistent-console test; the unattended smoke test explicitly masks that service.
+
+Workflow: [Linos CI](.github/workflows/ci.yml). Progress: [Development roadmap](docs/architecture/roadmap.md) and [GitHub issues](https://github.com/phe-rus/linos/issues).
+
+### Brand assets
+
+The official baby penguin mascot is stored as transparent PNG masters at `assets/brand/linos-512.png` and `assets/brand/linos-230.png`. The two uploaded 512px variants were byte-identical, so the repository retains one copy. Smaller favicon/tray/app-icon treatments should preserve the mascot's identity and be reviewed at their actual display sizes.
 
 The current build process runs on a Debian 13 development host. Install appropriate versions of Rust, `mmdebstrap`, `dpkg-deb`, `e2fsprogs` and QEMU for your host.
 

@@ -31,7 +31,8 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 ## Milestone 2: reproducible builds and supported targets
 
 - [ ] Encode dependency versions and build inputs in a reproducible recipe.
-- [ ] Run and verify the new local QEMU boot smoke script on ARM64 and AMD64, then add CI automation.
+- [x] Add an AMD64/ARM64 GitHub Actions matrix for Rust checks, package builds, disk images and QEMU smoke testing.
+- [ ] Confirm green CI boots on both architectures and investigate any ARM64-specific failures.
 - [x] Build and boot an AMD64 QEMU image on the ChromeOS Debian 13 development host; retain architecture autodetection.
 - [ ] Distinguish system package architecture from SoC-specific firmware and device trees.
 - [ ] Add explicit hardware support manifests for real boards, including RK3588.

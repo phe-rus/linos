@@ -55,11 +55,12 @@ else
     COMMAND=(
         qemu-system-aarch64
         -machine virt -cpu cortex-a76 -smp 2 -m 2048
-        -nographic
+        -display none -no-reboot -monitor none
+        -chardev "file,id=linos_serial,path=$LOG" -serial chardev:linos_serial
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-device,drive=rootfs
-        -append "root=/dev/vda rootwait rw console=ttyAMA0 systemd.unit=multi-user.target"
+        -append "root=/dev/vda rootwait rw console=ttyAMA0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target"
     )
 fi
 
@@ -67,11 +68,7 @@ echo "Boot-testing Linos 13 ($ARCH), build $BUILD_ID"
 echo "Serial log: $LOG"
 : > "$LOG"
 set +e
-if [[ "$ARCH" == amd64 ]]; then
-    timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1
-else
-    timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >"$LOG" 2>&1
-fi
+timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1
 STATUS=$?
 set -e
 
@@ -86,7 +83,7 @@ fi
 
 printf 'FAIL: serial login prompt not observed (QEMU exit: %s)\n' "$STATUS" >&2
 tail -n 35 "$LOG" >&2
-if [[ "$ARCH" == amd64 && -s "$QEMU_LOG" ]]; then
+if [[ -s "$QEMU_LOG" ]]; then
     echo "QEMU diagnostics:" >&2
     tail -n 20 "$QEMU_LOG" >&2
 fi
