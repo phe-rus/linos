@@ -7,6 +7,10 @@ DIR="images/recovery/builds/amd64/$BUILD_ID"
 DISK="$DIR/disk-uefi.raw"
 LOG="$DIR/recovery-smoke.log"
 [[ -s "$DISK" ]] || { echo "Missing recovery UEFI image" >&2; exit 2; }
+if ! debugfs -R "cat /usr/lib/linos/hardware-profile" "$DIR/disk.ext4" 2>/dev/null | grep -qx "edition=server"; then
+    echo "Recovery hardware profile is missing or has the wrong edition" >&2
+    exit 1
+fi
 
 CODE=""
 VARS=""

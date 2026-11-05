@@ -100,12 +100,6 @@ jobs:
           ./build/uefi.sh amd64
           ./build/uefi-smoke.sh
 
-      - name: Build and boot independent Server Recovery image
-        if: matrix.arch == 'amd64'
-        run: |
-          ./build/recovery-image.sh amd64
-          ./build/recovery-smoke.sh
-
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -120,5 +114,66 @@ jobs:
             images/server/builds/**/enrollment-*.log
             images/server/builds/**/uefi-*.log
             images/recovery/builds/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  recovery-uefi:
+    name: amd64 · Recovery image, OVMF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Check recovery crate
+        run: |
+          cargo +stable fmt --all -- --check
+          cargo +stable clippy -p recovery --all-targets --locked -- -D warnings
+          cargo +stable test -p recovery --locked
+
+      - name: Install recovery-build dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl fakeroot \
+            gdisk dosfstools mtools systemd-boot-efi ovmf qemu-system-x86
+
+      - name: Install verified Debian 13 archive keys
+        run: |
+          keydir="$RUNNER_TEMP/linos-debian-keys"
+          mkdir -p "$keydir"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13.asc \
+            --output "$keydir/archive.asc"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13-security.asc \
+            --output "$keydir/security.asc"
+          (
+            cd "$keydir"
+            printf '%s\n' \
+              '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
+              '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
+              | sha256sum --check
+          )
+          gpg --batch --dearmor --output "$keydir/archive.gpg" "$keydir/archive.asc"
+          gpg --batch --dearmor --output "$keydir/security.gpg" "$keydir/security.asc"
+          cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
+          echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
+
+      - name: Build independent recovery image
+        run: ./build/recovery-image.sh amd64
+
+      - name: Boot Recovery through OVMF
+        run: ./build/recovery-smoke.sh
+
+      - name: Upload recovery diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: recovery-boot-logs
+          path: images/recovery/builds/**/*.log
           if-no-files-found: ignore
           retention-days: 7

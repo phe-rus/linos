@@ -20,6 +20,7 @@ cargo build --release -p recovery
 install -m 755 target/release/recovery "$WORK/linos-recovery"
 install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.service"
 install -m 644 packages/release/usr/lib/linos/release "$WORK/release"
+install -m 644 hardware/profiles/amd64-uefi-server.conf "$WORK/hardware-profile"
 
 KEYRING_ARGS=()
 if [[ -n "${LINOS_KEYRING:-}" ]]; then
@@ -37,6 +38,7 @@ mmdebstrap \
     --customize-hook='mkdir -p "$1/usr/lib/linos" "$1/etc/systemd/system/multi-user.target.wants"' \
     --customize-hook="copy-in $WORK/linos-recovery /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/release /usr/lib/linos/" \
+    --customize-hook="copy-in $WORK/hardware-profile /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/linos-recovery.service /usr/lib/systemd/system/" \
     --customize-hook='ln -s /usr/lib/systemd/system/linos-recovery.service "$1/etc/systemd/system/multi-user.target.wants/linos-recovery.service"' \
     trixie "$ROOT/$OUT/rootfs.tar"

@@ -57,3 +57,19 @@ Passwords, passcodes and passkeys have distinct meanings and identifiers.
 - [ ] Add Rust storage inspection and installation plans, still without write permissions.
 - [ ] Add an explicitly authorized disk-writing installer with rollback/recovery rules.
 - [ ] Build Desktop Recovery GUI atop the shared domain API.
+
+## Versioned development hardware profiles
+
+The source manifests under `hardware/profiles/` specify edition, architecture,
+boot mechanism, recovery interface, and hardware identity. They distinguish
+a QEMU-validated configuration from physical hardware pending validation.
+
+Linos Server Recovery embeds `hardware-profile` and provides:
+
+- `linos-recovery profile`: inspect the embedded image profile;
+- `linos-recovery plan /dev/vda`: inspect device capacity and flags, then
+  **block installation** until boot-media identification, safe target checks,
+  and partition planning are implemented.
+
+These manifests are not yet cryptographically signed or enforced for physical
+installation. This is a read-only development-stage contract.
