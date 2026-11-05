@@ -103,4 +103,4 @@ Linos aims for automatic hardware-aware setup across supported ARM64 and AMD64 m
 
 See [Architecture](docs/architecture/overview.md) and [Roadmap](docs/architecture/roadmap.md).
 
-Project: [phe-rus/Linos13](https://github.com/phe-rus/Linos13) · Contact: <pherus@pherus.org>
+Project: [phe-rus/linos](https://github.com/phe-rus/linos) · Contact: <pherus@pherus.org>

@@ -1,5 +1,5 @@
-NAME="Linos"
-PRETTY_NAME="Linos 13 (Marauder)"
+NAME="linos"
+PRETTY_NAME="Linos 13"
 ID=linos
 ID_LIKE=debian
 VERSION_ID="13"
