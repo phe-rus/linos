@@ -67,11 +67,23 @@ fi
 echo "Boot-testing Linos 13 ($ARCH), build $BUILD_ID"
 echo "Serial log: $LOG"
 : > "$LOG"
-set +e
-timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1
-STATUS=$?
-set -e
-
+# Stop QEMU once we observe both boot signals, retaining the 180-second guard.
+timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1 &
+QEMU_PID=$!
+STATUS=0
+while kill -0 "$QEMU_PID" 2>/dev/null; do
+    if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" &&
+       grep -q "Provisioning state: unclaimed" "$LOG"; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        break
+    fi
+    sleep 2
+done
+if wait "$QEMU_PID"; then
+    STATUS=0
+else
+    STATUS=$?
+fi
 if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG"; then
     if ! grep -q "Provisioning state: unclaimed" "$LOG"; then
         echo "FAIL: login observed but Linos device initialization was not confirmed" >&2
