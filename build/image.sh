@@ -125,7 +125,7 @@ truncate -s 3G "$DISK"
 
 ROOTFS_STAGE="$STAGING_DIR/rootfs"
 mkdir -p "$ROOTFS_STAGE"
-tar -xf "$ROOTFS" -C "$ROOTFS_STAGE"
+tar --exclude="./dev/*" -xf "$ROOTFS" -C "$ROOTFS_STAGE"
 
 mkfs.ext4 \
     -F \
