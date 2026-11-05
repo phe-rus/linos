@@ -174,7 +174,9 @@ fn ensure_home(username: &str) -> io::Result<()> {
                 .ok_or_else(|| io::Error::other("Invalid home path"))?;
             run(
                 "/usr/bin/install",
-                &["-d", "-m", "0700", "-o", username, "-g", username, home_path],
+                &[
+                    "-d", "-m", "0700", "-o", username, "-g", username, home_path,
+                ],
             )?;
         }
         Err(error) => return Err(error),
