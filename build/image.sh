@@ -59,7 +59,7 @@ fi
 STAGING_DIR="$(mktemp -d /tmp/linos-image.XXXXXXXX)"
 STAGED_PACKAGE="$STAGING_DIR/$(basename "$PACKAGE")"
 STAGED_ISSUE="$STAGING_DIR/issue"
-trap 'rm -f -- "$STAGED_PACKAGE" "$STAGED_ISSUE" "$STAGING_DIR/debian-keyring.gpg"; rmdir -- "$STAGING_DIR"' EXIT
+trap 'rm -r -- "$STAGING_DIR"' EXIT
 chmod 755 "$STAGING_DIR"
 install -m 644 "$PACKAGE" "$STAGED_PACKAGE"
 install -m 644 system/base/identity/issue "$STAGED_ISSUE"
@@ -123,11 +123,15 @@ tar -xOf "$ROOTFS" \
 
 truncate -s 3G "$DISK"
 
+ROOTFS_STAGE="$STAGING_DIR/rootfs"
+mkdir -p "$ROOTFS_STAGE"
+tar -xf "$ROOTFS" -C "$ROOTFS_STAGE"
+
 mkfs.ext4 \
     -F \
     -q \
     -L linos-root \
-    -d "$ROOTFS" \
+    -d "$ROOTFS_STAGE" \
     "$DISK"
 
 echo
