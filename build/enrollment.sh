@@ -97,6 +97,11 @@ owner="$(read_guest_file /var/lib/linos/owner)"
 [[ "$(read_guest_file /var/lib/linos/provisioning-state)" == provisioned ]] || {
     echo "Provisioned state was not committed" >&2; exit 1;
 }
+home_metadata="$(debugfs -R 'stat /home/linosadmin' "$TEST_DISK" 2>"$TEST_DIR/home-debugfs.log")"
+if ! grep -q 'Type: directory' <<<"$home_metadata"; then
+    echo "Administrator home directory was not recovered" >&2
+    exit 1
+fi
 shadow="$(read_guest_file /etc/shadow)"
 hash="$(printf '%s\n' "$shadow" | awk -F: '$1 == "linosadmin" {print $2}')"
 [[ -n "$hash" && "$hash" != '!'* && "$hash" != '*'* ]] || {

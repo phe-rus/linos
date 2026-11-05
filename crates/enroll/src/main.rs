@@ -143,6 +143,64 @@ fn account_exists(username: &str) -> io::Result<bool> {
     Ok(result.status.success())
 }
 
+fn ensure_home(username: &str) -> io::Result<()> {
+    let parent = Path::new("/home");
+    if !parent.exists() {
+        fs::create_dir(parent)?;
+    }
+    let parent_meta = fs::symlink_metadata(parent)?;
+    if !parent_meta.file_type().is_dir()
+        || parent_meta.uid() != 0
+        || parent_meta.mode() & 0o022 != 0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Unsafe administrator home parent",
+        ));
+    }
+
+    let home = parent.join(username);
+    match fs::symlink_metadata(&home) {
+        Ok(meta) if !meta.file_type().is_dir() => {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Unsafe administrator home",
+            ));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let home_path = home
+                .to_str()
+                .ok_or_else(|| io::Error::other("Invalid home path"))?;
+            run(
+                "/usr/bin/install",
+                &["-d", "-m", "0700", "-o", username, "-g", username, home_path],
+            )?;
+        }
+        Err(error) => return Err(error),
+    }
+
+    let id = Command::new("/usr/bin/id")
+        .args(["-u", username])
+        .output()?;
+    if !id.status.success() {
+        return Err(io::Error::other("Administrator account is missing"));
+    }
+    let expected_uid = String::from_utf8_lossy(&id.stdout)
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| io::Error::other("Invalid administrator UID"))?;
+    let home_meta = fs::symlink_metadata(&home)?;
+    if !home_meta.file_type().is_dir() || home_meta.uid() != expected_uid {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Administrator home ownership is invalid",
+        ));
+    }
+    fs::File::open(&home)?.sync_all()?;
+    fs::File::open(parent)?.sync_all()
+}
+
 fn prompt_username() -> io::Result<String> {
     print!("Administrator username: ");
     io::stdout().flush()?;
@@ -221,6 +279,8 @@ fn enroll() -> io::Result<()> {
             &["-m", "-U", "-s", "/bin/bash", "-G", "sudo", &username],
         )?;
     }
+
+    ensure_home(&username)?;
 
     println!("Choose a strong password for {username}.");
     run("/usr/bin/passwd", &[&username])?;
