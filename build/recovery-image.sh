@@ -50,10 +50,28 @@ if [[ -n "${LINOS_INSTALL_PAYLOAD_DIR:-}" ]]; then
     for name in rootfs.tar.gz kernel initramfs manifest SHA256SUMS; do
         install -m 644 "$PAYLOAD_SOURCE/$name" "$WORK/payload/$name"
     done
+    if [[ -n "${LINOS_TRUSTED_PAYLOAD_KEY:-}" ]]; then
+        [[ -s "$LINOS_TRUSTED_PAYLOAD_KEY" && -s "$PAYLOAD_SOURCE/SHA256SUMS.sig" ]] || {
+            echo "Signed installer media requires both a trusted public key and signature" >&2
+            exit 2
+        }
+        command -v openssl >/dev/null || { echo "openssl is required for signed installer media" >&2; exit 2; }
+        openssl pkeyutl -verify -rawin -pubin -inkey "$LINOS_TRUSTED_PAYLOAD_KEY" \
+            -in "$PAYLOAD_SOURCE/SHA256SUMS" -sigfile "$PAYLOAD_SOURCE/SHA256SUMS.sig"
+        install -m 644 "$LINOS_TRUSTED_PAYLOAD_KEY" "$WORK/payload/signing-public.pem"
+        install -m 644 "$PAYLOAD_SOURCE/SHA256SUMS.sig" "$WORK/payload/SHA256SUMS.sig"
+    elif [[ -e "$PAYLOAD_SOURCE/SHA256SUMS.sig" ]]; then
+        echo "Refusing signed payload without independently supplied trusted public key" >&2
+        exit 2
+    fi
     PAYLOAD_HOOKS+=(--customize-hook='mkdir -p "$1/usr/share/linos/install"')
     for name in rootfs.tar.gz kernel initramfs manifest SHA256SUMS; do
         PAYLOAD_HOOKS+=(--customize-hook="copy-in $WORK/payload/$name /usr/share/linos/install/")
     done
+    if [[ -n "${LINOS_TRUSTED_PAYLOAD_KEY:-}" ]]; then
+        PAYLOAD_HOOKS+=(--customize-hook="copy-in $WORK/payload/signing-public.pem /usr/share/linos/install/")
+        PAYLOAD_HOOKS+=(--customize-hook="copy-in $WORK/payload/SHA256SUMS.sig /usr/share/linos/install/")
+    fi
 fi
 
 echo "Building independent Linos Server Recovery root filesystem ($ARCH)"
@@ -61,7 +79,7 @@ mmdebstrap \
     "${KEYRING_ARGS[@]}" \
     --variant=minbase \
     --architectures="$ARCH" \
-    --include=systemd-sysv,dbus,udev,iproute2,procps,ca-certificates,initramfs-tools,e2fsprogs,linux-image-amd64 \
+    --include=systemd-sysv,dbus,udev,iproute2,procps,ca-certificates,initramfs-tools,e2fsprogs,linux-image-amd64,openssl \
     --customize-hook='mkdir -p "$1/usr/lib/linos" "$1/etc/systemd/system/multi-user.target.wants"' \
     --customize-hook="copy-in $WORK/linos-recovery /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/release /usr/lib/linos/" \

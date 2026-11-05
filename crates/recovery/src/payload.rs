@@ -26,6 +26,40 @@ fn valid_manifest(manifest: &str) -> bool {
         })
 }
 
+fn signature_status(path: &Path) -> io::Result<&'static str> {
+    let key = path.join("signing-public.pem");
+    let signature = path.join("SHA256SUMS.sig");
+    if !key.exists() && !signature.exists() {
+        return Ok("NOT VERIFIED (development payload is unsigned)");
+    }
+    if !key.is_file() || !signature.is_file() {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "Incomplete offline payload signature or trusted key",
+        ));
+    }
+    if fs::metadata(&signature)?.len() != 64 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "Offline payload Ed25519 signature has invalid length",
+        ));
+    }
+    let status = Command::new("/usr/bin/openssl")
+        .args(["pkeyutl", "-verify", "-rawin", "-pubin", "-inkey"])
+        .arg(&key)
+        .args(["-in", "SHA256SUMS", "-sigfile"])
+        .arg(&signature)
+        .current_dir(path)
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "Offline payload signature verification failed",
+        ));
+    }
+    Ok("VERIFIED (Ed25519 signed checksum manifest)")
+}
+
 fn expected_checksums(contents: &str) -> bool {
     const EXPECTED: [&str; 4] = ["rootfs.tar.gz", "kernel", "initramfs", "manifest"];
     let lines: Vec<_> = contents.lines().collect();
@@ -72,6 +106,8 @@ pub fn verify() -> io::Result<()> {
         ));
     }
 
+    let authenticity = signature_status(path)?;
+
     println!("Linos Server offline payload");
     println!("  Edition: server");
     println!("  Architecture: amd64");
@@ -80,7 +116,7 @@ pub fn verify() -> io::Result<()> {
         value(&manifest, "build").unwrap_or("unknown")
     );
     println!("  Checksums: valid");
-    println!("  Authenticity: NOT VERIFIED (development payload is unsigned)");
+    println!("  Authenticity: {authenticity}");
     println!("  Installation: DISABLED");
     Ok(())
 }

@@ -242,13 +242,30 @@ jobs:
           ./build/image.sh
           ./build/payload.sh amd64
 
+      - name: Sign payload with disposable CI-only Ed25519 key
+        run: |
+          openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/linos-ci-test-private.pem"
+          openssl pkey -in "$RUNNER_TEMP/linos-ci-test-private.pem" -pubout \
+            -out "$RUNNER_TEMP/linos-ci-test-public.pem"
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+          payload="images/install/payloads/amd64/$build_id"
+          LINOS_PAYLOAD_SIGNING_KEY="$RUNNER_TEMP/linos-ci-test-private.pem" \
+            ./build/sign-payload.sh "$payload"
+          openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/linos-ci-test-public.pem" \
+            -in "$payload/SHA256SUMS" -sigfile "$payload/SHA256SUMS.sig"
+          echo "LINOS_TRUSTED_PAYLOAD_KEY=$RUNNER_TEMP/linos-ci-test-public.pem" >> "$GITHUB_ENV"
+
       - name: Embed offline payload into independent Recovery
         run: |
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
           LINOS_INSTALL_PAYLOAD_DIR="images/install/payloads/amd64/$build_id" ./build/recovery-image.sh amd64
-          debugfs -R 'cat /usr/share/linos/install/manifest' \
-            "images/recovery/builds/amd64/$build_id/disk.ext4" 2>/dev/null \
+          disk="images/recovery/builds/amd64/$build_id/disk.ext4"
+          debugfs -R 'cat /usr/share/linos/install/manifest' "$disk" 2>/dev/null \
             | grep -qx 'edition=server'
+          debugfs -R 'stat /usr/share/linos/install/SHA256SUMS.sig' "$disk" 2>/dev/null \
+            | grep -q 'Size: 64'
+          debugfs -R 'cat /usr/share/linos/install/signing-public.pem' "$disk" 2>/dev/null \
+            | grep -q 'BEGIN PUBLIC KEY'
 
       - name: Boot recovery media with offline payload
         run: ./build/recovery-smoke.sh
