@@ -452,7 +452,11 @@ mod tests {
     fn preserves_provisioned_state() {
         let root = test_root();
         fs::create_dir_all(root.join("var/lib/linos")).unwrap();
-        fs::write(root.join("var/lib/linos/provisioning-state"), "provisioned\n").unwrap();
+        fs::write(
+            root.join("var/lib/linos/provisioning-state"),
+            "provisioned\n",
+        )
+        .unwrap();
         let device = initialize(&root).expect("provisioned identity is valid");
         assert_eq!(device.state, "provisioned");
         cleanup(root);
