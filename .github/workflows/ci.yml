@@ -210,7 +210,7 @@ jobs:
       - name: Install build, GPT, and firmware dependencies
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl fakeroot \
             gdisk dosfstools mtools systemd-boot-efi ovmf qemu-system-x86
 
@@ -253,6 +253,14 @@ jobs:
             ./build/sign-payload.sh "$payload"
           openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/linos-ci-test-public.pem" \
             -in "$payload/SHA256SUMS" -sigfile "$payload/SHA256SUMS.sig"
+          # A one-byte mutation must be rejected without touching the original payload.
+          cp "$payload/SHA256SUMS" "$RUNNER_TEMP/tampered-sums"
+          printf 'x' >> "$RUNNER_TEMP/tampered-sums"
+          if openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/linos-ci-test-public.pem" \
+            -in "$RUNNER_TEMP/tampered-sums" -sigfile "$payload/SHA256SUMS.sig"; then
+            echo "ERROR: altered payload signature unexpectedly verified" >&2
+            exit 1
+          fi
           echo "LINOS_TRUSTED_PAYLOAD_KEY=$RUNNER_TEMP/linos-ci-test-public.pem" >> "$GITHUB_ENV"
 
       - name: Embed offline payload into independent Recovery
