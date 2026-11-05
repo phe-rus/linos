@@ -2,7 +2,7 @@
 
 # Interactive serial-console driver for a disposable Linos test VM.
 # The generated test password is provided privately via the environment.
-set timeout 180
+set timeout 110
 set arch $env(LINOS_ARCH)
 set phase $env(LINOS_ENROLL_PHASE)
 set disk $env(LINOS_ENROLL_DISK)
@@ -37,7 +37,7 @@ if {$arch eq "amd64"} {
     exit 2
 }
 
-log_user 0
+log_user 1
 log_file -noappend $logfile
 spawn -noecho {*}$command
 

@@ -63,7 +63,12 @@ run_phase() {
     export LINOS_ENROLL_PHASE="$1"
     export LINOS_ENROLL_LOG="$TEST_DIR/boot-$1.log"
     echo "Enrollment phase: $1 ($ARCH)"
-    timeout --signal=TERM --kill-after=5s 200s expect ./build/enrollment.exp
+    if ! timeout --signal=TERM --kill-after=5s 130s expect ./build/enrollment.exp >"$TEST_DIR/expect-$1.log" 2>&1; then
+        echo "Enrollment interaction failed during phase $1" >&2
+        tail -n 75 "$TEST_DIR/expect-$1.log" >&2
+        return 1
+    fi
+    grep 'PASS: enrollment phase' "$TEST_DIR/expect-$1.log"
     recover_journal "$1"
 }
 
