@@ -1,0 +1,22 @@
+[Unit]
+Description=Enroll first local Linos administrator
+Documentation=https://github.com/phe-rus/linos
+Requires=linos-first-boot.service
+After=linos-first-boot.service local-fs.target
+Before=multi-user.target
+ConditionPathExists=/var/lib/linos/device-id
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-enroll
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
+TimeoutStartSec=0
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

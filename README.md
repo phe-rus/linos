@@ -15,7 +15,7 @@ The first bootstrap uses the Linux kernel, Debian 13 repositories, packages and 
 | Sequence | 9 |
 | OS version | 13 |
 | Generation | 1.0.0 |
-| Build | 20261105.1 |
+| Build | 20261105.2 |
 | Channel | development |
 | Debian base | 13 (trixie) |
 
@@ -30,9 +30,9 @@ Canonical release metadata is in `packages/release/usr/lib/linos/release`. The c
 - The image builder extracts the selected Debian kernel and initramfs and assembles a 3 GiB ext4 image.
 - ARM64 and AMD64 QEMU boots have reached `multi-user.target`, started systemd services and shown a serial login prompt. The AMD64 boot was verified on a Debian 13 ChromeOS Linux development host.
 - Rust `init` creates a persistent device identifier and hostname. The offline `--root` mode continues to reject `/`. A separate privileged `--first-boot` mode is now packaged with an idempotent systemd service; **live-boot integration still requires QEMU verification**.
-- Fourteen initializer tests are defined (pending verification of the latest changes on the development host). Code has passed Cargo formatting and Clippy checks.
+- Fifteen initializer tests are defined (pending verification of the latest changes on the development host). Code has passed Cargo formatting and Clippy checks.
 
-**Not yet implemented:** administrator/owner enrollment, Passid linking, atomic updates, rollback, secure boot, disk encryption defaults, hardware-independent installer, or resource management. The first-boot service prepares device identity only, not authorization. A login prompt does not mean a usable administrator account has been provisioned. Do not deploy this prototype as a production server.
+**Not yet verified:** interactive administrator enrollment and persistence across reboot. Passid linking, atomic updates, rollback, secure boot, disk encryption defaults, hardware-independent installer and resource management remain future work. The first-boot service prepares device identity only, not authorization. A login prompt does not mean a usable administrator account has been provisioned. Do not deploy this prototype as a production server.
 
 ## Source layout
 
@@ -111,6 +111,21 @@ mkdir -p packages/dist
 ```
 
 The smoke test boots the generated image without networking and without persisting guest modifications. It looks for a serial login prompt and saves the serial output under the ignored `images/` directory. It does not confirm that administrator provisioning or networking works. Avoid running the image builder with `sudo` unless your host's `mmdebstrap` configuration requires it; inspect any privilege request before proceeding.
+
+## Local administrator enrollment (experimental)
+
+The Linos image now packages a console-only enrollment service. It calls system account tools directly, asks for a new local username, delegates secret password entry to Debian's `passwd`/PAM stack and writes a root-only ownership record after password setup succeeds. Interrupted enrollment keeps a pending marker so the same account can resume. No default credentials are created, and remote enrollment is not supported.
+
+The unattended smoke test masks the interactive enrollment service. To test it, build the new package and image and launch an isolated persistent QEMU overlay:
+
+```bash
+./build/package.sh
+./build/image.sh
+./build/smoke.sh amd64
+./build/console.sh amd64
+```
+
+Follow the console prompts and reboot the guest to check persistence. The overlay is in `images/server/builds/amd64/<build-id>/console.qcow2`, separate from the base disk; it retains credentials and must be treated as sensitive. This flow is experimental and must be verified before use on real hardware. The local console is a trusted administration boundary: anyone with control of that console during first boot could claim the system.
 
 ## Direction
 

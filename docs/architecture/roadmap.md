@@ -1,6 +1,6 @@
 # Development roadmap
 
-This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development release: **Marauder, Sequence 9**, generation **1.0.0**, build **20261105.1**.
+This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development release: **Marauder, Sequence 9**, generation **1.0.0**, build **20261105.2**.
 
 ## Completed proof of concept
 
@@ -21,10 +21,10 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 - [x] Define persistent device identity separate from hostname.
 - [ ] Complete the uninitialized, unclaimed, provisioned and recovery state model; interrupted offline initialization is tested.
 - [x] Harden offline `init` against common symlink/path traversal mistakes and recover from interrupted writes.
-- [ ] Add an authenticated local console administrator-enrollment flow; no default password.
+- [ ] Verify local console administrator enrollment, interruption recovery and no-default-password policy in persistent QEMU tests.
 - [ ] Verify the packaged root-privileged initializer and enabled systemd first-boot service in QEMU.
 - [ ] Integrate canonical OS identification without conflicting with Debian `base-files` ownership.
-- [ ] Confirm root filesystem checks, console behavior and service readiness in QEMU.
+- [ ] Confirm root filesystem checks, enrollment console behavior, ownership persistence and service readiness in QEMU.
 
 **Acceptance:** a fresh VM can initialize, enroll its first local administrator, reboot and preserve its identity without requiring network connectivity.
 

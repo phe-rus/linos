@@ -49,7 +49,7 @@ if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
     exit 2
 fi
 
-cargo build --release -p init
+cargo build --release -p init -p enroll
 
 STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
@@ -58,12 +58,15 @@ cp -a packages/release/. "$STAGING_DIR/package/"
 
 sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN/control"
 install -m 755 target/release/init "$STAGING_DIR/package/usr/lib/linos/linos-init"
+install -m 755 target/release/enroll "$STAGING_DIR/package/usr/lib/linos/linos-enroll"
 
 UNIT_DIR="$STAGING_DIR/package/usr/lib/systemd/system"
 WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
 mkdir -p "$UNIT_DIR" "$WANTS_DIR"
 install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
+install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
 ln -s /usr/lib/systemd/system/linos-first-boot.service "$WANTS_DIR/linos-first-boot.service"
+ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 
 mkdir -p packages/dist
 dpkg-deb --root-owner-group --build "$STAGING_DIR/package" "$OUTPUT"

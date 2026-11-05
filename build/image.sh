@@ -77,7 +77,7 @@ mmdebstrap \
     --variant=minbase \
     --architectures="$ARCH" \
     --hook-dir=/usr/share/mmdebstrap/hooks/file-mirror-automount \
-    --include=systemd-sysv,dbus,iproute2,procps,ca-certificates,openssh-server,initramfs-tools,e2fsprogs \
+    --include=systemd-sysv,dbus,iproute2,procps,ca-certificates,openssh-server,passwd,sudo,initramfs-tools,e2fsprogs \
     --include="$KERNEL_PACKAGE" \
     --include="$STAGED_PACKAGE" \
     --customize-hook='rm -f "$1/etc/hostname"' \

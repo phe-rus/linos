@@ -187,6 +187,7 @@ fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device>
     }
     if let Some(ref existing) = state
         && existing != "unclaimed"
+        && existing != "provisioned"
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -444,6 +445,16 @@ mod tests {
         assert_eq!(device.hostname, "kept-name");
         assert!(valid_uuid(&device.id));
         assert_eq!(device.state, "unclaimed");
+        cleanup(root);
+    }
+
+    #[test]
+    fn preserves_provisioned_state() {
+        let root = test_root();
+        fs::create_dir_all(root.join("var/lib/linos")).unwrap();
+        fs::write(root.join("var/lib/linos/provisioning-state"), "provisioned\n").unwrap();
+        let device = initialize(&root).expect("provisioned identity is valid");
+        assert_eq!(device.state, "provisioned");
         cleanup(root);
     }
 
