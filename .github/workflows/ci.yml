@@ -100,6 +100,14 @@ jobs:
           ./build/uefi.sh amd64
           ./build/uefi-smoke.sh
 
+      - name: Build offline Server installation payload
+        if: matrix.arch == 'amd64'
+        run: ./build/payload.sh amd64
+
+      - name: Simulate installation and firmware boot on disposable GPT disk
+        if: matrix.arch == 'amd64'
+        run: ./build/install-simulation.sh
+
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
