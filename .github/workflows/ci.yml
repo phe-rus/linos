@@ -51,7 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl expect \
             ${{ matrix.qemu_package }}
 
       - name: Install verified Debian 13 archive keys
@@ -87,6 +87,9 @@ jobs:
       - name: Verify device identity across two persistent boots
         run: ./build/persistence.sh ${{ matrix.arch }}
 
+      - name: Exercise interrupted and completed console enrollment
+        run: ./build/enrollment.sh ${{ matrix.arch }}
+
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -98,5 +101,6 @@ jobs:
             images/server/builds/**/boot-*.log
             images/server/builds/**/fsck-*.log
             images/server/builds/**/debugfs.log
+            images/server/builds/**/enrollment-*.log
           if-no-files-found: ignore
           retention-days: 7

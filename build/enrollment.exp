@@ -1,0 +1,69 @@
+#!/usr/bin/expect -f
+
+# Interactive serial-console driver for a disposable Linos test VM.
+# The generated test password is provided privately via the environment.
+set timeout 180
+set arch $env(LINOS_ARCH)
+set phase $env(LINOS_ENROLL_PHASE)
+set disk $env(LINOS_ENROLL_DISK)
+set kernel $env(LINOS_ENROLL_KERNEL)
+set initramfs $env(LINOS_ENROLL_INITRAMFS)
+set logfile $env(LINOS_ENROLL_LOG)
+set username linosadmin
+
+if {$arch eq "amd64"} {
+    set command [list qemu-system-x86_64 \
+        -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+        -display none -no-reboot -monitor none -serial stdio \
+        -kernel $kernel -initrd $initramfs \
+        -drive "file=$disk,if=none,format=raw,id=rootfs" \
+        -device virtio-blk-pci,drive=rootfs \
+        -append {root=/dev/vda rootwait rw console=ttyS0,115200n8 systemd.unit=multi-user.target} \
+        -net none]
+} elseif {$arch eq "arm64"} {
+    set command [list qemu-system-aarch64 \
+        -machine virt -cpu cortex-a76 -smp 2 -m 2048 \
+        -display none -no-reboot -monitor none -serial stdio \
+        -kernel $kernel -initrd $initramfs \
+        -drive "file=$disk,if=none,format=raw,id=rootfs" \
+        -device virtio-blk-device,drive=rootfs \
+        -append {root=/dev/vda rootwait rw console=ttyAMA0,115200n8 systemd.unit=multi-user.target} \
+        -net none]
+} else {
+    puts stderr "Unsupported enrollment architecture: $arch"
+    exit 2
+}
+
+log_user 0
+log_file -noappend $logfile
+spawn -noecho {*}$command
+
+proc await {pattern} {
+    expect {
+        -re $pattern { return }
+        timeout { puts stderr "Enrollment VM timed out waiting for: $pattern"; exit 1 }
+        eof { puts stderr "Enrollment VM stopped before: $pattern"; exit 1 }
+    }
+}
+
+if {$phase eq "interrupt" || $phase eq "complete"} {
+    await {Administrator username:}
+    send -- "$username\r"
+    await {New password:}
+    if {$phase eq "complete"} {
+        send -- "$env(LINOS_ENROLL_PASSWORD)\r"
+        await {Retype new password:}
+        send -- "$env(LINOS_ENROLL_PASSWORD)\r"
+        await {administrator enrollment complete}
+    }
+} elseif {$phase eq "verify"} {
+    await {This device is already enrolled[.]}
+    await {login:}
+} else {
+    puts stderr "Unknown enrollment phase: $phase"
+    exit 2
+}
+
+catch {exec kill -TERM [exp_pid]}
+catch {wait}
+puts "PASS: enrollment phase $phase ($arch)"
