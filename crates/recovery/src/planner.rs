@@ -105,6 +105,15 @@ pub fn inspect(device: &str, sys_block: &Path) -> io::Result<()> {
     println!("  Read-only: {readonly}");
     println!("  Active system disk identified: {root_known}");
     println!("  Planning status: {result:?}");
+    if result == Decision::InspectionOnly {
+        let disk_mib = sectors / 2048;
+        if let Some(partitions) = super::layout::server(disk_mib) {
+            println!("  Proposed Server layout (not applied):");
+            for partition in partitions {
+                println!("    {}: {} MiB", partition.label, partition.size_mib);
+            }
+        }
+    }
     println!("  Installation status: DISABLED");
     println!("No partition table, filesystem or storage contents were changed.");
     Ok(())
