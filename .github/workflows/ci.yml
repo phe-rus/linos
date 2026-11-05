@@ -51,7 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl expect \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl expect fakeroot \
             ${{ matrix.qemu_package }}
 
       - name: Install verified Debian 13 archive keys

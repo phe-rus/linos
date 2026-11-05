@@ -125,14 +125,30 @@ truncate -s 3G "$DISK"
 
 ROOTFS_STAGE="$STAGING_DIR/rootfs"
 mkdir -p "$ROOTFS_STAGE"
-tar --exclude="./dev/*" -xf "$ROOTFS" -C "$ROOTFS_STAGE"
+if ! command -v fakeroot >/dev/null 2>&1; then
+    echo "fakeroot is required to preserve root ownership in the disk image" >&2
+    exit 1
+fi
 
-mkfs.ext4 \
+# Never use host-user ownership in the guest image. Extract under fakeroot,
+# then reload its recorded metadata while mkfs populates the ext4 image.
+FAKE_STATE="$STAGING_DIR/fakeroot.state"
+fakeroot -s "$FAKE_STATE" -- \
+    tar --same-owner --exclude="./dev/*" -xf "$ROOTFS" -C "$ROOTFS_STAGE"
+
+fakeroot -i "$FAKE_STATE" -- mkfs.ext4 \
     -F \
     -q \
     -L linos-root \
     -d "$ROOTFS_STAGE" \
     "$DISK"
+
+# A disk with incorrectly owned setuid tools is unbootably insecure.
+SUDO_METADATA="$(debugfs -R "stat /usr/bin/sudo" "$DISK" 2>/dev/null)"
+if ! grep -Eq "User:[[:space:]]*0([[:space:]]|$)" <<<"$SUDO_METADATA"; then
+    echo "Image ownership validation failed: /usr/bin/sudo must belong to root" >&2
+    exit 1
+fi
 
 echo
 echo "Build completed."
