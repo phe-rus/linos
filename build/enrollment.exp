@@ -9,6 +9,7 @@ set disk $env(LINOS_ENROLL_DISK)
 set kernel $env(LINOS_ENROLL_KERNEL)
 set initramfs $env(LINOS_ENROLL_INITRAMFS)
 set logfile $env(LINOS_ENROLL_LOG)
+set sshport $env(LINOS_ENROLL_SSH_PORT)
 set username linosadmin
 
 if {$arch eq "amd64"} {
@@ -19,7 +20,8 @@ if {$arch eq "amd64"} {
         -drive "file=$disk,if=none,format=raw,id=rootfs" \
         -device virtio-blk-pci,drive=rootfs \
         -append {root=/dev/vda rootwait rw console=ttyS0,115200n8 systemd.unit=multi-user.target} \
-        -net none]
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$sshport-:22" \
+        -device virtio-net-pci,netdev=net0]
 } elseif {$arch eq "arm64"} {
     set command [list qemu-system-aarch64 \
         -machine virt -cpu cortex-a76 -smp 2 -m 2048 \
@@ -28,7 +30,8 @@ if {$arch eq "amd64"} {
         -drive "file=$disk,if=none,format=raw,id=rootfs" \
         -device virtio-blk-device,drive=rootfs \
         -append {root=/dev/vda rootwait rw console=ttyAMA0,115200n8 systemd.unit=multi-user.target} \
-        -net none]
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$sshport-:22" \
+        -device virtio-net-device,netdev=net0]
 } else {
     puts stderr "Unsupported enrollment architecture: $arch"
     exit 2
@@ -46,8 +49,23 @@ proc await {pattern} {
     }
 }
 
+proc ssh_banner_available {port} {
+    if {[catch {set connection [socket 127.0.0.1 $port]}]} {
+        return 0
+    }
+    fconfigure $connection -blocking 0 -buffering none
+    after 600
+    set banner [read $connection]
+    close $connection
+    return [string match {SSH-2.0-*} $banner]
+}
+
 if {$phase eq "interrupt" || $phase eq "complete"} {
     await {Administrator username:}
+    if {[ssh_banner_available $sshport]} {
+        puts stderr "SSH was reachable before local administrator enrollment"
+        exit 1
+    }
     send -- "$username\r"
     await {New password:}
     if {$phase eq "complete"} {
@@ -59,6 +77,31 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
 } elseif {$phase eq "verify"} {
     await {This device is already enrolled[.]}
     await {login:}
+    send -- "$username\r"
+    await {Password:}
+    send -- "$env(LINOS_ENROLL_PASSWORD)\r"
+    await {[$] }
+    send -- "stty -echo\r"
+    await {[$] }
+
+    # The guest gets test-only networking; Linos's image defaults stay unchanged.
+    send -- "sudo -S -p 'LINOS_SUDO:' sh -c 'dev=\$(ls /sys/class/net | grep -v lo | head -1); ip link set \"\$dev\" up; ip addr add 10.0.2.15/24 dev \"\$dev\"'; echo LINOS_NETWORK_READY\r"
+    await {LINOS_SUDO:}
+    send -- "$env(LINOS_ENROLL_PASSWORD)\r"
+    await {\r\nLINOS_NETWORK_READY\r\n}
+
+    set reachable 0
+    for {set attempt 0} {$attempt < 25} {incr attempt} {
+        if {[ssh_banner_available $sshport]} {
+            set reachable 1
+            break
+        }
+        after 1000
+    }
+    if {!$reachable} {
+        puts stderr "SSH banner was not reachable after enrollment and guest networking"
+        exit 1
+    }
 } else {
     puts stderr "Unknown enrollment phase: $phase"
     exit 2

@@ -41,6 +41,7 @@ export LINOS_ARCH="$ARCH"
 export LINOS_ENROLL_DISK="$TEST_DISK"
 export LINOS_ENROLL_KERNEL="$ROOT/$BUILD_DIR/boot/kernel"
 export LINOS_ENROLL_INITRAMFS="$ROOT/$BUILD_DIR/boot/initramfs"
+export LINOS_ENROLL_SSH_PORT=42222
 # Ephemeral, test-only password. Never written into the source or disk image.
 export LINOS_ENROLL_PASSWORD="$(tr -d '-' </proc/sys/kernel/random/uuid)"
 
