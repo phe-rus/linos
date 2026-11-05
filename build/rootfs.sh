@@ -6,11 +6,11 @@ PROJECT_ROOT="$(
     pwd
 )"
 
-ARCH="${PASSOS_ARCH:-$(dpkg --print-architecture)}"
-SUITE="${PASSOS_SUITE:-trixie}"
+ARCH="${linos13_ARCH:-$(dpkg --print-architecture)}"
+SUITE="${linos13_SUITE:-trixie}"
 
 OUTPUT_DIR="$PROJECT_ROOT/images/minimal"
-OUTPUT="$OUTPUT_DIR/passos-rootfs-${ARCH}.tar"
+OUTPUT="$OUTPUT_DIR/linos13-rootfs-${ARCH}.tar"
 
 PACKAGES=(
     systemd-sysv
@@ -34,7 +34,7 @@ PACKAGE_LIST="$(
     printf '%s' "${PACKAGES[*]}"
 )"
 
-printf 'Passos Linux Build\n'
+printf 'linos13 Linux Build\n'
 printf 'Architecture: %s\n' "$ARCH"
 printf 'Debian suite: %s\n' "$SUITE"
 printf 'Output: %s\n' "$OUTPUT"

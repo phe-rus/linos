@@ -1,8 +1,8 @@
-# Passos
+# linos13
 
-**Passos** is an experimental Linux-based operating system developed by Pherus. Its goal is a reliable and cohesive experience for servers and personal devices, inspired by the system design of macOS, iPadOS, iOS and ChromeOS without reproducing their interfaces or abandoning Linux compatibility.
+**linos13** is an experimental Linux-based operating system developed by Pherus. Its goal is a reliable and cohesive experience for servers and personal devices, inspired by the system design of macOS, iPadOS, iOS and ChromeOS without reproducing their interfaces or abandoning Linux compatibility.
 
-Passos uses the Linux kernel, Debian packages and `apt`. The first development target is a headless server system. A graphical environment is a later, separate project.
+linos13 uses the Linux kernel, Debian packages and `apt`. The first development target is a headless server system. A graphical environment is a later, separate project.
 
 > **Status:** early development prototype, not a production-ready operating system. The Orange Pi 5 Plus is a development host, not the only supported target.
 
@@ -10,7 +10,7 @@ Passos uses the Linux kernel, Debian packages and `apt`. The first development t
 
 | Field | Value |
 | --- | --- |
-| System | Passos |
+| System | linos13 |
 | Release name | Marauder |
 | Sequence | 9 |
 | Generation | 1.0.0 |
@@ -20,12 +20,12 @@ Passos uses the Linux kernel, Debian packages and `apt`. The first development t
 
 Release names and **Sequence** are the human-facing identity. The sequence counts down from 9 to 0 within a release generation; the generation, build identifier, kernel version and Debian base have separate technical roles. Sequence 9 does not mean Linux kernel 9.
 
-Canonical release metadata is in `packages/release/usr/lib/passos/release`. The console banner is in `system/base/identity/issue`. Standard `/usr/lib/os-release` integration is still pending, so systemd and some tools may identify the Debian base.
+Canonical release metadata is in `packages/release/usr/lib/linos13/release`. The console banner is in `system/base/identity/issue`. Standard `/usr/lib/os-release` integration is still pending, so systemd and some tools may identify the Debian base.
 
 ## Working today
 
 - Rust `detect` executable reports host architecture, kernel, model, firmware, CPU count and RAM.
-- `mmdebstrap` assembles a minimal Debian 13-based root filesystem and installs a Passos release package.
+- `mmdebstrap` assembles a minimal Debian 13-based root filesystem and installs a linos13 release package.
 - The image builder extracts the selected Debian kernel and initramfs and assembles a 3 GiB ext4 image.
 - ARM64 QEMU boot has reached `multi-user.target`, started systemd services and shown a serial login prompt.
 - Rust `init` creates an independent, persistent hostname in a specified *offline* root directory. It rejects `/`, preserves existing values, records an `unclaimed` provisioning state and tests restart recovery.
@@ -65,11 +65,11 @@ Create the package output directory before packaging:
 
 ```bash
 mkdir -p packages/dist
-dpkg-deb --build packages/release packages/dist/passos-release_1.0.0_all.deb
+dpkg-deb --build packages/release packages/dist/linos13-release_1.0.0_all.deb
 ./build/image.sh
 ```
 
-The builder detects the host package architecture with `dpkg --print-architecture`, unless `PASSOS_ARCH` is set. Selecting an architecture is not equivalent to full cross-compilation or universal boot support. Builds are saved under `images/server/builds/<arch>/<build-id>/`; existing build directories are never overwritten automatically.
+The builder detects the host package architecture with `dpkg --print-architecture`, unless `linos13_ARCH` is set. Selecting an architecture is not equivalent to full cross-compilation or universal boot support. Builds are saved under `images/server/builds/<arch>/<build-id>/`; existing build directories are never overwritten automatically.
 
 For the successful ARM64 development build, run an isolated QEMU boot test:
 
@@ -98,8 +98,8 @@ This only creates/preserves `etc/hostname` in that test directory. It is **not**
 
 ## Direction
 
-Passos aims for automatic hardware-aware setup across supported ARM64 and AMD64 machines, Debian package compatibility, safe scheduled updates, verified rollback, local-first device ownership, optional Passid integration and workload-aware system resource management. Administrative freedom should remain available with explicit safeguards.
+linos13 aims for automatic hardware-aware setup across supported ARM64 and AMD64 machines, Debian package compatibility, safe scheduled updates, verified rollback, local-first device ownership, optional Passid integration and workload-aware system resource management. Administrative freedom should remain available with explicit safeguards.
 
 See [Architecture](docs/architecture/overview.md) and [Roadmap](docs/architecture/roadmap.md).
 
-Project: [phe-rus/passos](https://github.com/phe-rus/passos) · Contact: pherus@pherus.org
+Project: [phe-rus/linos13](https://github.com/phe-rus/linos13) · Contact: <pherus@pherus.org>

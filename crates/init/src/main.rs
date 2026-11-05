@@ -166,7 +166,7 @@ fn initialize(root: &Path) -> io::Result<Device> {
     );
 
     let etc = open_directory(&root_fd, &["etc"], false)?;
-    let state_dir = open_directory(&root_fd, &["var", "lib", "passos"], false)?;
+    let state_dir = open_directory(&root_fd, &["var", "lib", "linos13"], false)?;
 
     // Validate existing state before creating or modifying any entries.
     let hostname = read_existing(etc.as_ref(), "hostname")?;
@@ -204,7 +204,7 @@ fn initialize(root: &Path) -> io::Result<Device> {
     let id = match id {
         Some(existing) => existing,
         None => {
-            let directory = open_directory(&root_fd, &["var", "lib", "passos"], true)?
+            let directory = open_directory(&root_fd, &["var", "lib", "linos13"], true)?
                 .ok_or_else(|| io::Error::other("Unable to open state directory"))?;
             let value = random_uuid()?;
             write_new(&directory, "device-id", &value, 0o600)?;
@@ -215,7 +215,7 @@ fn initialize(root: &Path) -> io::Result<Device> {
     let state = match state {
         Some(existing) => existing,
         None => {
-            let directory = open_directory(&root_fd, &["var", "lib", "passos"], true)?
+            let directory = open_directory(&root_fd, &["var", "lib", "linos13"], true)?
                 .ok_or_else(|| io::Error::other("Unable to open state directory"))?;
             write_new(&directory, "provisioning-state", "unclaimed", 0o600)?;
             "unclaimed".to_owned()
@@ -269,7 +269,7 @@ mod tests {
 
     fn test_root() -> PathBuf {
         let name = random_uuid().expect("random UUID");
-        let root = env::temp_dir().join(format!("passos-init-test-{name}"));
+        let root = env::temp_dir().join(format!("linos13-init-test-{name}"));
         fs::create_dir(&root).expect("create test directory");
         root
     }
@@ -293,13 +293,13 @@ mod tests {
             device.hostname
         );
         assert_eq!(
-            fs::read_to_string(root.join("var/lib/passos/device-id"))
+            fs::read_to_string(root.join("var/lib/linos13/device-id"))
                 .expect("device id")
                 .trim(),
             device.id
         );
         assert_eq!(
-            fs::read_to_string(root.join("var/lib/passos/provisioning-state"))
+            fs::read_to_string(root.join("var/lib/linos13/provisioning-state"))
                 .expect("provisioning state")
                 .trim(),
             "unclaimed"
@@ -341,15 +341,15 @@ mod tests {
         fs::write(root.join("etc/hostname"), "\n").unwrap();
         let error = initialize(&root).expect_err("empty hostname must be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-        assert!(!root.join("var/lib/passos/device-id").exists());
+        assert!(!root.join("var/lib/linos13/device-id").exists());
         cleanup(root);
     }
 
     #[test]
     fn rejects_invalid_existing_device_id() {
         let root = test_root();
-        fs::create_dir_all(root.join("var/lib/passos")).unwrap();
-        fs::write(root.join("var/lib/passos/device-id"), "not-a-uuid\n").unwrap();
+        fs::create_dir_all(root.join("var/lib/linos13")).unwrap();
+        fs::write(root.join("var/lib/linos13/device-id"), "not-a-uuid\n").unwrap();
         let error = initialize(&root).expect_err("invalid identity must be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!root.join("etc/hostname").exists());
@@ -363,7 +363,7 @@ mod tests {
         let root = test_root();
         initialize(&root).expect("initialize");
         for name in ["device-id", "provisioning-state"] {
-            let metadata = fs::metadata(root.join("var/lib/passos").join(name)).unwrap();
+            let metadata = fs::metadata(root.join("var/lib/linos13").join(name)).unwrap();
             assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         }
         cleanup(root);
@@ -405,8 +405,8 @@ mod tests {
     #[test]
     fn rejects_invalid_provisioning_state() {
         let root = test_root();
-        fs::create_dir_all(root.join("var/lib/passos")).unwrap();
-        fs::write(root.join("var/lib/passos/provisioning-state"), "ready\n").unwrap();
+        fs::create_dir_all(root.join("var/lib/linos13")).unwrap();
+        fs::write(root.join("var/lib/linos13/provisioning-state"), "ready\n").unwrap();
         let error = initialize(&root).expect_err("unsupported state");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!root.join("etc/hostname").exists());
@@ -420,7 +420,7 @@ mod tests {
         let root = test_root();
         let external = test_root();
         fs::create_dir_all(root.join("var/lib")).unwrap();
-        symlink(&external, root.join("var/lib/passos")).unwrap();
+        symlink(&external, root.join("var/lib/linos13")).unwrap();
         let error = initialize(&root).expect_err("must reject symlink");
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
         assert!(!external.join("device-id").exists());
@@ -433,8 +433,8 @@ mod tests {
     fn rejects_symlinked_identity_file() {
         use std::os::unix::fs::symlink;
         let root = test_root();
-        fs::create_dir_all(root.join("var/lib/passos")).unwrap();
-        symlink("/etc/hostname", root.join("var/lib/passos/device-id")).unwrap();
+        fs::create_dir_all(root.join("var/lib/linos13")).unwrap();
+        symlink("/etc/hostname", root.join("var/lib/linos13/device-id")).unwrap();
         let error = initialize(&root).expect_err("must reject symlink");
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
         cleanup(root);

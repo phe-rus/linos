@@ -7,9 +7,9 @@ This document tracks intended milestones, not promises or shipped features. The 
 - [x] Initialize Rust workspace and source layout.
 - [x] Discover model, architecture, firmware, CPU count, memory and kernel on Orange Pi 5 Plus.
 - [x] Build minimal Debian 13 ARM64 root filesystem using `mmdebstrap`.
-- [x] Package and include Passos release metadata.
+- [x] Package and include linos13 release metadata.
 - [x] Boot Debian kernel 6.12 guest on QEMU ARM64 `virt` to `multi-user.target`.
-- [x] Display initial Passos serial console banner.
+- [x] Display initial linos13 serial console banner.
 - [x] Test an offline Rust hostname initializer (four unit tests).
 - [x] Keep generated disk images, tarballs and Rust targets out of Git.
 - [x] Publish sources on `main`.
