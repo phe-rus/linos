@@ -43,7 +43,7 @@ if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
         qemu-system-x86_64
         -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048
-        -nographic -no-reboot -monitor none
+        -nographic -no-reboot
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-pci,drive=rootfs
