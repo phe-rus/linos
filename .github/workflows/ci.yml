@@ -84,6 +84,9 @@ jobs:
       - name: Boot smoke test
         run: ./build/smoke.sh ${{ matrix.arch }}
 
+      - name: Verify device identity across two persistent boots
+        run: ./build/persistence.sh ${{ matrix.arch }}
+
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7

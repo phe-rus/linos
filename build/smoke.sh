@@ -23,9 +23,13 @@ fi
 BUILD_DIR="images/server/builds/$ARCH/$BUILD_ID"
 KERNEL="$BUILD_DIR/boot/kernel"
 INITRAMFS="$BUILD_DIR/boot/initramfs"
-DISK="$BUILD_DIR/disk.ext4"
+DISK="${LINOS_SMOKE_DISK:-$BUILD_DIR/disk.ext4}"
 LOG="$BUILD_DIR/smoke.log"
 QEMU_LOG="$BUILD_DIR/qemu.log"
+if [[ -n "${LINOS_SMOKE_LOG_PREFIX:-}" ]]; then
+    LOG="${LINOS_SMOKE_LOG_PREFIX}.smoke.log"
+    QEMU_LOG="${LINOS_SMOKE_LOG_PREFIX}.qemu.log"
+fi
 
 for path in "$KERNEL" "$INITRAMFS" "$DISK"; do
     if [[ ! -f "$path" ]]; then
@@ -64,11 +68,16 @@ else
     )
 fi
 
+SNAPSHOT_ARGS=(-snapshot)
+if [[ "${LINOS_SMOKE_WRITE_DISK:-0}" == 1 ]]; then
+    SNAPSHOT_ARGS=()
+fi
+
 echo "Boot-testing Linos 13 ($ARCH), build $BUILD_ID"
 echo "Serial log: $LOG"
 : > "$LOG"
 # Stop QEMU once we observe both boot signals, retaining the 180-second guard.
-timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1 &
+timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" "${SNAPSHOT_ARGS[@]}" -net none >"$QEMU_LOG" 2>&1 &
 QEMU_PID=$!
 STATUS=0
 while kill -0 "$QEMU_PID" 2>/dev/null; do
