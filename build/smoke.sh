@@ -76,7 +76,11 @@ STATUS=$?
 set -e
 
 if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG"; then
-    echo "PASS: serial login prompt observed"
+    if ! grep -q "Provisioning state: unclaimed" "$LOG"; then
+        echo "FAIL: login observed but Linos device initialization was not confirmed" >&2
+        exit 1
+    fi
+    echo "PASS: serial login and Linos first-boot identity initialization observed"
     exit 0
 fi
 
