@@ -73,7 +73,17 @@ echo "Debian base  : $SUITE"
 echo "Build        : $BUILD_ID"
 echo "Kernel       : $KERNEL_PACKAGE"
 
+KEYRING_ARGS=()
+if [[ -n "${LINOS_KEYRING:-}" ]]; then
+    if [[ ! -r "$LINOS_KEYRING" ]]; then
+        echo "Configured Debian archive keyring is not readable: $LINOS_KEYRING" >&2
+        exit 1
+    fi
+    KEYRING_ARGS+=(--keyring="$LINOS_KEYRING")
+fi
+
 mmdebstrap \
+    "${KEYRING_ARGS[@]}" \
     --variant=minbase \
     --architectures="$ARCH" \
     --hook-dir=/usr/share/mmdebstrap/hooks/file-mirror-automount \

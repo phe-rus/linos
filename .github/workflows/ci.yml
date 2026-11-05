@@ -51,8 +51,30 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl \
             ${{ matrix.qemu_package }}
+
+      - name: Install verified Debian 13 archive keys
+        run: |
+          keydir="$RUNNER_TEMP/linos-debian-keys"
+          mkdir -p "$keydir"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13.asc \
+            --output "$keydir/archive.asc"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13-security.asc \
+            --output "$keydir/security.asc"
+          (
+            cd "$keydir"
+            printf '%s\n' \
+              '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
+              '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
+              | sha256sum --check
+          )
+          gpg --batch --dearmor --output "$keydir/archive.gpg" "$keydir/archive.asc"
+          gpg --batch --dearmor --output "$keydir/security.gpg" "$keydir/security.asc"
+          cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
+          echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
       - name: Build Linos package and server image
         run: |
