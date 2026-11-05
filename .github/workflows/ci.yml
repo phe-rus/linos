@@ -90,6 +90,16 @@ jobs:
       - name: Exercise interrupted and completed console enrollment
         run: ./build/enrollment.sh ${{ matrix.arch }}
 
+      - name: Install AMD64 UEFI build and firmware dependencies
+        if: matrix.arch == 'amd64'
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y gdisk dosfstools mtools systemd-boot-efi ovmf
+
+      - name: Build and firmware-boot AMD64 GPT image
+        if: matrix.arch == 'amd64'
+        run: |
+          ./build/uefi.sh amd64
+          ./build/uefi-smoke.sh
+
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -102,5 +112,6 @@ jobs:
             images/server/builds/**/fsck-*.log
             images/server/builds/**/debugfs.log
             images/server/builds/**/enrollment-*.log
+            images/server/builds/**/uefi-*.log
           if-no-files-found: ignore
           retention-days: 7
