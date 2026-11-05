@@ -126,7 +126,10 @@ fn valid_device_argument(device: &str) -> Option<&str> {
 
 fn show_plan(device: &str, sys_block: &Path) -> io::Result<()> {
     let name = valid_device_argument(device).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "Expected a block device like /dev/vda")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Expected a block device like /dev/vda",
+        )
     })?;
     let path = sys_block.join(name);
     let sectors = fs::read_to_string(path.join("size"))?
@@ -137,7 +140,10 @@ fn show_plan(device: &str, sys_block: &Path) -> io::Result<()> {
     let removable = fs::read_to_string(path.join("removable"))?;
     println!("Linos installation planning report (read-only)");
     println!("  Target: {device}");
-    println!("  Capacity: {:.1} GiB", sectors as f64 * 512.0 / 1_073_741_824.0);
+    println!(
+        "  Capacity: {:.1} GiB",
+        sectors as f64 * 512.0 / 1_073_741_824.0
+    );
     println!("  Read-only flag: {}", readonly.trim());
     println!("  Removable flag: {}", removable.trim());
     println!("  State: BLOCKED");
@@ -203,8 +209,12 @@ mod tests {
     fn hardware_profiles_are_checked() {
         let valid = "schema=1\nedition=server\narchitecture=amd64\nboot=uefi\nrecovery=cli\nhardware=generic-amd64-uefi\n";
         assert!(validate_profile(valid));
-        assert!(!validate_profile(&valid.replace("edition=server", "edition=desktop")));
-        assert!(!validate_profile(&valid.replace("boot=uefi", "boot=direct-kernel")));
+        assert!(!validate_profile(
+            &valid.replace("edition=server", "edition=desktop")
+        ));
+        assert!(!validate_profile(
+            &valid.replace("boot=uefi", "boot=direct-kernel")
+        ));
     }
 
     #[test]
