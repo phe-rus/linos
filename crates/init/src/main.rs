@@ -316,7 +316,9 @@ mod tests {
 
     #[test]
     fn detects_linos_release_identity() {
-        assert!(is_linos_release("NAME=\"linos\"\nID=linos\nVERSION_ID=\"13\"\n"));
+        assert!(is_linos_release(
+            "NAME=\"linos\"\nID=linos\nVERSION_ID=\"13\"\n"
+        ));
         assert!(!is_linos_release("ID=debian\n"));
         assert!(!is_linos_release("ID=linos-extra\n"));
     }
