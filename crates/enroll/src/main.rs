@@ -34,7 +34,9 @@ fn validate_device_id(value: &str) -> bool {
 fn parse_owner_record<'a>(contents: &'a str, device_id: &str) -> io::Result<&'a str> {
     let mut lines = contents.lines();
     let username = lines.next().and_then(|line| line.strip_prefix("username="));
-    let recorded_id = lines.next().and_then(|line| line.strip_prefix("device-id="));
+    let recorded_id = lines
+        .next()
+        .and_then(|line| line.strip_prefix("device-id="));
     match (username, recorded_id, lines.next()) {
         (Some(name), Some(id), None) if validate_username(name) && id == device_id => Ok(name),
         _ => Err(io::Error::new(
