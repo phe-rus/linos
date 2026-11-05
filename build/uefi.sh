@@ -67,11 +67,11 @@ sgdisk --clear \
     --new=2:0:+3G --typecode=2:8300 --change-name=2:linos-system \
     "$DISK" >/dev/null
 
-PARTUUID="$(sgdisk -i 2 "$DISK" | sed -n 's/^Partition unique GUID: //p')"
+ROOT_UUID="$(dumpe2fs -h "$ROOTFS" 2>/dev/null | sed -n 's/^Filesystem UUID:[[:space:]]*//p')"
 ESP_START="$(sgdisk -i 1 "$DISK" | sed -n 's/^First sector: \([0-9]*\).*$/\1/p')"
 ROOT_START="$(sgdisk -i 2 "$DISK" | sed -n 's/^First sector: \([0-9]*\).*$/\1/p')"
 ROOT_LAST="$(sgdisk -i 2 "$DISK" | sed -n 's/^Last sector: \([0-9]*\).*$/\1/p')"
-if [[ -z "$PARTUUID" || -z "$ESP_START" || -z "$ROOT_START" || -z "$ROOT_LAST" ]]; then
+if [[ -z "$ROOT_UUID" || -z "$ESP_START" || -z "$ROOT_START" || -z "$ROOT_LAST" ]]; then
     echo "Could not inspect GPT partition metadata" >&2
     exit 1
 fi
@@ -93,7 +93,7 @@ printf '%s\n' \
     'title Linos 13 Server' \
     'linux /linos/kernel' \
     'initrd /linos/initramfs' \
-    "options root=PARTUUID=$PARTUUID rootwait rw console=ttyS0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
+    "options root=UUID=$ROOT_UUID rootwait rw console=ttyS0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
     > "$WORK/linos.conf"
 mcopy -i "$ESP" "$WORK/loader.conf" ::/loader/loader.conf
 mcopy -i "$ESP" "$WORK/linos.conf" ::/loader/entries/linos.conf
@@ -103,5 +103,5 @@ dd if="$ROOTFS" of="$DISK" bs=512 seek="$ROOT_START" conv=notrunc status=none
 mv "$DISK" "$OUTPUT"
 
 echo "UEFI image created: $OUTPUT"
-echo "System PARTUUID: $PARTUUID"
+echo "System filesystem UUID: $ROOT_UUID"
 echo "Boot mode: GPT + FAT32 EFI + systemd-boot (Linos 13 Server)"
