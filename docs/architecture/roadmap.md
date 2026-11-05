@@ -21,10 +21,10 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 - [x] Define persistent device identity separate from hostname.
 - [ ] Complete the uninitialized, unclaimed, provisioned and recovery state model; interrupted offline initialization is tested.
 - [x] Harden offline `init` against common symlink/path traversal mistakes and recover from interrupted writes.
-- [ ] Verify local console administrator enrollment, interruption recovery and no-default-password policy in persistent QEMU tests.
-- [ ] Verify the packaged root-privileged initializer and enabled systemd first-boot service in QEMU.
+- [x] Verify local console administrator enrollment, interruption recovery and no-default-password policy in persistent QEMU tests.
+- [x] Verify the packaged root-privileged initializer and enabled systemd first-boot service in QEMU.
 - [ ] Integrate canonical OS identification without conflicting with Debian `base-files` ownership.
-- [ ] Confirm root filesystem checks, enrollment console behavior, ownership persistence and service readiness in QEMU.
+- [x] Confirm root filesystem checks, enrollment console behavior, ownership persistence and service readiness in QEMU.
 
 **Acceptance:** a fresh VM can initialize, enroll its first local administrator, reboot and preserve its identity without requiring network connectivity.
 
@@ -32,13 +32,31 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 
 - [ ] Encode dependency versions and build inputs in a reproducible recipe.
 - [x] Add an AMD64/ARM64 GitHub Actions matrix for Rust checks, package builds, disk images and QEMU smoke testing.
-- [ ] Confirm green CI boots on both architectures and investigate any ARM64-specific failures.
+- [x] Confirm green CI boots on both architectures and investigate any ARM64-specific failures.
 - [x] Build and boot an AMD64 QEMU image on the ChromeOS Debian 13 development host; retain architecture autodetection.
-- [ ] Distinguish system package architecture from SoC-specific firmware and device trees.
-- [ ] Add explicit hardware support manifests for real boards, including RK3588.
+- [x] Distinguish system package architecture from SoC-specific firmware and device trees in profile metadata.
+- [x] Add initial hardware support manifests, including an unverified RK3588 profile (not hardware certification).
 - [ ] Create an installer that discovers storage and asks for confirmation before formatting.
 
 **Acceptance:** independent ARM64 and AMD64 test VMs boot and pass the same core test suite.
+
+**Current assessment:** the VM acceptance target has been met. Reproducible dependency
+pinning, physical-device validation, and an enabled safe installer are outstanding.
+
+## Installer and Recovery integration (active)
+
+- [x] Independent Server Recovery CLI boots under UEFI in QEMU.
+- [x] Read-only storage inspection and fail-closed installation planning.
+- [x] Verify the proposed GPT geometry on fresh disposable images.
+- [x] Package an offline Server payload and simulate its installation on disposable storage.
+- [x] Add SHA-256 integrity verification and Ed25519 signature verification code.
+- [ ] Confirm the signed Recovery media path in a completed CI run.
+- [ ] Implement a transactional, explicitly confirmed physical-disk installer.
+- [ ] Add Recovery repair, rollback, and data-preserving reinstall workflows.
+
+All installation experiments remain confined to disposable virtual disks. Signed
+payload checks alone do not authenticate the full boot chain; physical-disk install
+is deliberately disabled.
 
 ## Milestone 3: security and ownership
 
