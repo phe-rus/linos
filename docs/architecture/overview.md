@@ -1,13 +1,13 @@
-# linos13 architecture
+# Linos architecture
 
-linos13 is a Linux-based operating system with a Debian-compatible userspace. It is designed as a cohesive system rather than a desktop environment layered over a stock installation. The first engineering milestone is a stable, headless server image; graphical software is out of scope for the present phase.
+Linos is a Linux-based operating system with a Debian-compatible userspace. It is designed as a cohesive system rather than a desktop environment layered over a stock installation. The first engineering milestone is a stable, headless server image; graphical software is out of scope for the present phase.
 
 ## Layers and boundaries
 
 1. **Hardware and firmware**: discover CPU architecture, platform model, memory, boot method, block devices, and supported capabilities. Detection does not imply a compatible bootloader or available driver.
 2. **Linux kernel**: use a supported kernel and platform-specific configuration, firmware and device trees when needed. The current QEMU image uses Debian's kernel package. The Orange Pi host currently runs an Armbian vendor kernel; this is separate from the guest.
 3. **Early boot and services**: initramfs mounts the root filesystem, then systemd manages the userspace and services. The Rust tool called `init` is **not PID 1** and does not replace systemd.
-4. **System base**: Debian packages via `apt` plus linos13-owned packages, release metadata, defaults and eventual system policy.
+4. **System base**: Debian packages via `apt` plus Linos-owned packages, release metadata, defaults and eventual system policy.
 5. **Device services**: future first-boot provisioning, ownership, system updates, recovery and resource policies. These should be independently testable, with short internal names.
 6. **User and applications**: ordinary Linux processes, tools and packages. A future desktop shell must not be required by the server image.
 
@@ -33,9 +33,9 @@ This does **not** establish an installation method for real Orange Pi hardware o
 
 `crates/init` is a standalone Rust command accepting `--root <directory>`. It canonicalizes the destination, refuses the live root (`/`), then:
 
-- Reads and preserves a nonempty existing `etc/hostname`, or generates a `pass-` hostname.
-- Reads and preserves a valid UUID in `var/lib/linos13/device-id`, or creates one if absent.
-- Writes `var/lib/linos13/provisioning-state` as `unclaimed` only after the hostname and device ID exist.
+- Reads and preserves a nonempty existing `etc/hostname`, or generates a `linos-` hostname.
+- Reads and preserves a valid UUID in `var/lib/linos/device-id`, or creates one if absent.
+- Writes `var/lib/linos/provisioning-state` as `unclaimed` only after the hostname and device ID exist.
 - Checks existing data for invalid values before writing new state; unrecognized provisioning states are rejected.
 - Opens the offline root and traverses its directories using `rustix::fs::openat` with `O_NOFOLLOW` and `O_DIRECTORY`; subsequent operations use these opened directory handles.
 - Reads existing entries using no-follow file descriptors, rejecting non-regular files and oversized/invalid values.
@@ -61,10 +61,10 @@ Suggested future runtime paths follow Linux compatibility conventions:
 
 | Path | Proposed use |
 | --- | --- |
-| `/usr/lib/linos13/` | linos13-owned installed components |
-| `/etc/linos13/` | Administrator-editable configuration |
-| `/var/lib/linos13/` | Persistent per-device state |
-| `/run/linos13/` | Ephemeral runtime state |
+| `/usr/lib/linos/` | Linos-owned installed components |
+| `/etc/linos/` | Administrator-editable configuration |
+| `/var/lib/linos/` | Persistent per-device state |
+| `/run/linos/` | Ephemeral runtime state |
 
 These are design targets, not existing supported APIs.
 
@@ -85,7 +85,7 @@ Future security includes secure provisioning, least-privilege services, signed u
 ## Engineering principles
 
 - One source tree, target-specific builds and capability detection.
-- A coherent linos13 experience with explicit compatibility contracts.
+- A coherent Linos experience with explicit compatibility contracts.
 - No mandatory Passid connection for local administration.
 - Clean recovery before risky updates.
 - Small focused Rust components rather than one crate for every concept.

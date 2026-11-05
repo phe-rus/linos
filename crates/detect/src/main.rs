@@ -64,7 +64,7 @@ fn total_memory() -> Option<u64> {
 fn main() {
     let hardware = Hardware::detect();
 
-    println!("linos13 Linux | Hardware Discovery");
+    println!("Linos Linux | Hardware Discovery");
     println!("---------------------------------");
     println!("Architecture : {}", hardware.architecture);
     println!("Kernel       : {}", hardware.kernel);

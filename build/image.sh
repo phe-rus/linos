@@ -4,23 +4,23 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-ARCH="${linos13_ARCH:-$(dpkg --print-architecture)}"
-SUITE="${linos13_SUITE:-trixie}"
+ARCH="${LINOS_ARCH:-$(dpkg --print-architecture)}"
+SUITE="${LINOS_SUITE:-trixie}"
 
-RELEASE_FILE="packages/release/usr/lib/linos13/release"
-PACKAGE="packages/dist/linos13-release_1.0.0_all.deb"
+RELEASE_FILE="packages/release/usr/lib/linos/release"
+PACKAGE="packages/dist/linos-release_1.0.0_all.deb"
 
 BUILD_ID="$(
     sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE_FILE"
 )"
 
 if [[ -z "$BUILD_ID" ]]; then
-    echo "Missing linos13 build identifier"
+    echo "Missing Linos build identifier"
     exit 1
 fi
 
 if [[ ! -f "$PACKAGE" ]]; then
-    echo "Missing linos13 release package: $PACKAGE"
+    echo "Missing Linos release package: $PACKAGE"
     exit 1
 fi
 
@@ -46,7 +46,7 @@ fi
 
 mkdir -p "$BOOT_DIR"
 
-echo "linos13 Image Builder"
+echo "Linos Image Builder"
 echo "===================="
 echo "Architecture : $ARCH"
 echo "Debian base  : $SUITE"
@@ -95,7 +95,7 @@ truncate -s 3G "$DISK"
 mkfs.ext4 \
     -F \
     -q \
-    -L linos13-root \
+    -L linos-root \
     -d "$ROOTFS" \
     "$DISK"
 

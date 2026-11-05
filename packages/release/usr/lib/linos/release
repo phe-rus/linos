@@ -1,0 +1,13 @@
+NAME="Linos"
+PRETTY_NAME="Linos 13 (Marauder)"
+ID=linos
+ID_LIKE=debian
+VERSION_ID="13"
+VERSION="13 (Marauder, Sequence 9)"
+VERSION_CODENAME=marauder
+LINOS_SEQUENCE=9
+LINOS_GENERATION="1.0.0"
+BUILD_ID="20261025.3"
+BUILD_CHANNEL=development
+BASE_ID=debian
+BASE_CODENAME=trixie

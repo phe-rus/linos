@@ -1,9 +1,9 @@
-Package: linos13-release
+Package: linos-release
 Version: 1.0.0
 Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Pherus <pherus@pherus.org>
-Description: linos13 operating system release information
+Description: Linos 13 operating system release information
  Provides the canonical identity and release metadata
- for the linos13 operating system.
+ for the Linos 13 operating system.
