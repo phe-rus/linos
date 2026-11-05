@@ -15,7 +15,7 @@ The first bootstrap uses the Linux kernel, Debian 13 repositories, packages and 
 | Sequence | 9 |
 | OS version | 13 |
 | Generation | 1.0.0 |
-| Build | 20261025.3 |
+| Build | 20261105.1 |
 | Channel | development |
 | Debian base | 13 (trixie) |
 
@@ -29,10 +29,10 @@ Canonical release metadata is in `packages/release/usr/lib/linos/release`. The c
 - `mmdebstrap` assembles a minimal Debian 13-based root filesystem and installs a Linos release package.
 - The image builder extracts the selected Debian kernel and initramfs and assembles a 3 GiB ext4 image.
 - ARM64 and AMD64 QEMU boots have reached `multi-user.target`, started systemd services and shown a serial login prompt. The AMD64 boot was verified on a Debian 13 ChromeOS Linux development host.
-- Rust `init` creates an independent, persistent hostname in a specified *offline* root directory. It rejects `/`, preserves existing values, records an `unclaimed` provisioning state and tests restart recovery.
-- Thirteen offline initialization tests are defined (pending verification of the latest changes on the development host). Code has passed Cargo formatting and Clippy checks.
+- Rust `init` creates a persistent device identifier and hostname. The offline `--root` mode continues to reject `/`. A separate privileged `--first-boot` mode is now packaged with an idempotent systemd service; **live-boot integration still requires QEMU verification**.
+- Fourteen initializer tests are defined (pending verification of the latest changes on the development host). Code has passed Cargo formatting and Clippy checks.
 
-**Not yet implemented:** boot-time provisioning, account/owner creation, Passid linking, atomic updates, rollback, secure boot, disk encryption defaults, hardware-independent installer, or resource management. A login prompt does not mean a usable administrator account has been provisioned. Do not deploy this prototype as a production server.
+**Not yet implemented:** administrator/owner enrollment, Passid linking, atomic updates, rollback, secure boot, disk encryption defaults, hardware-independent installer, or resource management. The first-boot service prepares device identity only, not authorization. A login prompt does not mean a usable administrator account has been provisioned. Do not deploy this prototype as a production server.
 
 ## Source layout
 
@@ -86,7 +86,7 @@ qemu-system-aarch64 \
   -append "root=/dev/vda rootwait rw console=ttyAMA0 systemd.unit=multi-user.target"
 ```
 
-The VM is disconnected from the network, and `-snapshot` prevents guest changes from writing back to the disk image. No insecure default credentials are created.
+The VM is disconnected from the network, and `-snapshot` prevents guest changes from writing back to the disk image. First-boot identity written during this test is therefore intentionally discarded. No insecure default credentials are created.
 
 To try the standalone offline initialization tool:
 
@@ -95,7 +95,7 @@ mkdir -p tests/init-fixture
 cargo run -p init -- --root "$PWD/tests/init-fixture"
 ```
 
-This only creates/preserves `etc/hostname` in that test directory. It is **not** a systemd unit or live-boot initializer yet.
+This exercises the offline mode against a disposable directory. The separately packaged `--first-boot` mode is intended for the installed system and must not be run manually on the development host.
 
 ## AMD64 development on Debian 13 (ChromeOS Linux)
 

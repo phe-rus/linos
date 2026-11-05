@@ -35,5 +35,35 @@ if [[ $# -ne 0 ]]; then
     exit 2
 fi
 
+# The initializer is a native executable, so this is an architecture-specific
+# package. Reject cross-builds until a dedicated cross-compilation toolchain exists.
+HOST_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+case "$HOST_TRIPLE" in
+    x86_64-*) ARCH=amd64 ;;
+    aarch64-*) ARCH=arm64 ;;
+    *) echo "Unsupported Rust host: $HOST_TRIPLE" >&2; exit 2 ;;
+esac
+
+if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
+    echo "Host architecture and requested image architecture differ; cross-compilation is not configured" >&2
+    exit 2
+fi
+
+cargo build --release -p init
+
+STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
+trap 'rm -rf -- "$STAGING_DIR"' EXIT
+mkdir -p "$STAGING_DIR/package"
+cp -a packages/release/. "$STAGING_DIR/package/"
+
+sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN/control"
+install -m 755 target/release/init "$STAGING_DIR/package/usr/lib/linos/linos-init"
+
+UNIT_DIR="$STAGING_DIR/package/usr/lib/systemd/system"
+WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
+mkdir -p "$UNIT_DIR" "$WANTS_DIR"
+install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
+ln -s /usr/lib/systemd/system/linos-first-boot.service "$WANTS_DIR/linos-first-boot.service"
+
 mkdir -p packages/dist
-dpkg-deb --root-owner-group --build packages/release "$OUTPUT"
+dpkg-deb --root-owner-group --build "$STAGING_DIR/package" "$OUTPUT"

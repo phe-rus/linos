@@ -1,0 +1,16 @@
+[Unit]
+Description=Linos local device identity initialization
+Documentation=https://github.com/phe-rus/linos
+After=local-fs.target
+Before=multi-user.target
+ConditionPathExists=/usr/lib/linos/release
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-init --first-boot
+RemainAfterExit=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

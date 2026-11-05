@@ -34,6 +34,12 @@ if [[ "$PACKAGE_VERSION" != "$(awk '/^Version:/ { print $2 }' packages/release/D
     exit 1
 fi
 
+PACKAGE_ARCH="$(dpkg-deb -f "$PACKAGE" Architecture)"
+if [[ "$PACKAGE_ARCH" != "$ARCH" ]]; then
+    echo "Package architecture $PACKAGE_ARCH does not match image architecture $ARCH" >&2
+    exit 1
+fi
+
 KERNEL_PACKAGE="linux-image-${ARCH}"
 
 BUILD_DIR="images/server/builds/${ARCH}/${BUILD_ID}"

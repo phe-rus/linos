@@ -143,6 +143,10 @@ fn write_new(parent: &File, name: &str, value: &str, mode: u32) -> io::Result<()
 }
 
 fn initialize(root: &Path) -> io::Result<Device> {
+    initialize_for_root(root, false)
+}
+
+fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device> {
     if fs::symlink_metadata(root)?.file_type().is_symlink() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -150,7 +154,7 @@ fn initialize(root: &Path) -> io::Result<Device> {
         ));
     }
     let root = fs::canonicalize(root)?;
-    if root == Path::new("/") {
+    if root == Path::new("/") && !allow_live_root {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Live system initialization is not enabled",
@@ -228,35 +232,67 @@ fn initialize(root: &Path) -> io::Result<Device> {
     })
 }
 
+fn is_linos_release(contents: &str) -> bool {
+    contents.lines().any(|line| line == "ID=linos")
+}
+
+fn initialize_live() -> io::Result<Device> {
+    if rustix::process::geteuid().as_raw() != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "First-boot initialization requires root privileges",
+        ));
+    }
+    let release = fs::read_to_string("/usr/lib/linos/release")?;
+    if !is_linos_release(&release) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Live initialization is restricted to an installed Linos system",
+        ));
+    }
+    initialize_for_root(Path::new("/"), true)
+}
+
 fn main() -> io::Result<()> {
     let mut arguments = env::args().skip(1);
     let Some(option) = arguments.next() else {
-        eprintln!("Usage: init --root <directory>");
+        eprintln!("Usage: linos-init --root <directory> | --first-boot");
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Missing target directory",
+            "Missing initialization mode",
         ));
     };
-    if option != "--root" {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Expected --root",
-        ));
-    }
-    let Some(root) = arguments.next() else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Missing root directory",
-        ));
-    };
-    if arguments.next().is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Unexpected arguments",
-        ));
-    }
 
-    let device = initialize(&PathBuf::from(root))?;
+    let device = match option.as_str() {
+        "--first-boot" => {
+            if arguments.next().is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Unexpected first-boot arguments",
+                ));
+            }
+            initialize_live()?
+        }
+        "--root" => {
+            let root = arguments.next().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "Missing root directory")
+            })?;
+            if arguments.next().is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Unexpected arguments",
+                ));
+            }
+            initialize(&PathBuf::from(root))?
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Expected --root or --first-boot",
+            ));
+        }
+    };
+
     println!("Device hostname: {}", device.hostname);
     println!("Device identifier: {}", device.id);
     println!("Provisioning state: {}", device.state);
@@ -276,6 +312,13 @@ mod tests {
 
     fn cleanup(root: PathBuf) {
         fs::remove_dir_all(root).expect("clean test directory");
+    }
+
+    #[test]
+    fn detects_linos_release_identity() {
+        assert!(is_linos_release("NAME=\"linos\"\nID=linos\nVERSION_ID=\"13\"\n"));
+        assert!(!is_linos_release("ID=debian\n"));
+        assert!(!is_linos_release("ID=linos-extra\n"));
     }
 
     #[test]

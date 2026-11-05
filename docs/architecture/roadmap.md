@@ -1,6 +1,6 @@
 # Development roadmap
 
-This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development release: **Marauder, Sequence 9**, generation **1.0.0**, build **20261025.3**.
+This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development release: **Marauder, Sequence 9**, generation **1.0.0**, build **20261105.1**.
 
 ## Completed proof of concept
 
@@ -18,11 +18,11 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 
 ## Milestone 1: credible first boot
 
-- [ ] Define persistent device identity separate from hostname.
-- [ ] Model uninitialized, unclaimed, provisioned and recovery states; test interrupted operations.
-- [ ] Make the offline `init` tool safe against symlink/path traversal mistakes and partial writes.
+- [x] Define persistent device identity separate from hostname.
+- [ ] Complete the uninitialized, unclaimed, provisioned and recovery state model; interrupted offline initialization is tested.
+- [x] Harden offline `init` against common symlink/path traversal mistakes and recover from interrupted writes.
 - [ ] Add an authenticated local console administrator-enrollment flow; no default password.
-- [ ] Package and enable the initializer as a controlled first-boot service only after testing.
+- [ ] Verify the packaged root-privileged initializer and enabled systemd first-boot service in QEMU.
 - [ ] Integrate canonical OS identification without conflicting with Debian `base-files` ownership.
 - [ ] Confirm root filesystem checks, console behavior and service readiness in QEMU.
 
