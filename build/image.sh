@@ -44,6 +44,17 @@ if [[ -e "$BUILD_DIR" ]]; then
     exit 1
 fi
 
+# mmdebstrap may run in an unshared user namespace. ChromeOS home
+# directories are not always traversable from that namespace, so stage
+# local inputs under /tmp with read/traverse access.
+STAGING_DIR="$(mktemp -d /tmp/linos-image.XXXXXXXX)"
+STAGED_PACKAGE="$STAGING_DIR/$(basename "$PACKAGE")"
+STAGED_ISSUE="$STAGING_DIR/issue"
+trap 'rm -f -- "$STAGED_PACKAGE" "$STAGED_ISSUE"; rmdir -- "$STAGING_DIR"' EXIT
+chmod 755 "$STAGING_DIR"
+install -m 644 "$PACKAGE" "$STAGED_PACKAGE"
+install -m 644 system/base/identity/issue "$STAGED_ISSUE"
+
 mkdir -p "$BOOT_DIR"
 
 echo "Linos Image Builder"
@@ -59,9 +70,9 @@ mmdebstrap \
     --hook-dir=/usr/share/mmdebstrap/hooks/file-mirror-automount \
     --include=systemd-sysv,dbus,iproute2,procps,ca-certificates,openssh-server,initramfs-tools,e2fsprogs \
     --include="$KERNEL_PACKAGE" \
-    --include="$ROOT/$PACKAGE" \
+    --include="$STAGED_PACKAGE" \
     --customize-hook='rm -f "$1/etc/hostname"' \
-    --customize-hook="copy-in $ROOT/system/base/identity/issue /etc/" \
+    --customize-hook="copy-in $STAGED_ISSUE /etc/" \
     "$SUITE" \
     "$ROOT/$ROOTFS"
 
