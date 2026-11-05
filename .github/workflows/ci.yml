@@ -188,3 +188,76 @@ jobs:
           path: images/recovery/builds/**/*.log
           if-no-files-found: ignore
           retention-days: 7
+
+  installer-media:
+    name: amd64 · Offline installer media
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Check recovery and installer scripts
+        run: |
+          cargo +stable fmt --all -- --check
+          cargo +stable clippy --workspace --all-targets --locked -- -D warnings
+          cargo +stable test --workspace --locked
+          for file in build/*.sh; do bash -n "$file"; done
+
+      - name: Install build, GPT, and firmware dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates gnupg curl fakeroot \
+            gdisk dosfstools mtools systemd-boot-efi ovmf qemu-system-x86
+
+      - name: Install verified Debian 13 archive keys
+        run: |
+          keydir="$RUNNER_TEMP/linos-debian-keys"
+          mkdir -p "$keydir"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13.asc \
+            --output "$keydir/archive.asc"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13-security.asc \
+            --output "$keydir/security.asc"
+          (
+            cd "$keydir"
+            printf '%s\n' \
+              '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
+              '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
+              | sha256sum --check
+          )
+          gpg --batch --dearmor --output "$keydir/archive.gpg" "$keydir/archive.asc"
+          gpg --batch --dearmor --output "$keydir/security.gpg" "$keydir/security.asc"
+          cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
+          echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
+
+      - name: Build offline Server payload
+        run: |
+          ./build/package.sh
+          ./build/image.sh
+          ./build/payload.sh amd64
+
+      - name: Embed offline payload into independent Recovery
+        run: |
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+          LINOS_INSTALL_PAYLOAD_DIR="images/install/payloads/amd64/$build_id" ./build/recovery-image.sh amd64
+          debugfs -R 'cat /usr/share/linos/install/manifest' \
+            "images/recovery/builds/amd64/$build_id/disk.ext4" 2>/dev/null \
+            | grep -qx 'edition=server'
+
+      - name: Boot recovery media with offline payload
+        run: ./build/recovery-smoke.sh
+
+      - name: Upload installer-media diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-media-logs
+          path: images/recovery/builds/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7

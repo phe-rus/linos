@@ -1,5 +1,6 @@
 mod layout;
 mod planner;
+mod payload;
 
 use std::{
     fs,
@@ -72,7 +73,8 @@ fn interactive() -> io::Result<()> {
         println!("  2. Inspect disks (read-only)");
         println!("  3. Install Linos (not available yet)");
         println!("  4. Repair or restore (not available yet)");
-        println!("  5. Exit");
+        println!("  5. Verify offline payload");
+        println!("  6. Exit");
         print!("Select an option: ");
         io::stdout().flush()?;
         let mut input = String::new();
@@ -83,8 +85,13 @@ fn interactive() -> io::Result<()> {
             "1" => show_status(),
             "2" => show_disks(Path::new("/sys/block"))?,
             "3" | "4" => println!("This operation is not implemented. No disks were changed."),
-            "5" => return Ok(()),
-            _ => println!("Choose a number from 1 to 5."),
+            "5" => {
+                if let Err(error) = payload::verify() {
+                    println!("Offline payload unavailable or invalid: {error}");
+                }
+            }
+            "6" => return Ok(()),
+            _ => println!("Choose a number from 1 to 6."),
         }
     }
 }
@@ -126,7 +133,7 @@ fn run(args: &[String]) -> io::Result<()> {
     match args {
         [] => interactive(),
         [flag] if flag == "--help" || flag == "-h" => {
-            println!("Usage: linos-recovery [status|disks|profile|plan /dev/DEVICE|--help]");
+            println!("Usage: linos-recovery [status|disks|profile|payload|plan /dev/DEVICE|--help]");
             println!("Linos Server recovery console. All commands are read-only.");
             Ok(())
         }
@@ -136,6 +143,7 @@ fn run(args: &[String]) -> io::Result<()> {
         }
         [command] if command == "disks" => show_disks(Path::new("/sys/block")),
         [command] if command == "profile" => show_profile(),
+        [command] if command == "payload" => payload::verify(),
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,

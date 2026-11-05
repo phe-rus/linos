@@ -29,6 +29,33 @@ if [[ -n "${LINOS_KEYRING:-}" ]]; then
     KEYRING_ARGS+=(--keyring="$WORK/debian-keyring.gpg")
 fi
 
+# Optional offline Server payload is staged only for dedicated installer-media tests.
+# SHA-256 checks corruption; no payload is trusted or installed without signing.
+PAYLOAD_HOOKS=()
+if [[ -n "${LINOS_INSTALL_PAYLOAD_DIR:-}" ]]; then
+    PAYLOAD_SOURCE="$LINOS_INSTALL_PAYLOAD_DIR"
+    for name in rootfs.tar.gz kernel initramfs manifest SHA256SUMS; do
+        [[ -s "$PAYLOAD_SOURCE/$name" ]] || {
+            echo "Missing offline payload component: $name" >&2
+            exit 2
+        }
+    done
+    (
+        cd "$PAYLOAD_SOURCE"
+        sha256sum --check SHA256SUMS
+    )
+    grep -qx 'edition=server' "$PAYLOAD_SOURCE/manifest"
+    grep -qx 'architecture=amd64' "$PAYLOAD_SOURCE/manifest"
+    mkdir -p "$WORK/payload"
+    for name in rootfs.tar.gz kernel initramfs manifest SHA256SUMS; do
+        install -m 644 "$PAYLOAD_SOURCE/$name" "$WORK/payload/$name"
+    done
+    PAYLOAD_HOOKS+=(--customize-hook='mkdir -p "$1/usr/share/linos/install"')
+    for name in rootfs.tar.gz kernel initramfs manifest SHA256SUMS; do
+        PAYLOAD_HOOKS+=(--customize-hook="copy-in $WORK/payload/$name /usr/share/linos/install/")
+    done
+fi
+
 echo "Building independent Linos Server Recovery root filesystem ($ARCH)"
 mmdebstrap \
     "${KEYRING_ARGS[@]}" \
@@ -41,6 +68,7 @@ mmdebstrap \
     --customize-hook="copy-in $WORK/hardware-profile /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/linos-recovery.service /usr/lib/systemd/system/" \
     --customize-hook='ln -s /usr/lib/systemd/system/linos-recovery.service "$1/etc/systemd/system/multi-user.target.wants/linos-recovery.service"' \
+    "${PAYLOAD_HOOKS[@]}" \
     trixie "$ROOT/$OUT/rootfs.tar"
 
 KERNEL_MEMBER="$(tar -tf "$OUT/rootfs.tar" | awk '/^\.\/boot\/vmlinuz-[^/]+$/ && !found { print; found=1 }')"
