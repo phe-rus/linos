@@ -51,6 +51,10 @@ STAGE="$WORK/rootfs"
 mkdir -p "$STAGE"
 FAKE_STATE="$WORK/fakeroot.state"
 fakeroot -s "$FAKE_STATE" -- tar --same-owner --exclude="./dev/*" -xf "$OUT/rootfs.tar" -C "$STAGE"
+
+# Fresh recovery media does not need package-generated shadow database backups.
+# These may be mode 000 and unreadable to mkfs.ext4 in rootless fakeroot builds.
+rm -f -- "$STAGE/etc/gshadow-" "$STAGE/etc/shadow-"
 truncate -s 3G "$OUT/disk.ext4"
 fakeroot -i "$FAKE_STATE" -- mkfs.ext4 -F -q -L linos-recovery -d "$STAGE" "$OUT/disk.ext4"
 echo "Recovery root filesystem: $OUT/disk.ext4"
