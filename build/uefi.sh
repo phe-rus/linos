@@ -20,7 +20,12 @@ if [[ ! "$BUILD_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
     exit 2
 fi
 
-BUILD_DIR="images/server/builds/$ARCH/$BUILD_ID"
+PROFILE="${LINOS_UEFI_PROFILE:-server}"
+case "$PROFILE" in
+    server) BUILD_DIR="images/server/builds/$ARCH/$BUILD_ID" ;;
+    recovery) BUILD_DIR="images/recovery/builds/$ARCH/$BUILD_ID" ;;
+    *) echo "Unsupported UEFI profile: $PROFILE" >&2; exit 2 ;;
+esac
 KERNEL="$BUILD_DIR/boot/kernel"
 INITRAMFS="$BUILD_DIR/boot/initramfs"
 ROOTFS="$BUILD_DIR/disk.ext4"
@@ -88,12 +93,19 @@ mcopy -i "$ESP" "$BOOTLOADER" ::/EFI/BOOT/BOOTX64.EFI
 mcopy -i "$ESP" "$KERNEL" ::/linos/kernel
 mcopy -i "$ESP" "$INITRAMFS" ::/linos/initramfs
 
+TITLE='Linos 13 Server'
+KERNEL_OPTIONS='systemd.mask=linos-enroll.service systemd.unit=multi-user.target'
+if [[ "$PROFILE" == recovery ]]; then
+    TITLE='Linos 13 Recovery (Server CLI)'
+    KERNEL_OPTIONS='systemd.mask=serial-getty@ttyS0.service systemd.unit=multi-user.target'
+fi
+
 printf '%s\n' 'default linos' 'timeout 2' 'console-mode keep' > "$WORK/loader.conf"
 printf '%s\n' \
-    'title Linos 13 Server' \
+    "title $TITLE" \
     'linux /linos/kernel' \
     'initrd /linos/initramfs' \
-    "options root=UUID=$ROOT_UUID rootwait rw console=ttyS0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
+    "options root=UUID=$ROOT_UUID rootwait rw console=ttyS0,115200n8 $KERNEL_OPTIONS" \
     > "$WORK/linos.conf"
 mcopy -i "$ESP" "$WORK/loader.conf" ::/loader/loader.conf
 mcopy -i "$ESP" "$WORK/linos.conf" ::/loader/entries/linos.conf
@@ -104,4 +116,4 @@ mv "$DISK" "$OUTPUT"
 
 echo "UEFI image created: $OUTPUT"
 echo "System filesystem UUID: $ROOT_UUID"
-echo "Boot mode: GPT + FAT32 EFI + systemd-boot (Linos 13 Server)"
+echo "Boot mode: GPT + FAT32 EFI + systemd-boot ($TITLE)"

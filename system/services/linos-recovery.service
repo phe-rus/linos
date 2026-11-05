@@ -1,0 +1,20 @@
+[Unit]
+Description=Linos Recovery CLI
+After=systemd-udev-trigger.service
+ConditionPathExists=/usr/lib/linos/linos-recovery
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/linos/linos-recovery
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/ttyS0
+TTYReset=yes
+Restart=always
+RestartSec=1
+NoNewPrivileges=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

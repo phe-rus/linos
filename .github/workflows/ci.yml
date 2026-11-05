@@ -100,6 +100,12 @@ jobs:
           ./build/uefi.sh amd64
           ./build/uefi-smoke.sh
 
+      - name: Build and boot independent Server Recovery image
+        if: matrix.arch == 'amd64'
+        run: |
+          ./build/recovery-image.sh amd64
+          ./build/recovery-smoke.sh
+
       - name: Upload boot diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -113,5 +119,6 @@ jobs:
             images/server/builds/**/debugfs.log
             images/server/builds/**/enrollment-*.log
             images/server/builds/**/uefi-*.log
+            images/recovery/builds/**/*.log
           if-no-files-found: ignore
           retention-days: 7
