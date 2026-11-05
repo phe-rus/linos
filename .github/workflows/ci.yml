@@ -95,5 +95,8 @@ jobs:
           path: |
             images/server/builds/**/smoke.log
             images/server/builds/**/qemu.log
+            images/server/builds/**/boot-*.log
+            images/server/builds/**/fsck-*.log
+            images/server/builds/**/debugfs.log
           if-no-files-found: ignore
           retention-days: 7

@@ -25,7 +25,14 @@ if [[ ! -f "$SOURCE" ]]; then
 fi
 
 TEST_DIR="$(mktemp -d /tmp/linos-persistence.XXXXXXXX)"
-trap 'rm -r -- "$TEST_DIR"' EXIT
+cleanup() {
+    local status=$?
+    if (( status != 0 )); then
+        cp -- "$TEST_DIR"/*.log "images/server/builds/$ARCH/$BUILD_ID/" 2>/dev/null || true
+    fi
+    rm -r -- "$TEST_DIR"
+}
+trap cleanup EXIT
 TEST_DISK="$TEST_DIR/disk.ext4"
 cp --reflink=auto --sparse=always -- "$SOURCE" "$TEST_DISK"
 
@@ -46,6 +53,15 @@ for iteration in 1 2; do
         LINOS_SMOKE_LOG_PREFIX="$TEST_DIR/boot-$iteration" \
         LINOS_SMOKE_WRITE_DISK=1 \
         ./build/smoke.sh "$ARCH"
+    # QEMU is stopped like a sudden power loss. Replay the ext4 journal
+    # before inspecting the filesystem without mounting it.
+    fsck_status=0
+    e2fsck -fy "$TEST_DISK" >"$TEST_DIR/fsck-$iteration.log" 2>&1 || fsck_status=$?
+    if (( fsck_status > 1 )); then
+        echo "Filesystem recovery failed with code $fsck_status" >&2
+        cat "$TEST_DIR/fsck-$iteration.log" >&2
+        exit 1
+    fi
     identity="$(read_identity)"
     if [[ "$iteration" == 1 ]]; then
         first_identity="$identity"
