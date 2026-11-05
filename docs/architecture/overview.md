@@ -1,6 +1,14 @@
 # Linos architecture
 
-Linos is a Linux-based operating system with a Debian-compatible userspace. It is designed as a cohesive system rather than a desktop environment layered over a stock installation. The first engineering milestone is a stable, headless server image; graphical software is out of scope for the present phase.
+Linos is its own Linux-based operating system, designed as a coherent system rather than a desktop environment or a renamed Debian installation. Debian 13 repositories and packages are an initial bootstrap dependency. Long term, Linos owns its system architecture, integration, identity, policies, services, release model and distribution choices. Linux application compatibility is an intentional boundary, not a commitment to adopt Debian's product design. The first engineering milestone is a stable, headless server image; graphical software is out of scope for the present phase.
+
+## Product philosophy and distribution boundary
+
+- Design end-to-end coherence across installation, system settings, updates, security and application experience. Study Apple's integration philosophy, but do not imitate its UI or rely on closed Apple technologies.
+- Keep user control and administrator freedom, with understandable permissions and safe recovery.
+- Start from Debian packages and `apt` as implementation inputs, not a permanent identity. Record which base components Linos adopts, changes or eventually replaces.
+- Maintain compatibility deliberately: changing packaging or system internals requires migration plans and measurable tests.
+- Keep the server core independent of any future desktop shell.
 
 ## Layers and boundaries
 

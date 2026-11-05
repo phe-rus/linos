@@ -1,8 +1,8 @@
 # Linos
 
-**Linos 13** is an experimental Linux-based operating system developed by Pherus. Its goal is a reliable and cohesive experience for servers and personal devices, inspired by the system design of macOS, iPadOS, iOS and ChromeOS without reproducing their interfaces or abandoning Linux compatibility.
+**Linos 13** is an experimental Linux-based operating system developed by Pherus. Its goal is an independently designed, coherent experience for servers and personal devices. Apple's approach to integration, consistency and user experience is an influence, alongside other ideas, but Linos will define its own interfaces, system services, security model and behavior.
 
-Linos uses the Linux kernel, Debian packages and `apt`. The first development target is a headless server system. A graphical environment is a later, separate project.
+The first bootstrap uses the Linux kernel, Debian 13 repositories, packages and `apt` to move quickly. This is a **temporary foundation**, not an intention to remain a Debian rebrand. Linos will progressively own its build, base-system packages, policies, services, release lifecycle and eventual package/distribution strategy while preserving intentional Linux application compatibility. The first target is a headless server image; a graphical environment comes later.
 
 > **Status:** early development prototype, not a production-ready operating system. The Orange Pi 5 Plus is a development host, not the only supported target.
 
@@ -96,6 +96,21 @@ cargo run -p init -- --root "$PWD/tests/init-fixture"
 ```
 
 This only creates/preserves `etc/hostname` in that test directory. It is **not** a systemd unit or live-boot initializer yet.
+
+## AMD64 development on Debian 13 (ChromeOS Linux)
+
+These commands run inside the Debian container. The AMD64 image uses Debian's kernel and package repositories for now; it is not a ChromeOS boot image. QEMU runs entirely in software when hardware virtualization is unavailable.
+
+```bash
+sudo apt update
+sudo apt install mmdebstrap dpkg-dev e2fsprogs qemu-system-x86 qemu-utils ca-certificates
+mkdir -p packages/dist
+dpkg-deb --build packages/release packages/dist/linos-release_1.0.0_all.deb
+./build/image.sh
+./build/smoke.sh amd64
+```
+
+The smoke test boots the generated image without networking and without persisting guest modifications. It looks for a serial login prompt and saves the serial output under the ignored `images/` directory. It does not confirm that administrator provisioning or networking works. Avoid running the image builder with `sudo` unless your host's `mmdebstrap` configuration requires it; inspect any privilege request before proceeding.
 
 ## Direction
 

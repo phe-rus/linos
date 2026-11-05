@@ -31,8 +31,8 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 ## Milestone 2: reproducible builds and supported targets
 
 - [ ] Encode dependency versions and build inputs in a reproducible recipe.
-- [ ] Add automated boot smoke tests that detect regressions.
-- [ ] Build and boot an AMD64 QEMU image; retain architecture autodetection.
+- [ ] Run and verify the new local QEMU boot smoke script on ARM64 and AMD64, then add CI automation.
+- [ ] Build and boot an AMD64 QEMU image on the ChromeOS Debian 13 development host; retain architecture autodetection.
 - [ ] Distinguish system package architecture from SoC-specific firmware and device trees.
 - [ ] Add explicit hardware support manifests for real boards, including RK3588.
 - [ ] Create an installer that discovers storage and asks for confirmation before formatting.
@@ -69,6 +69,10 @@ These are **prototype achievements**, not proof of general hardware compatibilit
 - [ ] Evaluate policies against measured workloads, not aesthetic assumptions.
 
 **Acceptance:** demonstrate reproducible improvements without data loss or starvation.
+
+## Product independence
+
+Debian repositories, `apt` and the Debian kernel are first-stage build inputs, not the identity of Linos. Incrementally define Linos-owned package policies, core services, system behavior and release infrastructure. Preserve deliberate Linux compatibility and avoid a breaking "rewrite everything" transition.
 
 ## Later: user experience
 
