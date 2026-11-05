@@ -1,3 +1,5 @@
+mod planner;
+
 use std::{
     fs,
     io::{self, Write},
@@ -119,38 +121,6 @@ fn show_profile() -> io::Result<()> {
     Ok(())
 }
 
-fn valid_device_argument(device: &str) -> Option<&str> {
-    let name = device.strip_prefix("/dev/")?;
-    visible_block_device(name).then_some(name)
-}
-
-fn show_plan(device: &str, sys_block: &Path) -> io::Result<()> {
-    let name = valid_device_argument(device).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Expected a block device like /dev/vda",
-        )
-    })?;
-    let path = sys_block.join(name);
-    let sectors = fs::read_to_string(path.join("size"))?
-        .trim()
-        .parse::<u64>()
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let readonly = fs::read_to_string(path.join("ro"))?;
-    let removable = fs::read_to_string(path.join("removable"))?;
-    println!("Linos installation planning report (read-only)");
-    println!("  Target: {device}");
-    println!(
-        "  Capacity: {:.1} GiB",
-        sectors as f64 * 512.0 / 1_073_741_824.0
-    );
-    println!("  Read-only flag: {}", readonly.trim());
-    println!("  Removable flag: {}", removable.trim());
-    println!("  State: BLOCKED");
-    println!("  Boot-media detection, data protection, partition layout, and installation");
-    println!("  authorization have not yet been implemented. No disks were changed.");
-    Ok(())
-}
 
 fn run(args: &[String]) -> io::Result<()> {
     match args {
@@ -166,7 +136,7 @@ fn run(args: &[String]) -> io::Result<()> {
         }
         [command] if command == "disks" => show_disks(Path::new("/sys/block")),
         [command] if command == "profile" => show_profile(),
-        [command, device] if command == "plan" => show_plan(device, Path::new("/sys/block")),
+        [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Unknown recovery command. Use --help.",
@@ -219,11 +189,9 @@ mod tests {
 
     #[test]
     fn installation_targets_require_explicit_device_paths() {
-        assert_eq!(valid_device_argument("/dev/vda"), Some("vda"));
-        assert_eq!(valid_device_argument("/dev/nvme0n1"), Some("nvme0n1"));
-        assert_eq!(valid_device_argument("/dev/../vda"), None);
-        assert_eq!(valid_device_argument("vda"), None);
-        assert_eq!(valid_device_argument("/dev/loop0"), None);
+        assert!(planner::inspect("/dev/../vda", Path::new("/sys/block")).is_err());
+        assert!(planner::inspect("vda", Path::new("/sys/block")).is_err());
+        assert!(planner::inspect("/dev/loop0", Path::new("/sys/block")).is_err());
     }
 
     #[test]
