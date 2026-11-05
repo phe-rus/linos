@@ -121,7 +121,6 @@ fn show_profile() -> io::Result<()> {
     Ok(())
 }
 
-
 fn run(args: &[String]) -> io::Result<()> {
     match args {
         [] => interactive(),
