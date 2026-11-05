@@ -25,6 +25,7 @@ KERNEL="$BUILD_DIR/boot/kernel"
 INITRAMFS="$BUILD_DIR/boot/initramfs"
 DISK="$BUILD_DIR/disk.ext4"
 LOG="$BUILD_DIR/smoke.log"
+QEMU_LOG="$BUILD_DIR/qemu.log"
 
 for path in "$KERNEL" "$INITRAMFS" "$DISK"; do
     if [[ ! -f "$path" ]]; then
@@ -43,7 +44,8 @@ if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
         qemu-system-x86_64
         -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048
-        -nographic -no-reboot
+        -display none -no-reboot -monitor none
+        -chardev "file,id=linos_serial,path=$LOG" -serial chardev:linos_serial
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-pci,drive=rootfs
@@ -63,8 +65,13 @@ fi
 
 echo "Boot-testing Linos 13 ($ARCH), build $BUILD_ID"
 echo "Serial log: $LOG"
+: > "$LOG"
 set +e
-timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >"$LOG" 2>&1
+if [[ "$ARCH" == amd64 ]]; then
+    timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >"$QEMU_LOG" 2>&1
+else
+    timeout --signal=TERM --kill-after=5s 120s "${COMMAND[@]}" -snapshot -net none >"$LOG" 2>&1
+fi
 STATUS=$?
 set -e
 
@@ -75,4 +82,8 @@ fi
 
 printf 'FAIL: serial login prompt not observed (QEMU exit: %s)\n' "$STATUS" >&2
 tail -n 35 "$LOG" >&2
+if [[ "$ARCH" == amd64 && -s "$QEMU_LOG" ]]; then
+    echo "QEMU diagnostics:" >&2
+    tail -n 20 "$QEMU_LOG" >&2
+fi
 exit 1
