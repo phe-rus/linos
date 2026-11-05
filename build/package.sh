@@ -65,6 +65,13 @@ WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
 mkdir -p "$UNIT_DIR" "$WANTS_DIR"
 install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
 install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
+
+# SSH remains unavailable until local enrollment creates an owner record.
+for unit in ssh.service ssh.socket; do
+    DROPIN_DIR="$UNIT_DIR/$unit.d"
+    mkdir -p "$DROPIN_DIR"
+    install -m 644 system/services/ssh-enrollment.conf "$DROPIN_DIR/linos-enrollment.conf"
+done
 ln -s /usr/lib/systemd/system/linos-first-boot.service "$WANTS_DIR/linos-first-boot.service"
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 
