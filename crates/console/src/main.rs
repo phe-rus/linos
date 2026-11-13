@@ -143,10 +143,10 @@ fn interactive() -> io::Result<ExitCode> {
         match input.trim() {
             "1" => status(),
             "2" => {
-                command("ip", &["-brief", "address"])?;
+                let _ = command("ip", &["-brief", "address"])?;
             }
             "3" => {
-                command(
+                let _ = command(
                     "systemctl",
                     &[
                         "list-units",
