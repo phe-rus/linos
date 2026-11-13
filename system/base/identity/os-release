@@ -1,0 +1,10 @@
+NAME="Linos"
+PRETTY_NAME="Linos 13 Server"
+ID=linos
+ID_LIKE=debian
+VERSION_ID="13"
+VERSION="13 (Marauder, Sequence 9)"
+VERSION_CODENAME=marauder
+HOME_URL="https://github.com/phe-rus/linos"
+SUPPORT_URL="https://github.com/phe-rus/linos/issues"
+BUG_REPORT_URL="https://github.com/phe-rus/linos/issues/new"

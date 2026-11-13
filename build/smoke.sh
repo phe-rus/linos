@@ -53,7 +53,7 @@ if [[ "$ARCH" == amd64 ]]; then
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-pci,drive=rootfs
-        -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 systemd.mask=linos-enroll.service systemd.unit=multi-user.target"
+        -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.mask=linos-enroll.service systemd.unit=multi-user.target"
     )
 else
     COMMAND=(
@@ -64,7 +64,7 @@ else
         -kernel "$KERNEL" -initrd "$INITRAMFS"
         -drive "file=$DISK,if=none,format=raw,id=rootfs"
         -device virtio-blk-device,drive=rootfs
-        -append "root=/dev/vda rootwait rw console=ttyAMA0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target"
+        -append "root=/dev/vda rootwait rw console=ttyAMA0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.mask=linos-enroll.service systemd.unit=multi-user.target"
     )
 fi
 

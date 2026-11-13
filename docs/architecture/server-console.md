@@ -31,3 +31,19 @@ cargo test -p console --locked
 
 On a booted Server guest, run `linos` for the guided menu or
 `linos status` for the noninteractive overview.
+
+## Boot presentation
+
+The Server image uses Linos' own `/etc/os-release` identity so systemd
+announces Linos rather than Debian during startup. This does not misrepresent
+the current Debian 13 base or rewrite its kernel identity. A quiet normal boot
+uses `quiet loglevel=3 systemd.show_status=auto`: healthy startup details
+are retained in the journal, while warnings and failures remain visible.
+Run `journalctl -b` or `dmesg` after login for full diagnostics.
+For a deliberately verbose boot, remove the quiet arguments and add
+`loglevel=7 systemd.show_status=yes` in the test QEMU kernel command line.
+
+The first boot has **no default username or password**. Enrollment prompts
+for a new administrator name and password, and getty units are ordered after
+the enrollment service so no competing login prompt appears during setup.
+After enrollment, log in with the credentials just created.

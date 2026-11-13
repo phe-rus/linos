@@ -26,6 +26,8 @@ fi
 
 echo "Linos 13 interactive console"
 echo "Persistent guest changes are stored only in: $OVERLAY"
+echo "No default login exists. On first boot, create a username and password in Linos enrollment."
+echo "After setup, sign in using the username/password you selected."
 echo "No network access is configured. Press Ctrl+A, then X to exit QEMU."
 
 exec qemu-system-x86_64 \
@@ -34,4 +36,4 @@ exec qemu-system-x86_64 \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
     -device virtio-blk-pci,drive=rootfs \
-    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 earlyprintk=serial,ttyS0,115200 systemd.unit=multi-user.target"
+    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.unit=multi-user.target"

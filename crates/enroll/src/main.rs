@@ -249,9 +249,13 @@ fn enroll() -> io::Result<()> {
         ));
     }
 
-    println!("Linos 13 | Local administrator enrollment");
-    println!("Use this system's trusted physical or virtual console.");
-    println!("No default administrator password will be created.");
+    println!();
+    println!("  Linos 13  /  First-time setup");
+    println!("  ---------------------------------------");
+    println!("  [1/2] Create your administrator account");
+    println!("  Choose your own username. There is no default login.");
+    println!("  This setup works offline. Use the trusted local console.");
+    println!();
     let username = prompt_username()?;
     let pending = Path::new(STATE_DIR).join("pending-owner");
 
@@ -284,7 +288,7 @@ fn enroll() -> io::Result<()> {
 
     ensure_home(&username)?;
 
-    println!("Choose a strong password for {username}.");
+    println!("  [2/2] Create a strong password for {username}.");
     run("/usr/bin/passwd", &[&username])?;
 
     create_state(
@@ -293,7 +297,10 @@ fn enroll() -> io::Result<()> {
     )?;
     commit_provisioned_state()?;
     fs::remove_file(pending)?;
-    println!("Linos administrator enrollment complete. Please reboot.");
+    println!();
+    println!("  [ OK ] Administrator setup complete.");
+    println!("  Sign in as {username} using the password you created.");
+    println!();
     Ok(())
 }
 

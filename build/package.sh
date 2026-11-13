@@ -75,6 +75,12 @@ for unit in ssh.service ssh.socket; do
     install -m 644 system/services/ssh-enrollment.conf "$DROPIN_DIR/linos-enrollment.conf"
 done
 ln -s /usr/lib/systemd/system/linos-first-boot.service "$WANTS_DIR/linos-first-boot.service"
+# A getty must not compete for the physical console while enrollment owns it.
+for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.service; do
+    DROPIN_DIR="$UNIT_DIR/$unit.d"
+    mkdir -p "$DROPIN_DIR"
+    install -m 644 system/services/linos-getty-after-enrollment.conf "$DROPIN_DIR/linos-enrollment-order.conf"
+done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 
 mkdir -p packages/dist

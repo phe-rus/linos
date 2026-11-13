@@ -21,6 +21,7 @@ install -m 755 target/release/recovery "$WORK/linos-recovery"
 install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.service"
 install -m 644 packages/release/usr/lib/linos/release "$WORK/release"
 install -m 644 hardware/profiles/amd64-uefi-server.conf "$WORK/hardware-profile"
+install -m 644 system/base/identity/os-release "$WORK/os-release"
 
 KEYRING_ARGS=()
 if [[ -n "${LINOS_KEYRING:-}" ]]; then
@@ -84,6 +85,8 @@ mmdebstrap \
     --customize-hook="copy-in $WORK/linos-recovery /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/release /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/hardware-profile /usr/lib/linos/" \
+    --customize-hook='rm -f "$1/etc/os-release"' \
+    --customize-hook="copy-in $WORK/os-release /etc/" \
     --customize-hook="copy-in $WORK/linos-recovery.service /usr/lib/systemd/system/" \
     --customize-hook='ln -s /usr/lib/systemd/system/linos-recovery.service "$1/etc/systemd/system/multi-user.target.wants/linos-recovery.service"' \
     "${PAYLOAD_HOOKS[@]}" \

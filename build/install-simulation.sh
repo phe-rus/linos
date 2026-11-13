@@ -67,7 +67,7 @@ printf '%s\n' \
     'title Linos 13 Server (simulated install)' \
     'linux /linos/kernel' \
     'initrd /linos/initramfs' \
-    "options root=UUID=$SYSTEM_UUID rootwait rw console=ttyS0,115200n8 systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
+    "options root=UUID=$SYSTEM_UUID rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
     > "$WORK/linos.conf"
 mcopy -i "$ESP" "$WORK/loader.conf" ::/loader/loader.conf
 mcopy -i "$ESP" "$WORK/linos.conf" ::/loader/entries/linos.conf
