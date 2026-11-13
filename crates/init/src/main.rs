@@ -294,9 +294,10 @@ fn main() -> io::Result<()> {
         }
     };
 
-    println!("Device hostname: {}", device.hostname);
-    println!("Device identifier: {}", device.id);
+    println!("  [ OK ] Linos device identity ready");
+    println!("  [ OK ] Hostname: {}", device.hostname);
     println!("Provisioning state: {}", device.state);
+    eprintln!("Device identifier: {}", device.id);
     Ok(())
 }
 

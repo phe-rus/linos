@@ -10,7 +10,7 @@ Type=oneshot
 ExecStart=/usr/lib/linos/linos-init --first-boot
 RemainAfterExit=yes
 StandardOutput=journal+console
-StandardError=journal+console
+StandardError=journal
 NoNewPrivileges=yes
 PrivateTmp=yes
 
