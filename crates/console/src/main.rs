@@ -37,18 +37,31 @@ fn value_in(text: &str, key: &str) -> Option<String> {
 fn uptime() -> Option<String> {
     let raw = fs::read_to_string("/proc/uptime").ok()?;
     let seconds = raw.split_whitespace().next()?.parse::<f64>().ok()? as u64;
-    Some(format!("{}d {}h {}m", seconds / 86400, (seconds / 3600) % 24, (seconds / 60) % 60))
+    Some(format!(
+        "{}d {}h {}m",
+        seconds / 86400,
+        (seconds / 3600) % 24,
+        (seconds / 60) % 60
+    ))
 }
 
 fn memory() -> Option<String> {
     let raw = fs::read_to_string("/proc/meminfo").ok()?;
     let field = |key: &str| -> Option<u64> {
-        raw.lines().find(|line| line.starts_with(key))?
-            .split_whitespace().nth(1)?.parse().ok()
+        raw.lines()
+            .find(|line| line.starts_with(key))?
+            .split_whitespace()
+            .nth(1)?
+            .parse()
+            .ok()
     };
     let total = field("MemTotal:")?;
     let available = field("MemAvailable:")?;
-    Some(format!("{} / {} MiB used", (total - available) / 1024, total / 1024))
+    Some(format!(
+        "{} / {} MiB used",
+        (total - available) / 1024,
+        total / 1024
+    ))
 }
 
 fn release() -> String {
@@ -61,13 +74,27 @@ fn release() -> String {
 fn status() {
     heading("Linos 13  /  Server");
     item("Version", &release());
-    item("Hostname", &fs::read_to_string("/etc/hostname")
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_else(|_| "unknown".into()));
-    if let Some(value) = uptime() { item("Uptime", &value); }
-    if let Some(value) = memory() { item("Memory", &value); }
+    item(
+        "Hostname",
+        &fs::read_to_string("/etc/hostname")
+            .map(|value| value.trim().to_owned())
+            .unwrap_or_else(|_| "unknown".into()),
+    );
+    if let Some(value) = uptime() {
+        item("Uptime", &value);
+    }
+    if let Some(value) = memory() {
+        item("Memory", &value);
+    }
     let provisioned = fs::metadata("/var/lib/linos/owner").is_ok();
-    item("Ownership", if provisioned { "locally enrolled" } else { "not confirmed" });
+    item(
+        "Ownership",
+        if provisioned {
+            "locally enrolled"
+        } else {
+            "not confirmed"
+        },
+    );
     println!();
 }
 
@@ -75,7 +102,9 @@ fn valid_unit(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && !name.starts_with('-')
-        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"._@-".contains(&b))
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._@-".contains(&b))
         && !name.contains("..")
 }
 
@@ -108,11 +137,25 @@ fn interactive() -> io::Result<ExitCode> {
         print!("\n  Choose an option: ");
         io::stdout().flush()?;
         let mut input = String::new();
-        if io::stdin().read_line(&mut input)? == 0 { return Ok(ExitCode::SUCCESS); }
+        if io::stdin().read_line(&mut input)? == 0 {
+            return Ok(ExitCode::SUCCESS);
+        }
         match input.trim() {
             "1" => status(),
-            "2" => { command("ip", &["-brief", "address"])?; },
-            "3" => { command("systemctl", &["list-units", "--type=service", "--state=running", "--no-pager"])?; },
+            "2" => {
+                command("ip", &["-brief", "address"])?;
+            }
+            "3" => {
+                command(
+                    "systemctl",
+                    &[
+                        "list-units",
+                        "--type=service",
+                        "--state=running",
+                        "--no-pager",
+                    ],
+                )?;
+            }
             "4" | "q" | "exit" => return Ok(ExitCode::SUCCESS),
             _ => println!("  Choose 1, 2, 3 or 4."),
         }
@@ -122,17 +165,34 @@ fn interactive() -> io::Result<ExitCode> {
 fn run(args: &[String]) -> io::Result<ExitCode> {
     match args {
         [] if io::stdin().is_terminal() && io::stdout().is_terminal() => interactive(),
-        [] => { help(); Ok(ExitCode::SUCCESS) },
-        [arg] if arg == "help" || arg == "--help" || arg == "-h" => {
-            help(); Ok(ExitCode::SUCCESS)
+        [] => {
+            help();
+            Ok(ExitCode::SUCCESS)
         }
-        [arg] if arg == "status" => { status(); Ok(ExitCode::SUCCESS) },
+        [arg] if arg == "help" || arg == "--help" || arg == "-h" => {
+            help();
+            Ok(ExitCode::SUCCESS)
+        }
+        [arg] if arg == "status" => {
+            status();
+            Ok(ExitCode::SUCCESS)
+        }
         [arg] if arg == "network" => command("ip", &["-brief", "address"]),
-        [arg] if arg == "services" => command("systemctl", &["list-units", "--type=service", "--state=running", "--no-pager"]),
-        [arg, name] if arg == "service" && valid_unit(name) =>
-            command("systemctl", &["status", "--no-pager", "--", name]),
-        [arg, name] if arg == "logs" && valid_unit(name) =>
-            command("journalctl", &["--no-pager", "-n", "60", "-u", name]),
+        [arg] if arg == "services" => command(
+            "systemctl",
+            &[
+                "list-units",
+                "--type=service",
+                "--state=running",
+                "--no-pager",
+            ],
+        ),
+        [arg, name] if arg == "service" && valid_unit(name) => {
+            command("systemctl", &["status", "--no-pager", "--", name])
+        }
+        [arg, name] if arg == "logs" && valid_unit(name) => {
+            command("journalctl", &["--no-pager", "-n", "60", "-u", name])
+        }
         _ => {
             eprintln!("linos: invalid command or service name. Run 'linos help'.");
             Ok(ExitCode::from(2))
@@ -166,12 +226,18 @@ mod tests {
     }
     #[test]
     fn release_fields_are_read_safely() {
-        assert_eq!(value_in("VERSION_ID=\"13\"\n", "VERSION_ID").as_deref(), Some("13"));
+        assert_eq!(
+            value_in("VERSION_ID=\"13\"\n", "VERSION_ID").as_deref(),
+            Some("13")
+        );
         assert_eq!(value_in("OTHER=x\n", "VERSION_ID"), None);
     }
     #[test]
     fn unknown_commands_fail() {
         assert_eq!(run(&["install".into()]).unwrap(), ExitCode::from(2));
-        assert_eq!(run(&["service".into(), "../bad".into()]).unwrap(), ExitCode::from(2));
+        assert_eq!(
+            run(&["service".into(), "../bad".into()]).unwrap(),
+            ExitCode::from(2)
+        );
     }
 }
