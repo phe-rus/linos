@@ -84,6 +84,11 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     send -- "stty -echo\r"
     await {[$] }
 
+    # Confirm the packaged Linos UI command runs inside the real guest.
+    # No shell startup file or prompt customization is required.
+    send -- "linos status | grep -q 'Linos 13  /  Server' && echo LINOS_CONSOLE_OK\r"
+    await {LINOS_CONSOLE_OK}
+
     # The guest gets test-only networking; Linos's image defaults stay unchanged.
     send -- "sudo -S -p 'LINOS_SUDO:' sh -c 'dev=\$(ls /sys/class/net | grep -v lo | head -1); ip link set \"\$dev\" up; ip addr add 10.0.2.15/24 dev \"\$dev\"'; echo LINOS_NETWORK_READY\r"
     await {LINOS_SUDO:}

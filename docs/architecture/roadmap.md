@@ -50,7 +50,7 @@ pinning, physical-device validation, and an enabled safe installer are outstandi
 - [x] Verify the proposed GPT geometry on fresh disposable images.
 - [x] Package an offline Server payload and simulate its installation on disposable storage.
 - [x] Add SHA-256 integrity verification and Ed25519 signature verification code.
-- [ ] Confirm the signed Recovery media path in a completed CI run.
+- [x] Confirm the signed Recovery media path in a completed CI run ([CI run](https://github.com/phe-rus/linos/actions/runs/42594094015)).
 - [ ] Implement a transactional, explicitly confirmed physical-disk installer.
 - [ ] Add Recovery repair, rollback, and data-preserving reinstall workflows.
 

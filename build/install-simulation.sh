@@ -35,6 +35,11 @@ truncate -s 4G "$SYSTEM"
 fakeroot -i "$FAKE_STATE" -- mkfs.ext4 -F -q -L linos-system-a -d "$STAGE" "$SYSTEM"
 SYSTEM_UUID="$(dumpe2fs -h "$SYSTEM" 2>/dev/null | sed -n 's/^Filesystem UUID:[[:space:]]*//p')"
 [[ -n "$SYSTEM_UUID" ]] || { echo "Unable to read installed filesystem UUID" >&2; exit 1; }
+# The installed System A must contain the new native administration console.
+debugfs -R 'stat /usr/bin/linos' "$SYSTEM" 2>/dev/null | grep -q 'Type: regular' || {
+    echo "Installed system has no Linos administration console" >&2
+    exit 1
+}
 
 truncate -s 16G "$DISK"
 sgdisk --clear \

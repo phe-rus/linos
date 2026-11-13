@@ -17,9 +17,11 @@ images/install/payloads/amd64/<build>/
 └── SHA256SUMS
 ```
 
-The payload records image edition and architecture. SHA-256 verifies
-accidental corruption, **not** authenticity. Production installation will
-require signed manifests and a trusted public-key policy.
+The payload records image edition and architecture. SHA-256 checks integrity, while the signed-media CI path uses an Ed25519
+signature and a separately supplied public key at build time. Production
+release keys and a trust anchor independent of replaceable installation media
+are still required. The present development media is not a fully trusted
+production installer.
 
 ## Disposable installation simulation
 
@@ -39,7 +41,7 @@ paths or runs any write operation on a physical block device.
 
 ## Remaining for a real installer
 
-- Embed the verified offline payload into the separate Recovery boot media.
+- Establish a production release-key and trusted-key distribution policy (the signed Recovery media CI path is already working).
 - Move the deployment engine behind an authenticated, explicitly authorized
   Rust recovery installer, with robust target identity and source-media checks.
 - Implement System B, Recovery and persistent Data provisioning.
