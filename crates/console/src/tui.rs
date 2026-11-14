@@ -855,7 +855,7 @@ mod tests {
                 .iter()
                 .map(|cell| cell.symbol().to_owned())
                 .collect();
-            assert!(screen.contains("LINOS") || screen.contains("Linos 13"));
+            assert!(screen.contains("Linos"), "Missing Linos identity at {width}x{height}");
             assert!(screen.contains("Type / for commands") || width < 36 || height < 14);
         }
     }
@@ -879,7 +879,7 @@ mod tests {
         let mut app = App::new();
         app.key(press(KeyCode::Char('/'))).unwrap();
         app.key(press(KeyCode::Char('s'))).unwrap();
-        assert_eq!(app.suggestions().len(), 5); // status, services, settings, shell, shutdown
+        assert_eq!(app.suggestions().len(), 6); // status, services, settings, store, shell, shutdown
         app.key(press(KeyCode::Char('t'))).unwrap();
         app.key(press(KeyCode::Enter)).unwrap();
         assert_eq!(app.view, View::Status);
