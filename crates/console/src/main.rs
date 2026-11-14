@@ -116,7 +116,7 @@ fn help() {
     println!("A normal shell remains available after selecting 'Return to shell'.");
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     Status,
     Network,

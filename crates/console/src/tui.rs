@@ -53,6 +53,7 @@ struct App {
     palette: Option<String>,
     confirm: Option<Action>,
     info: String,
+    content: String,
     scroll: u16,
     user: String,
 }
@@ -65,6 +66,7 @@ impl App {
             palette: None,
             confirm: None,
             info: String::from("Ready  ·  Press / for commands  ·  Tab to navigate"),
+            content: overview(),
             scroll: 0,
             user: env::var("USER").unwrap_or_else(|_| "operator".to_owned()),
         }
@@ -73,6 +75,7 @@ impl App {
     fn view(&mut self, screen: Screen) {
         self.screen = screen;
         self.scroll = 0;
+        self.content = content_for(screen, &self.user);
         self.info = match screen {
             Screen::Overview => "System overview".into(),
             Screen::Network => "Read-only network interfaces".into(),
@@ -194,13 +197,13 @@ fn read_command(program: &str, args: &[&str]) -> String {
     }
 }
 
-fn page_content(app: &App) -> String {
-    match app.screen {
+fn content_for(screen: Screen, user: &str) -> String {
+    match screen {
         Screen::Overview => format!(
             "Linos {} Server\n\nDevice       {}\nSession      {}\nUptime       {}\nMemory       {}\n\n{}\n\nSystem data is read-only on this page.",
             version(),
             host(),
-            app.user,
+            user,
             uptime().unwrap_or_else(|| "Unavailable".into()),
             memory().unwrap_or_else(|| "Unavailable".into()),
             overview()
@@ -289,12 +292,12 @@ fn draw(frame: &mut Frame, app: &App) {
     let wide = area.width >= 76;
     let middle = if wide {
         Layout::default()
-            .direction(Direction::Horizontal())
+            .direction(Direction::Horizontal)
             .constraints([Constraint::Length(23), Constraint::Min(20)])
             .split(vertical[1])
     } else {
         Layout::default()
-            .direction(Direction::Vertical())
+            .direction(Direction::Vertical)
             .constraints([Constraint::Length(10), Constraint::Min(3)])
             .split(vertical[1])
     };
@@ -318,7 +321,7 @@ fn draw(frame: &mut Frame, app: &App) {
         Screen::Logs => "Journal",
         Screen::Help => "Help",
     };
-    let content = Paragraph::new(page_content(app))
+    let content = Paragraph::new(app.content.as_str())
         .block(panel(title))
         .wrap(Wrap { trim: false })
         .scroll((app.scroll, 0));
@@ -382,7 +385,7 @@ pub fn run() -> io::Result<ExitCode> {
             if event::poll(Duration::from_millis(120))? {
                 if let Event::Key(key) = event::read()? {
                     if let Some(exit) = app.key(key)? {
-                        break Ok(exit);
+                        break Ok::<Exit, io::Error>(exit);
                     }
                 }
             }
