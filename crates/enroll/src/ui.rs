@@ -2,6 +2,9 @@
 use std::{
     env,
     io::{self, IsTerminal, Write},
+    process::Command,
+    thread,
+    time::Duration,
 };
 
 #[derive(Clone, Copy)]
@@ -83,7 +86,26 @@ fn display(stage: Stage, name: Option<&str>) -> io::Result<()> {
     stdout.flush()
 }
 
+// systemd PID 1 prints [ OK ] progress on the active serial console.
+// Stop only that *presentation* before drawing an interactive form.
+// SIGRTMIN+21 is systemd's documented runtime switch for ShowStatus=off.
+// It is reset on every reboot, so the next boot still shows progress.
+fn end_boot_status_output() -> io::Result<()> {
+    let status = Command::new("/usr/bin/kill")
+        .args(["-s", "RTMIN+21", "1"])
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::other("Could not finish boot console handoff"));
+    }
+    // Allow PID 1 to process the signal before clearing the terminal.
+    thread::sleep(Duration::from_millis(150));
+    Ok(())
+}
+
 pub fn start() -> io::Result<()> {
+    if visual() {
+        end_boot_status_output()?;
+    }
     display(Stage::Username, None)
 }
 

@@ -98,3 +98,17 @@ authentication, local and SSH **interactive login shells** display a
 small Linos welcome banner and offer the `linos` management command.
 Non-interactive SSH commands, pipes, scripts, and nested TUIs receive
 no shell-wide decoration. Set `LINOS_NO_WELCOME=1` to opt out.
+
+## First-boot console handoff
+
+Normal startup keeps real systemd service progress visible. Immediately before
+interactive enrollment, Linos asks systemd PID 1 to stop writing startup
+status lines to the console (SIGRTMIN+21). Only then does it clear the screen
+and render the setup prompt. This avoids late `[ OK ] Started …` output
+appearing inside a username or password field. Journal logging and error
+handling are unchanged; after reboot the startup progress policy is restored
+from the kernel command line. The handoff is limited to an interactive TTY.
+
+The test suite checks the new UI width and plain-output fallback. A full QEMU
+enrollment run verifies the first-boot flow, while serial-console behavior
+should also be reviewed in a manual development VM.
