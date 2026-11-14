@@ -25,6 +25,22 @@ Updated: 14 November 2026. Channel: development. This status reflects directly o
 
 These source additions must pass rustfmt, Clippy, unit tests, build and live QEMU verification before checking them as complete.
 
+## Product identity and independence gap
+
+Linos aims to be a consumer operating-system product, **not a Debian spin with a custom shell**. Upstream repositories are a pragmatic early source of software. They are not intended to prescribe the final Linos kernel policy, runtime contracts, application behaviour or user experience.
+
+**What exists:** Linux-based QEMU images, Debian-provided kernel packages, systemd/PAM/APT foundations, Rust-owned setup and console features, a read-only Assets browser, and preliminary source for Hardware and Linus store.
+
+**What does not yet exist:** a Linos kernel build/configuration pipeline with enforced upgrade policy; production-grade latency/rendering/input budgets; a native Linos Rust UI/application SDK; an integrated multi-edition app manifest, sandbox and lifecycle; a fully featured Assets file manager; a developer-facing Linus store; and the complete independently validated release architecture.
+
+The difference is important. No currently demonstrated Linos image proves the intended deep operating-system independence. A source tree expressing those intentions is a plan, not validation.
+
+## The user-experience standard
+
+The target is not just that Linux commands or package installation technically work. The system must be understandable without technical instruction, feel consistently responsive, recover from errors safely, maintain deliberate interaction and visual rules, and support advanced tools without requiring ordinary users to become Linux specialists.
+
+Kernel and resource policies must be measured and reproduced per hardware profile, and cooperate with application frameworks, display/input rendering, services and device drivers. The kernel alone does not create smooth animations or native application consistency.
+
 ## Critical blockers
 
 1. **Command composer:** a normal command sometimes leaves the UI in `Password (hidden)` mode. This is a UI/PTY state bug, not evidence that ordinary Linux commands require a login password. Verify prompt handling in a rebuilt guest and stop claiming the bug is fixed until observed.
