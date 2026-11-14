@@ -3,8 +3,13 @@
 //! environment and job state. Full-screen terminal applications belong in
 //! the native Shell mode until an ANSI terminal emulator is integrated.
 use std::{
-    env, fs::File, io::{self, Read, Write},
-    os::{fd::{AsRawFd, FromRawFd}, unix::process::CommandExt},
+    env,
+    fs::File,
+    io::{self, Read, Write},
+    os::{
+        fd::{AsRawFd, FromRawFd},
+        unix::process::CommandExt,
+    },
     process::{Child, Command, Stdio},
     sync::mpsc::{self, Receiver},
     thread,
@@ -28,7 +33,16 @@ impl Session {
             ws_ypixel: 0,
         };
         // SAFETY: openpty writes two owned file descriptors, initialized above.
-        if unsafe { libc::openpty(&raw mut master, &raw mut slave, std::ptr::null_mut(), std::ptr::null(), &size) } != 0 {
+        if unsafe {
+            libc::openpty(
+                &raw mut master,
+                &raw mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                &size,
+            )
+        } != 0
+        {
             return Err(io::Error::last_os_error());
         }
         // SAFETY: openpty returned unique owned descriptors.
@@ -55,7 +69,8 @@ impl Session {
         // async-signal-safe libc functions to establish controlling TTY.
         unsafe {
             cmd.pre_exec(|| {
-                if libc::setsid() == -1 || libc::ioctl(libc::STDIN_FILENO, libc::TIOCSCTTY, 0) == -1 {
+                if libc::setsid() == -1 || libc::ioctl(libc::STDIN_FILENO, libc::TIOCSCTTY, 0) == -1
+                {
                     return Err(io::Error::last_os_error());
                 }
                 Ok(())
@@ -69,12 +84,21 @@ impl Session {
             let mut data = [0u8; 8192];
             let mut escape_state = 0u8;
             while let Ok(len) = reader.read(&mut data) {
-                if len == 0 { break; }
+                if len == 0 {
+                    break;
+                }
                 let clean = plain_text(&data[..len], &mut escape_state);
-                if !clean.is_empty() && tx.send(clean).is_err() { break; }
+                if !clean.is_empty() && tx.send(clean).is_err() {
+                    break;
+                }
             }
         });
-        Ok(Self { writer, output, child, slave_tty })
+        Ok(Self {
+            writer,
+            output,
+            child,
+            slave_tty,
+        })
     }
 
     pub fn current_dir(&self) -> Option<std::path::PathBuf> {
@@ -93,9 +117,21 @@ impl Session {
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) -> io::Result<()> {
-        let size = libc::winsize { ws_row: rows.max(2), ws_col: cols.max(20), ws_xpixel: 0, ws_ypixel: 0 };
+        let size = libc::winsize {
+            ws_row: rows.max(2),
+            ws_col: cols.max(20),
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
         // SAFETY: ioctl only reads this initialized struct; writer owns a PTY.
-        if unsafe { libc::ioctl(std::os::fd::AsRawFd::as_raw_fd(&self.writer), libc::TIOCSWINSZ, &size) } < 0 {
+        if unsafe {
+            libc::ioctl(
+                std::os::fd::AsRawFd::as_raw_fd(&self.writer),
+                libc::TIOCSWINSZ,
+                &size,
+            )
+        } < 0
+        {
             return Err(io::Error::last_os_error());
         }
         Ok(())
@@ -114,7 +150,9 @@ impl Session {
             output.push_str(&String::from_utf8_lossy(&bytes));
             if output.len() > 32_000 {
                 let mut boundary = output.len() - 24_000;
-                while !output.is_char_boundary(boundary) { boundary -= 1; }
+                while !output.is_char_boundary(boundary) {
+                    boundary -= 1;
+                }
                 output.drain(..boundary);
             }
         }
@@ -135,7 +173,7 @@ fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
     for &byte in bytes {
         match *state {
             0 if byte == 0x1b => *state = 1,
-            0 if byte == b'\r' => {},
+            0 if byte == b'\r' => {}
             0 if byte == b'\n' || byte == b'\t' || byte >= 0x20 => clean.push(byte),
             1 if byte == b'[' => *state = 2,
             1 if byte == b']' => *state = 3,
@@ -144,7 +182,7 @@ fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
             3 if byte == 0x07 => *state = 0,
             3 if byte == 0x1b => *state = 4,
             4 => *state = if byte == b'\\' { 0 } else { 3 },
-            _ => {},
+            _ => {}
         }
     }
     clean
@@ -163,6 +201,9 @@ mod tests {
     #[test]
     fn strips_terminal_controls() {
         let mut state = 0;
-        assert_eq!(plain_text(b"hello\x1b[31m world\x1b[0m\r\n", &mut state), b"hello world\n");
+        assert_eq!(
+            plain_text(b"hello\x1b[31m world\x1b[0m\r\n", &mut state),
+            b"hello world\n"
+        );
     }
 }
