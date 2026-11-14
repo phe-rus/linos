@@ -87,6 +87,7 @@ struct App {
     scroll: u16,
     user: String,
     session: Option<pty::Session>,
+    terminal_output: String,
 }
 
 impl App {
@@ -101,6 +102,7 @@ impl App {
             scroll: 0,
             user: env::var("USER").unwrap_or_else(|_| "operator".into()),
             session: None,
+            terminal_output: String::new(),
         }
     }
 
@@ -134,7 +136,7 @@ impl App {
             View::Assets => assets(),
             View::Settings => settings(),
             View::Updates => updates(),
-            View::Terminal => self.content.clone(),
+            View::Terminal => self.terminal_output.clone(),
             View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
             View::Services => system_output(
                 "/usr/bin/systemctl",
@@ -224,6 +226,7 @@ impl App {
             shell.command(&command)?;
         }
         self.view = View::Terminal;
+        self.content = self.terminal_output.clone();
         self.scroll = u16::MAX;
         self.notice = "Linux PTY session · /home returns to Home".into();
         Ok(())
@@ -290,16 +293,17 @@ impl App {
                 if self.input.is_empty() {
                     return Ok(None);
                 }
-                let action = self
+                let waiting_for_secret = self.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+                let action = if waiting_for_secret { None } else { self
                     .suggestions()
                     .get(self.highlighted)
                     .map(|item| item.0)
-                    .or_else(|| action_for(&self.input));
+                    .or_else(|| action_for(&self.input)) };
                 if let Some(action) = action {
                     return Ok(self.apply(action));
                 }
                 let command = std::mem::take(&mut self.input);
-                if command.starts_with('/') {
+                if command.starts_with('/') && !waiting_for_secret {
                     if command == "/home" {
                         self.navigate(View::Home);
                     } else {
@@ -509,7 +513,8 @@ fn draw(frame: &mut Frame, app: &App) {
         ]);
     }
 
-    let suggestions = app.suggestions();
+    let waiting_for_secret = app.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+    let suggestions = if waiting_for_secret { Vec::new() } else { app.suggestions() };
     let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
     let count = suggestions.len().min(5).min(available_suggestions);
     let suggestion_y = composer_y.saturating_sub(count as u16 + 1);
@@ -542,11 +547,16 @@ fn draw(frame: &mut Frame, app: &App) {
             .border_style(Style::default().fg(if app.input.is_empty() { Color::DarkGray } else { ACCENT })),
         Rect::new(x, composer_y, width, 3),
     );
+    let display_input = if waiting_for_secret {
+        "•".repeat(app.input.chars().count())
+    } else {
+        app.input.clone()
+    };
     paragraph_at(frame, Rect::new(left, composer_y + 1, inner_width, 1), vec![
         Line::from(vec![
             Span::styled("❯ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled(
-                if app.input.is_empty() { "Type / for commands or enter a Linux command" } else { &app.input },
+                if app.input.is_empty() { if waiting_for_secret { "Password (hidden)" } else { "Type / for commands or enter a Linux command" } } else { &display_input },
                 Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
             ),
         ]),
@@ -604,14 +614,26 @@ pub fn run() -> io::Result<ExitCode> {
                     last_refresh = Instant::now();
                 }
                 if let Some(shell) = &mut app.session {
-                    shell.drain(&mut app.content);
+                    shell.drain(&mut app.terminal_output);
+                    if app.view == View::Terminal {
+                        app.content.clone_from(&app.terminal_output);
+                    }
                 }
                 terminal.draw(|frame| draw(frame, &app))?;
-                if event::poll(Duration::from_millis(140))?
-                    && let Event::Key(key) = event::read()?
-                    && let Some(exit) = app.key(key)?
-                {
-                    break Ok::<Exit, io::Error>(exit);
+                if event::poll(Duration::from_millis(140))? {
+                    match event::read()? {
+                        Event::Key(key) => {
+                            if let Some(exit) = app.key(key)? {
+                                break Ok::<Exit, io::Error>(exit);
+                            }
+                        }
+                        Event::Resize(width, height) => {
+                            if let Some(shell) = &mut app.session {
+                                shell.resize(height.saturating_sub(12), width.saturating_sub(4))?;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
         })?;
