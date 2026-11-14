@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T18:06:56.121934+00:00",
+  "title": "Design System: Linos",
+  "extensions": {
+    "colorMeta": {},
+    "typographyMeta": {},
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [],
+    "native": {
+      "platform": "terminal",
+      "edition": "Linos 13 Server",
+      "sourceRevision": "8cce91d",
+      "includesPreExistingLocalEdits": true,
+      "northStarScope": "Current Server interface only",
+      "paletteRoles": {
+        "accent": "ratatui::Color::Cyan",
+        "quiet": "ratatui::Color::Gray",
+        "frame": "ratatui::Color::DarkGray",
+        "text": "ratatui::Color::White",
+        "background": "Terminal default"
+      },
+      "guidedTheme": {
+        "library": "cliclack",
+        "resolvedVersion": "0.5.7",
+        "customTheme": false,
+        "active": "cyan",
+        "submittedSymbol": "green",
+        "validation": "yellow",
+        "cancel": "red",
+        "info": "blue"
+      },
+      "geometry": {
+        "unit": "terminal cells",
+        "minimumColumns": 36,
+        "minimumRows": 14,
+        "wideThresholdColumns": 100,
+        "workspaceWidth": "W - (W > 100 ? 8 : 2)",
+        "innerInsetColumns": 2,
+        "composerHeightRows": 3,
+        "composerTop": "H - 5",
+        "suggestionLimit": 5,
+        "overviewMinimumRows": 21,
+        "exploreMinimumRows": 23,
+        "pageScrollRows": 7,
+        "resourceBarCells": 28
+      },
+      "font": "Terminal-controlled; no authored family, pixel size, line height or scale",
+      "cadence": {
+        "eventPollMilliseconds": 100,
+        "resourcesRefreshSeconds": 2,
+        "idleSerialGeometrySeconds": 4,
+        "measuredLatency": false
+      },
+      "preview": {
+        "status": "Illustrative browser translations, not screenshots or functioning native controls",
+        "colors": "Browser Canvas/CanvasText/Highlight/GrayText placeholders; optional --linos-ansi-* variables can supply a chosen terminal palette. These are not runtime tokens.",
+        "geometry": "CSS ch and line metrics approximate cells; browser fieldsets do not reproduce terminal rasterization.",
+        "states": "Only the composer content-state border is illustrated. Browser focus outline is preview-only. No hover states are invented for keyboard-only native components."
+      },
+      "validation": {
+        "workspaceTests": "Blocked: upstream pty.rs:147 unterminated character literal",
+        "currentRender": "Not run; no current committed screenshots or golden fixtures found",
+        "historicalEvidence": "Reported by docs/architecture/current-status.md, not independently reverified"
+      },
+      "sources": [
+        "PRODUCT.md",
+        "docs/vision.md",
+        "docs/architecture/overview.md",
+        "docs/plans/linos13-master-plan.md",
+        "crates/console/src/tui.rs",
+        "crates/console/src/assets.rs",
+        "crates/enroll/src/ui.rs",
+        "crates/login/src/main.rs",
+        "Cargo.lock"
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Server identity",
+      "kind": "custom",
+      "description": "Static native-source illustration: bold cyan identity and quiet generation/session. Browser colors are placeholders, not extracted ANSI values.",
+      "html": "<div class=\"ds-identity\"><strong>◆  Linos</strong><span>  13  /  Server    •    operator@server</span></div>",
+      "css": ".ds-identity{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;--ds-accent:var(--linos-ansi-cyan,Highlight);--ds-quiet:var(--linos-ansi-gray,GrayText);--ds-frame:var(--linos-ansi-darkgray,GrayText);}.ds-identity strong{color:var(--ds-accent);font-weight:bold}.ds-identity span{color:var(--ds-quiet)}"
+    },
+    {
+      "name": "Command composer",
+      "kind": "input",
+      "description": "Illustrates empty and nonempty border styling. Read-only browser example; does not execute commands or emulate native focus.",
+      "html": "<fieldset class=\"ds-composer\"><legend>  Command  </legend><label class=\"ds-entry\"><span>› </span><input aria-label=\"Command preview\" placeholder=\"Type / for commands or enter a Linux command\" readonly></label></fieldset>",
+      "css": ".ds-composer{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;--ds-accent:var(--linos-ansi-cyan,Highlight);--ds-quiet:var(--linos-ansi-gray,GrayText);--ds-frame:var(--linos-ansi-darkgray,GrayText);border:1px solid var(--ds-frame);border-radius:0;padding:0 2ch;min-width:0}.ds-composer legend{padding:0}.ds-entry{display:flex;align-items:baseline}.ds-entry span{color:var(--ds-accent)}.ds-entry input{font:inherit;color:CanvasText;background:transparent;border:0;width:100%;min-width:0;padding:0}.ds-entry input::placeholder{color:var(--ds-quiet);opacity:1}.ds-composer:has(input:not(:placeholder-shown)){border-color:var(--ds-accent)}.ds-entry input:focus-visible{outline:1px solid var(--ds-accent)}"
+    },
+    {
+      "name": "Command suggestions",
+      "kind": "nav",
+      "description": "Static first-two-match sample. Source selection uses marker and color, with keyboard handling in Rust; no browser navigation is implemented.",
+      "html": "<nav class=\"ds-suggestions\" aria-label=\"Command suggestion preview\"><div class=\"ds-active\"><span>› /status     </span>Show the health and identity of this server</div><div>  /services   Inspect running system services</div></nav>",
+      "css": ".ds-suggestions{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;--ds-accent:var(--linos-ansi-cyan,Highlight);--ds-quiet:var(--linos-ansi-gray,GrayText);--ds-frame:var(--linos-ansi-darkgray,GrayText);color:var(--ds-quiet)}.ds-active{color:CanvasText}.ds-active span{color:var(--ds-accent)}"
+    },
+    {
+      "name": "Server overview",
+      "kind": "card",
+      "description": "Static example of the six-row bordered label/value panel. Values are explicitly illustrative, not live device measurements.",
+      "html": "<fieldset class=\"ds-overview\"><legend>  Server overview  </legend><div><span>Device       </span>example-server</div><div><span>Uptime       </span>Illustrative</div><div><span>Memory       </span>Illustrative</div><div><span>Setup        </span>Illustrative</div></fieldset>",
+      "css": ".ds-overview{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;--ds-accent:var(--linos-ansi-cyan,Highlight);--ds-quiet:var(--linos-ansi-gray,GrayText);--ds-frame:var(--linos-ansi-darkgray,GrayText);border:1px solid var(--ds-frame);border-radius:0;padding:0 2ch}.ds-overview legend{padding:0}.ds-overview span{color:var(--ds-quiet)}"
+    },
+    {
+      "name": "Assets rows",
+      "kind": "custom",
+      "description": "Static read-only browser sample. Selection is a text marker; fixed-width rows preserve the incumbent limitation.",
+      "html": "<pre class=\"ds-assets\">ASSETS  /  /home/example\n\n  NAME                                       TYPE         SIZE\n  ────────────────────────────────────────────────────────────\n❯ Documents                                  Folder\n  notes.txt                                  File         128 B\n\n↑↓ Select     Enter Open     Backspace Parent</pre>",
+      "css": ".ds-assets{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;margin:0;overflow:auto}"
+    },
+    {
+      "name": "Resource usage bar",
+      "kind": "custom",
+      "description": "Illustrative 50% bar with 28 glyph cells, percentage and units; not a running metric.",
+      "html": "<pre class=\"ds-resource\">Memory\n[██████████████░░░░░░░░░░░░░░]  50%\n512 / 1024 MiB used    512 MiB available\nIllustrative values</pre>",
+      "css": ".ds-resource{font-family:monospace;white-space:pre-wrap;background:Canvas;color:CanvasText;margin:0;overflow:auto}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Familiar Workbench",
+    "overview": "**Linos design philosophy: Made to feel at home.**\n\nLinos is a consumer-oriented operating-system family for ordinary people. Comfort includes understandable language, consistent interactions, accessibility, responsiveness, user control, and care across hardware and software. Apple's attention to those relationships is a quality reference, not an appearance to copy. Server is the first edition; Desktop, mobile, television and other supported devices will require their own expressions of this philosophy.\n\n**Creative North Star for the current Server interface: \"The Familiar Workbench\"**\n\nLinos 13 Server pairs an approachable, personal workspace with the calm precision of a quiet control room. The existing interface uses sparse terminal composition, restrained color, direct keyboard actions and guided setup. Its visual voice is calm and welcoming; its controls are precise and restrained. This metaphor describes Server today, not the identity or eventual appearance of every Linos edition.",
+    "keyCharacteristics": [
+      "A persistent bottom command field and a spacious central workspace.",
+      "Cyan identity and command cues, quiet secondary text and explicit selection markers.",
+      "Guided first boot and local sign-in, with standard system password handling.",
+      "Read-only inspection views with a native Shell escape for advanced work.",
+      "Terminal-dependent typography and colors rather than a fixed graphical theme."
+    ],
+    "rules": [
+      {
+        "name": "The Terminal Palette Rule",
+        "body": "Preserve native color roles when documenting Server. A terminal's theme determines their appearance; fixed contrast ratios and graphical palette values remain unverified.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do keep Linos's “Made to feel at home” philosophy distinct from the Server-specific Familiar Workbench expression.",
+      "Do preserve canonical names: Linos, Linos 13, Assets and Linus store.",
+      "Do preserve terminal ownership and restore it when handing control to native Shell.",
+      "Do describe read-only data, simulations and unavailable operations explicitly.",
+      "Do distinguish source implementation, historical demonstrations and current verification."
+    ],
+    "donts": [
+      "Don't promote ANSI colors, terminal typography or slash navigation into universal standards for future editions.",
+      "Don't present dependency-default styling as an authored Linos-wide component library.",
+      "Don't claim correct password handling, accessibility compliance or measured responsiveness without matching evidence.",
+      "Don't silently elevate privileges or treat enrollment as blanket authorization.",
+      "Don't redesign existing screens as a side effect of documenting them."
+    ]
+  }
+}
