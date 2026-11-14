@@ -7,6 +7,14 @@ use std::{
     os::fd::AsRawFd,
 };
 
+pub fn serial_console() -> bool {
+    let target = std::fs::read_link("/proc/self/fd/0").ok();
+    target.as_ref().is_some_and(|path| {
+        path.to_string_lossy().starts_with("/dev/ttyS")
+            || path.to_string_lossy().starts_with("/dev/ttyAMA")
+    })
+}
+
 pub fn negotiate() -> io::Result<bool> {
     let fd = io::stdin().as_raw_fd();
     // SAFETY: the fd is our own stdin, and libc initializes saved termios.
