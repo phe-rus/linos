@@ -14,6 +14,7 @@ pub struct Session {
     writer: File,
     output: Receiver<Vec<u8>>,
     child: Child,
+    slave_tty: File,
 }
 
 impl Session {
@@ -38,8 +39,14 @@ impl Session {
             .filter(|path| path.starts_with('/') && std::path::Path::new(path).is_file())
             .unwrap_or_else(|| "/bin/sh".into());
         let mut cmd = Command::new(shell);
+        // The embedded shell must never source user startup files that can
+        // automatically launch Linos again. Native Shell mode keeps .bashrc.
+        if cmd.get_program().to_string_lossy().ends_with("/bash") {
+            cmd.args(["--noprofile", "--norc"]);
+        }
         cmd.arg("-i")
             .env("LINOS_NO_WELCOME", "1")
+            .env("LINOS_EMBEDDED_PTY", "1")
             .env("TERM", "xterm-256color")
             .stdin(Stdio::from(slave_file.try_clone()?))
             .stdout(Stdio::from(slave_file.try_clone()?))
@@ -55,7 +62,7 @@ impl Session {
             });
         }
         let child = cmd.spawn()?;
-        drop(slave_file);
+        let slave_tty = slave_file;
         let mut reader = writer.try_clone()?;
         let (tx, output) = mpsc::sync_channel(128);
         thread::spawn(move || {
@@ -66,7 +73,7 @@ impl Session {
                 }
             }
         });
-        Ok(Self { writer, output, child })
+        Ok(Self { writer, output, child, slave_tty })
     }
 
     pub fn current_dir(&self) -> Option<std::path::PathBuf> {
@@ -94,10 +101,11 @@ impl Session {
     }
 
     pub fn echo_enabled(&self) -> bool {
-        // SAFETY: master is an open PTY and libc initializes the structure.
+        // Read the PTY slave's termios, not the master. On failure, never
+        // invent a password prompt simply because the query failed.
         let mut termios: libc::termios = unsafe { std::mem::zeroed() };
-        (unsafe { libc::tcgetattr(self.writer.as_raw_fd(), &raw mut termios) }) == 0
-            && termios.c_lflag & libc::ECHO != 0
+        let result = unsafe { libc::tcgetattr(self.slave_tty.as_raw_fd(), &raw mut termios) };
+        result != 0 || (termios.c_lflag & libc::ECHO != 0)
     }
 
     pub fn drain(&self, output: &mut String) {
