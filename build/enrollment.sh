@@ -109,6 +109,10 @@ hash="$(printf '%s\n' "$shadow" | awk -F: '$1 == "linosadmin" {print $2}')"
 }
 
 # A later boot must recognize the owner without offering a new claim.
+hint="$(read_guest_file /etc/linos/login-user)"
+[[ "$hint" == linosadmin ]] || {
+    echo "Local login username hint is missing or incorrect" >&2; exit 1;
+}
 run_phase verify
 [[ "$(read_guest_file /var/lib/linos/owner)" == "$owner" ]] || {
     echo "Owner record changed on the next boot" >&2; exit 1;

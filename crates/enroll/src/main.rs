@@ -302,6 +302,7 @@ fn enroll() -> io::Result<()> {
     // that first-run setup completed. Private owner data stays root-only.
     fs::create_dir_all("/etc/linos")?;
     fs::write("/etc/linos/setup-complete", b"ready\n")?;
+    fs::write("/etc/linos/login-user", format!("{username}\n"))?;
     fs::remove_file(pending)?;
     ui::completed(&username)?;
     // First-time setup needs a clean boot so hostname, locale and network are active.
