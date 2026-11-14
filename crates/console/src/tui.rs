@@ -229,6 +229,11 @@ impl App {
             self.terminal_output.clear();
             self.content.clear();
             self.scroll = 0;
+            self.view = View::Terminal;
+            self.notice = "Terminal output cleared".into();
+            if command.trim() == "/clear" {
+                return Ok(());
+            }
         }
         if self.session.is_none() {
             let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
@@ -782,6 +787,18 @@ mod tests {
         assert_eq!(app.view, View::Home);
         let shortcut = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
         assert_eq!(app.key(shortcut).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn ctrl_l_clears_output_without_exiting_home() {
+        let mut app = App::new();
+        app.view = View::Terminal;
+        app.terminal_output = "previous command output".into();
+        app.content = app.terminal_output.clone();
+        let key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL);
+        assert_eq!(app.key(key).unwrap(), None);
+        assert!(app.content.is_empty());
+        assert!(app.terminal_output.is_empty());
     }
 
     #[test]
