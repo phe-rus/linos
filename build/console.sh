@@ -29,13 +29,21 @@ echo "Persistent guest changes are stored only in: $OVERLAY"
 echo "No default login exists. On first boot, create a username and password in Linos enrollment."
 echo "After setup, sign in using the username/password you selected."
 echo "No network access is configured."
+if [[ -c /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]; then
+    ACCEL="kvm"
+    CPU="host"
+else
+    ACCEL="tcg"
+    CPU="qemu64"
+fi
+echo "QEMU accelerator: $ACCEL"
 echo "To exit: press Ctrl+A, release both keys, then press X (not Ctrl+X)."
 echo "Alternatively: Ctrl+A, release, C to open QEMU monitor, then type quit."
 
 exec qemu-system-x86_64 \
-    -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+    -machine "pc,accel=$ACCEL" -cpu "$CPU" -smp 2 -m 2048 \
     -nographic -net none \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
     -device virtio-blk-pci,drive=rootfs \
-    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=yes rd.systemd.show_status=yes systemd.unit=multi-user.target"
+    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.unit=multi-user.target"
