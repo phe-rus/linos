@@ -196,3 +196,16 @@ Network, services and logs are initially read-only views.
 For scripted commands, `linos status`, `linos network`, `linos services`
 and `linos logs ssh.service` retain their stdout-based API. The TUI renders
 read-only command output after filtering terminal control characters.
+
+## Composer-first Server home
+
+The Ratatui home follows a content-and-composer layout: a compact identity at
+the top, a spacious workspace in the middle, optional filtered command
+suggestions above the command field, and a composer fixed at the terminal
+bottom. Unlike the earlier fixed left navigation, the `/` palette appears only
+when typed. It shows up to four relevant commands, with Up/Down navigation.
+
+It is a terminal application, not a shell wrapper or an imitation of Claude
+Code's branding. Clack remains the toolkit for first-boot questions and
+the local login presentation. Returning from the TUI restores the regular
+terminal so Claude Code, Codex, Vim and other full-screen programs own it.
