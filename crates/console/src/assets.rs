@@ -28,7 +28,7 @@ impl Browser {
         let entries = fs::read_dir(&canonical)?;
         let mut items = Vec::new();
         for entry in entries.flatten() {
-            let meta = entry.symlink_metadata().ok();
+            let meta = fs::symlink_metadata(entry.path()).ok();
             let name = entry.file_name().to_string_lossy().chars().filter(|c| !c.is_control()).collect();
             let is_symlink = meta.as_ref().is_some_and(fs::Metadata::is_symlink);
             let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
