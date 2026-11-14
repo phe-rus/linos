@@ -34,7 +34,7 @@ echo "Alternatively: Ctrl+A, release, C to open QEMU monitor, then type quit."
 
 exec qemu-system-x86_64 \
     -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
-    -nographic -no-reboot -net none \
+    -nographic -net none \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
     -device virtio-blk-pci,drive=rootfs \
