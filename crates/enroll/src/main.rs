@@ -1,3 +1,4 @@
+mod setup;
 mod ui;
 
 use std::{
@@ -206,11 +207,7 @@ fn ensure_home(username: &str) -> io::Result<()> {
 }
 
 fn prompt_username() -> io::Result<String> {
-    ui::username_prompt()?;
-    io::stdout().flush()?;
-    let mut value = String::new();
-    io::stdin().read_line(&mut value)?;
-    let username = value.trim().to_owned();
+    let username = ui::username()?;
     if !validate_username(&username) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -286,6 +283,10 @@ fn enroll() -> io::Result<()> {
 
     ui::password(&username)?;
     run("/usr/bin/passwd", &[&username])?;
+
+    let current_hostname = fs::read_to_string("/etc/hostname")?.trim().to_owned();
+    let settings = ui::configure(&current_hostname)?;
+    settings.apply()?;
 
     create_state(
         "owner",

@@ -112,3 +112,23 @@ from the kernel command line. The handoff is limited to an interactive TTY.
 The test suite checks the new UI width and plain-output fallback. A full QEMU
 enrollment run verifies the first-boot flow, while serial-console behavior
 should also be reviewed in a manual development VM.
+
+## First-run configuration choices
+
+The new `cliclack` setup wizard collects username, administrator password,
+language, keyboard layout, timezone/location, hostname, and optional DHCP,
+then reviews settings before applying. The account password is still entered
+through system `passwd`, not through command-line arguments or logs.
+Initial language choices are English, French and Chinese; locale generation
+is required for the latter two. Keyboard choices are US, UK, French and German.
+Timezones are limited to the supported installed zoneinfo entries.
+
+Networking remains opt-in: choosing **Configure later** makes no network
+changes. Selecting **Automatic DHCP** enables systemd-networkd on future
+boots. No default administrator or SSH password is embedded in the image.
+Interactive setup can be cancelled, leaving owner enrollment incomplete
+rather than silently accepting unsafe defaults.
+
+Noninteractive sessions keep the original minimal plain prompt and use
+English/UTC/offline defaults. The wizard must not run inside SSH startup or
+third-party terminal applications.
