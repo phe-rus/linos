@@ -107,7 +107,7 @@ impl App {
 
         if let Some(action) = self.confirm {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
                     self.confirm = None;
                     let operation = if action == Action::Reboot {
                         "reboot"
@@ -120,7 +120,7 @@ impl App {
                     }
                     self.info = format!("Unable to {operation}. Check authorization.");
                 }
-                KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
                     self.confirm = None;
                     self.info = "Power operation cancelled".into();
                 }
@@ -371,23 +371,22 @@ fn draw(frame: &mut Frame, app: &App) {
         );
         frame.render_widget(Clear, popup);
         frame.render_widget(Paragraph::new(format!(
-            "\n  {message} {}?\n\n  This disconnects active sessions.\n  Enter/Y Confirm    N/Esc Cancel", host()
+            "\n  {message} {}?\n\n  This disconnects active sessions.\n  Y Confirm    Enter/N/Esc Cancel", host()
         )).block(panel("Confirm power action"))
         .style(Style::default().fg(Color::Yellow)), popup);
     }
 }
 
 pub fn run() -> io::Result<ExitCode> {
-    let result = ratatui::run(|mut terminal| {
+    let result = ratatui::run(|terminal| {
         let mut app = App::new();
         loop {
             terminal.draw(|frame| draw(frame, &app))?;
-            if event::poll(Duration::from_millis(120))? {
-                if let Event::Key(key) = event::read()? {
-                    if let Some(exit) = app.key(key)? {
-                        break Ok::<Exit, io::Error>(exit);
-                    }
-                }
+            if event::poll(Duration::from_millis(120))?
+                && let Event::Key(key) = event::read()?
+                && let Some(exit) = app.key(key)?
+            {
+                break Ok::<Exit, io::Error>(exit);
             }
         }
     })?;
