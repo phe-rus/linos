@@ -106,7 +106,11 @@ impl App {
             match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
                     self.confirm = None;
-                    let operation = if action == Action::Reboot { "reboot" } else { "poweroff" };
+                    let operation = if action == Action::Reboot {
+                        "reboot"
+                    } else {
+                        "poweroff"
+                    };
                     let result = Command::new("/usr/bin/systemctl").arg(operation).status()?;
                     if result.success() {
                         return Ok(Some(Exit::Power));
@@ -125,9 +129,13 @@ impl App {
         if let Some(input) = self.palette.as_mut() {
             match key.code {
                 KeyCode::Esc => self.palette = None,
-                KeyCode::Backspace => { input.pop(); }
+                KeyCode::Backspace => {
+                    input.pop();
+                }
                 KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    if input.len() < 64 { input.push(c); }
+                    if input.len() < 64 {
+                        input.push(c);
+                    }
                 }
                 KeyCode::Enter => {
                     let entered = self.palette.take().unwrap_or_default();
@@ -144,7 +152,9 @@ impl App {
         match key.code {
             KeyCode::Char('/') => self.palette = Some("/".into()),
             KeyCode::Up | KeyCode::BackTab => self.selected = self.selected.saturating_sub(1),
-            KeyCode::Down | KeyCode::Tab => self.selected = (self.selected + 1).min(ACTIONS.len() - 1),
+            KeyCode::Down | KeyCode::Tab => {
+                self.selected = (self.selected + 1).min(ACTIONS.len() - 1)
+            }
             KeyCode::Enter => return self.action(ACTIONS[self.selected].0),
             KeyCode::PageDown => self.scroll = self.scroll.saturating_add(8),
             KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(8),
@@ -166,7 +176,8 @@ impl App {
 
 fn clean(raw: &[u8]) -> String {
     let output = String::from_utf8_lossy(raw);
-    output.chars()
+    output
+        .chars()
         .filter(|c| *c == '\n' || *c == '\t' || !c.is_control())
         .take(9000)
         .collect()
@@ -175,7 +186,10 @@ fn clean(raw: &[u8]) -> String {
 fn read_command(program: &str, args: &[&str]) -> String {
     match Command::new(program).args(args).output() {
         Ok(output) if output.status.success() => clean(&output.stdout),
-        Ok(output) => format!("Unable to read system information\n{}", clean(&output.stderr)),
+        Ok(output) => format!(
+            "Unable to read system information\n{}",
+            clean(&output.stderr)
+        ),
         Err(error) => format!("System command unavailable: {error}"),
     }
 }
@@ -192,10 +206,20 @@ fn page_content(app: &App) -> String {
             overview()
         ),
         Screen::Network => read_command("/usr/sbin/ip", &["-brief", "address"]),
-        Screen::Services => read_command("/usr/bin/systemctl", &[
-            "list-units", "--type=service", "--state=running", "--no-pager", "--plain"
-        ]),
-        Screen::Logs => read_command("/usr/bin/journalctl", &["--no-pager", "-n", "60", "--output=short"]),
+        Screen::Services => read_command(
+            "/usr/bin/systemctl",
+            &[
+                "list-units",
+                "--type=service",
+                "--state=running",
+                "--no-pager",
+                "--plain",
+            ],
+        ),
+        Screen::Logs => read_command(
+            "/usr/bin/journalctl",
+            &["--no-pager", "-n", "60", "--output=short"],
+        ),
         Screen::Help => [
             "Navigation",
             "",
@@ -221,7 +245,8 @@ fn page_content(app: &App) -> String {
             "",
             "Regular system commands and third-party TUIs run",
             "normally after returning to the shell.",
-        ].join("\n"),
+        ]
+        .join("\n"),
     }
 }
 
@@ -236,29 +261,48 @@ fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let vertical = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(6), Constraint::Length(3)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Length(3),
+        ])
         .split(area);
 
     let heading = Paragraph::new(Line::from(vec![
-        Span::styled(" ◆  Linos 13", Style::default().fg(SKY).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ◆  Linos 13",
+            Style::default().fg(SKY).add_modifier(Modifier::BOLD),
+        ),
         Span::styled("  /  Server", Style::default().fg(Color::White)),
-        Span::styled(format!("      {}@{}", app.user, host()), Style::default().fg(MUTED)),
+        Span::styled(
+            format!("      {}@{}", app.user, host()),
+            Style::default().fg(MUTED),
+        ),
     ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Color::DarkGray)));
+    .block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
     frame.render_widget(heading, vertical[0]);
 
     let wide = area.width >= 76;
     let middle = if wide {
-        Layout::default().direction(Direction::Horizontal())
-            .constraints([Constraint::Length(23), Constraint::Min(20)]).split(vertical[1])
+        Layout::default()
+            .direction(Direction::Horizontal())
+            .constraints([Constraint::Length(23), Constraint::Min(20)])
+            .split(vertical[1])
     } else {
-        Layout::default().direction(Direction::Vertical())
-            .constraints([Constraint::Length(10), Constraint::Min(3)]).split(vertical[1])
+        Layout::default()
+            .direction(Direction::Vertical())
+            .constraints([Constraint::Length(10), Constraint::Min(3)])
+            .split(vertical[1])
     };
 
-    let entries: Vec<ListItem<'_>> = ACTIONS.iter().map(|(_, title, _)| {
-        ListItem::new(format!(" {title}"))
-    }).collect();
+    let entries: Vec<ListItem<'_>> = ACTIONS
+        .iter()
+        .map(|(_, title, _)| ListItem::new(format!(" {title}")))
+        .collect();
     let list = List::new(entries)
         .block(panel("Navigate"))
         .highlight_style(Style::default().fg(SKY).add_modifier(Modifier::BOLD))
@@ -283,23 +327,45 @@ fn draw(frame: &mut Frame, app: &App) {
     let footer = Paragraph::new(format!(
         "  {}    ↑↓ Navigate  ·  Enter Open  ·  / Commands  ·  q Shell",
         app.info
-    )).block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(Color::DarkGray)))
-      .style(Style::default().fg(MUTED));
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    )
+    .style(Style::default().fg(MUTED));
     frame.render_widget(footer, vertical[2]);
 
     if let Some(input) = &app.palette {
         let width = area.width.saturating_sub(4).min(64);
-        let popup = Rect::new(area.x + (area.width.saturating_sub(width) / 2), area.y + area.height / 3, width, 5);
+        let popup = Rect::new(
+            area.x + (area.width.saturating_sub(width) / 2),
+            area.y + area.height / 3,
+            width,
+            5,
+        );
         frame.render_widget(Clear, popup);
-        frame.render_widget(Paragraph::new(format!("  {input}▏\n\n  Enter to run · Esc to cancel"))
-            .block(panel("Command palette"))
-            .style(Style::default().fg(SKY)), popup);
+        frame.render_widget(
+            Paragraph::new(format!("  {input}▏\n\n  Enter to run · Esc to cancel"))
+                .block(panel("Command palette"))
+                .style(Style::default().fg(SKY)),
+            popup,
+        );
     }
 
     if let Some(action) = app.confirm {
-        let message = if action == Action::Reboot { "Restart" } else { "Shut down" };
+        let message = if action == Action::Reboot {
+            "Restart"
+        } else {
+            "Shut down"
+        };
         let width = area.width.saturating_sub(4).min(58);
-        let popup = Rect::new(area.x + (area.width.saturating_sub(width) / 2), area.y + area.height / 3, width, 7);
+        let popup = Rect::new(
+            area.x + (area.width.saturating_sub(width) / 2),
+            area.y + area.height / 3,
+            width,
+            7,
+        );
         frame.render_widget(Clear, popup);
         frame.render_widget(Paragraph::new(format!(
             "\n  {message} {}?\n\n  This disconnects active sessions.\n  Enter/Y Confirm    N/Esc Cancel", host()
