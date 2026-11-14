@@ -1,4 +1,4 @@
-//! Linus Store: read-only dpkg inventory and APT previews.
+//! Linus store: read-only dpkg inventory and APT previews.
 use std::process::Command;
 
 fn run(program: &str, args: &[&str]) -> String {
@@ -36,7 +36,7 @@ pub fn overview() -> String {
     let packages = inventory();
     let total_kib: u64 = packages.iter().map(|item| item.0).sum();
     let mut out = format!(
-        "LINUS STORE  /  Installed\n\nPackages: {}    Estimated installed size: {} MiB\n\nLARGEST PACKAGES\n",
+        "Linus store  /  Installed\n\nPackages: {}    Estimated installed size: {} MiB\n\nLARGEST PACKAGES\n",
         packages.len(), total_kib / 1024
     );
     for (size, name, version) in packages.iter().take(25) {
@@ -48,7 +48,7 @@ pub fn overview() -> String {
 
 pub fn installed() -> String {
     let packages = inventory();
-    let mut out = format!("LINUS STORE  /  Installed packages: {}\n\n", packages.len());
+    let mut out = format!("Linus store  /  Installed packages: {}\n\n", packages.len());
     for (size, name, version) in packages.iter().take(100) {
         out.push_str(&format!("{name:<36} {:>8} KiB  {version}\n", size));
     }
@@ -61,7 +61,7 @@ pub fn search(query: &str) -> String {
         return "Usage: /store search QUERY".into();
     }
     let results = run("/usr/bin/apt-cache", &["search", "--names-only", query]);
-    format!("LINUS STORE / Search: {query}\n\n{}\n\nRead-only repository query.", results.lines().take(70).collect::<Vec<_>>().join("\n"))
+    format!("Linus store / Search: {query}\n\n{}\n\nRead-only repository query.", results.lines().take(70).collect::<Vec<_>>().join("\n"))
 }
 
 pub fn details(package: &str) -> String {
@@ -69,7 +69,7 @@ pub fn details(package: &str) -> String {
     let installed = run("/usr/bin/dpkg-query",
         &["-W", "-f=Installed-size: \${Installed-Size} KiB\nVersion: \${Version}\n", package]);
     let available = run("/usr/bin/apt-cache", &["show", package]);
-    format!("LINUS STORE / {package}\n\nINSTALLED\n{installed}\n\nREPOSITORY\n{}\n\nRead-only details.", available.lines().take(30).collect::<Vec<_>>().join("\n"))
+    format!("Linus store / {package}\n\nINSTALLED\n{installed}\n\nREPOSITORY\n{}\n\nRead-only details.", available.lines().take(30).collect::<Vec<_>>().join("\n"))
 }
 
 pub fn preview(operation: &str, package: &str) -> String {
@@ -77,7 +77,7 @@ pub fn preview(operation: &str, package: &str) -> String {
         return "Invalid package operation.".into();
     }
     let output = run("/usr/bin/apt-get", &["--simulate", operation, "--", package]);
-    format!("LINUS STORE / {operation} {package}\n\n{output}\n\nPREVIEW ONLY. No system changes.\nTo apply in native Shell (Ctrl+T): sudo apt-get {operation} {package}\nA managed confirmation and transaction UI is not implemented yet.")
+    format!("Linus store / {operation} {package}\n\n{output}\n\nPREVIEW ONLY. No system changes.\nTo apply in native Shell (Ctrl+T): sudo apt-get {operation} {package}\nA managed confirmation and transaction UI is not implemented yet.")
 }
 
 #[cfg(test)]
