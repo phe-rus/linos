@@ -95,9 +95,9 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     # Interactive sign-in enters the Linos Server home first.
     await {Linos 13 / Server}
     send -- "/shell\r"
-    await {[$] }
+    await {❯ }
     send -- "stty -echo\r"
-    await {[$] }
+    await {❯ }
 
     # Confirm the packaged Linos UI command runs inside the real guest.
     # No shell startup file or prompt customization is required.
