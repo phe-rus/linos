@@ -9,6 +9,8 @@ use std::{
 
 mod assets;
 mod geometry;
+mod hardware;
+mod store;
 mod pty;
 mod tui;
 
@@ -135,6 +137,8 @@ enum Action {
     Assets,
     Settings,
     Updates,
+    Hardware,
+    Store,
 }
 
 fn action_for(value: &str) -> Option<Action> {
@@ -145,6 +149,8 @@ fn action_for(value: &str) -> Option<Action> {
         "/assets" | "assets" => Some(Action::Assets),
         "/settings" | "settings" => Some(Action::Settings),
         "/updates" | "updates" => Some(Action::Updates),
+        "/hardware" | "hardware" => Some(Action::Hardware),
+        "/store" | "store" => Some(Action::Store),
         "/network" | "network" => Some(Action::Network),
         "/services" | "services" => Some(Action::Services),
         "/logs" | "logs" => Some(Action::Logs),
@@ -163,7 +169,7 @@ fn execute(action: Action) -> io::Result<ExitCode> {
             println!("Run linos to open Home.");
             Ok(ExitCode::SUCCESS)
         }
-        Action::Resources | Action::Assets | Action::Settings | Action::Updates => {
+        Action::Resources | Action::Assets | Action::Settings | Action::Updates | Action::Hardware | Action::Store => {
             eprintln!("Open the interactive Linos Server home for this view.");
             Ok(ExitCode::from(2))
         }
