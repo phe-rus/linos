@@ -255,3 +255,31 @@ critical error messages or system journal records.
 Login banners must not remain in the Home workspace after authentication.
 The interactive session clears the console immediately before starting Home.
 Non-interactive sessions and scripts remain unaffected.
+
+## Home navigation refinements
+
+Linos Assets is a read-only, keyboard-driven filesystem browser. `/assets`
+opens the user's home directory; `/assets/home/linos` opens that absolute
+path (if it exists). Up/Down selects entries, Enter opens directories, and
+Backspace goes to the parent. The Assets view retains its directory when
+navigating to another management view. Non-directory entries are selected but
+not executed. File mutation and preview are separate future features.
+
+The composer shows a location indicator above it. When a persistent Linux PTY
+is active, the indicator reads the child shell's working directory from procfs,
+so `cd` is reflected in the Home UI. Assets displays its own current browser
+path. These are distinct contexts, intentionally: browsing Assets does not
+silently change the command shell's working directory.
+
+Resources includes proportional Unicode bars for memory, swap, and the root
+filesystem, with values from procfs and `df`. CPU load averages and logical
+processor count are reported separately; load averages must not be mislabeled
+as instantaneous CPU utilization. The read-only view refreshes every two
+seconds.
+
+The built image is immutable for development validation. Source changes do not
+retroactively change existing `images/server/builds/*/*/disk.ext4` images or
+existing `console.qcow2` overlays. Make a new build ID using
+`bash build/next-build.sh amd64`, then rebuild package and image and launch
+`./build/console.sh amd64`. The image builder rejects packages that lack the
+new command-capable Home binary marker.
