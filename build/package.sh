@@ -49,7 +49,7 @@ if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
     exit 2
 fi
 
-cargo build --release -p init -p enroll -p linos-console
+cargo build --release -p init -p enroll -p linos-console -p linos-login
 
 STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
@@ -59,6 +59,7 @@ cp -a packages/release/. "$STAGING_DIR/package/"
 sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN/control"
 install -m 755 target/release/init "$STAGING_DIR/package/usr/lib/linos/linos-init"
 install -m 755 target/release/enroll "$STAGING_DIR/package/usr/lib/linos/linos-enroll"
+install -m 755 target/release/linos-login "$STAGING_DIR/package/usr/lib/linos/linos-login"
 mkdir -p "$STAGING_DIR/package/usr/bin"
 install -m 755 target/release/linos "$STAGING_DIR/package/usr/bin/linos"
 mkdir -p "$STAGING_DIR/package/etc/profile.d"
@@ -82,6 +83,9 @@ for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.s
     DROPIN_DIR="$UNIT_DIR/$unit.d"
     mkdir -p "$DROPIN_DIR"
     install -m 644 system/services/linos-getty-after-enrollment.conf "$DROPIN_DIR/linos-enrollment-order.conf"
+    case "$unit" in
+      serial-getty@*) install -m 644 system/services/linos-serial-login.conf "$DROPIN_DIR/linos-serial-login.conf" ;;
+    esac
 done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 

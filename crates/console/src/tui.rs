@@ -389,7 +389,7 @@ mod tests {
         let mut app = App::new();
         app.key(press(KeyCode::Char('/'))).unwrap();
         app.key(press(KeyCode::Char('s'))).unwrap();
-        assert_eq!(app.suggestions().len(), 3); // status, services, shell? /s matches status, services, shell, shutdown
+        assert_eq!(app.suggestions().len(), 4); // status, services, shell, shutdown
         app.key(press(KeyCode::Char('t'))).unwrap();
         app.key(press(KeyCode::Enter)).unwrap();
         assert_eq!(app.view, View::Status);
