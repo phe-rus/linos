@@ -87,7 +87,7 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
         await {Setup complete}
     }
 } elseif {$phase eq "verify"} {
-    await {This device is already enrolled[.]}
+    # Enrollment service is skipped after an owner is committed.
     await {login:}
     send -- "$username\r"
     await {Password:}

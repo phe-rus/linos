@@ -109,6 +109,7 @@ fn help() {
     println!("Linos 13 Server");
     println!("Usage: linos [status|network|services|service NAME|logs NAME|help]");
     println!("       linos /status | /network | /services | /logs | /shell");
+    println!("       linos /logout | /reboot | /shutdown");
     println!("Run 'linos' in an interactive terminal for guided management.");
     println!("A normal shell remains available after selecting 'Return to shell'.");
 }
@@ -121,6 +122,9 @@ enum Action {
     Logs,
     Help,
     Shell,
+    Logout,
+    Reboot,
+    Shutdown,
 }
 
 fn action_for(value: &str) -> Option<Action> {
@@ -131,6 +135,9 @@ fn action_for(value: &str) -> Option<Action> {
         "/logs" | "logs" => Some(Action::Logs),
         "/help" | "help" => Some(Action::Help),
         "/shell" | "shell" | "exit" | "/exit" => Some(Action::Shell),
+        "/logout" | "logout" => Some(Action::Logout),
+        "/reboot" | "reboot" => Some(Action::Reboot),
+        "/shutdown" | "shutdown" | "/poweroff" => Some(Action::Shutdown),
         _ => None,
     }
 }
@@ -152,6 +159,13 @@ fn execute(action: Action) -> io::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Action::Shell => Ok(ExitCode::SUCCESS),
+        Action::Logout => Ok(ExitCode::from(20)),
+        Action::Reboot | Action::Shutdown => {
+            // Only the interactive home may offer a confirmation dialog.
+            // Non-interactive power commands are intentionally rejected.
+            eprintln!("Use the interactive Linos home to confirm power actions.");
+            Ok(ExitCode::from(2))
+        },
     }
 }
 
@@ -163,6 +177,9 @@ fn choose_action() -> io::Result<Action> {
         .item(Action::Logs, "Recent logs", "/logs")
         .item(Action::Help, "Commands", "/help")
         .item(Action::Shell, "Return to shell", "/shell")
+        .item(Action::Logout, "Sign out", "/logout")
+        .item(Action::Reboot, "Restart server", "/reboot")
+        .item(Action::Shutdown, "Shut down server", "/shutdown")
         .interact()
 }
 
@@ -179,6 +196,38 @@ fn home() -> io::Result<ExitCode> {
         if action == Action::Shell {
             cliclack::outro("Returning to your shell")?;
             return Ok(ExitCode::SUCCESS);
+        }
+        if action == Action::Logout {
+            cliclack::outro("Signing out. See you next time.")?;
+            return Ok(ExitCode::from(20));
+        }
+        if matches!(action, Action::Reboot | Action::Shutdown) {
+            let is_reboot = action == Action::Reboot;
+            let verb = if is_reboot { "Restart" } else { "Shut down" };
+            let confirmed = cliclack::confirm(format!(
+                "{verb} {}? Active connections and services will be interrupted.",
+                host()
+            ))
+            .initial_value(false)
+            .interact()?;
+            if !confirmed {
+                cliclack::log::info("Cancelled. Your server is still running.")?;
+                continue;
+            }
+            cliclack::log::step(if is_reboot {
+                "Restarting Linos safely"
+            } else {
+                "Shutting down Linos safely"
+            })?;
+            let operation = if is_reboot { "reboot" } else { "poweroff" };
+            let result = command("/usr/bin/systemctl", &[operation])?;
+            if result != ExitCode::SUCCESS {
+                cliclack::log::error("The system rejected the request. Check your permissions.")?;
+            } else {
+                cliclack::outro("The system is closing your session.")?;
+                return Ok(ExitCode::SUCCESS);
+            }
+            continue;
         }
         if action == Action::Help {
             cliclack::note(
@@ -252,6 +301,8 @@ mod tests {
     fn exact_commands_only() {
         assert!(action_for("/status") == Some(Action::Status));
         assert!(action_for("/shell") == Some(Action::Shell));
+        assert!(action_for("/logout") == Some(Action::Logout));
+        assert!(action_for("/shutdown") == Some(Action::Shutdown));
         assert!(action_for("/status;id").is_none());
         assert!(action_for("not-a-command").is_none());
     }

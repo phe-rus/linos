@@ -160,3 +160,20 @@ continues identifying its real Debian-derived build in `uname`, kernel logs,
 and diagnostics, rather than falsifying kernel provenance. The regular shell
 uses a minimal Linos-colored prompt for interactive Bash only, after exiting
 `linos` with `/shell`. Standard system directories are preserved.
+
+## Unified session and power lifecycle
+
+The Linos home offers **Return to shell**, **Sign out**, **Restart server** and
+**Shut down server** using the same Clack interaction model as first-time
+setup. Power actions require an explicit confirmation defaulting to **No**.
+The OS still authorizes the action through systemd/polkit, and a denied
+operation leaves the session running. Noninteractive power commands are
+rejected by the Linos CLI to avoid accidental automation. Normal shell tools
+remain available after **Return to shell**.
+
+Sign out is communicated to the interactive login shell by a dedicated exit
+code, allowing it to terminate the login session and clear the console.
+Exiting the Bash login shell similarly clears the display. This behavior is
+never applied to noninteractive SSH commands. The first-boot enrollment unit
+skips future boots when its protected owner record already exists, so it
+cannot print an unrelated enrollment message after sign-out.

@@ -5,6 +5,7 @@ Requires=linos-first-boot.service
 After=linos-first-boot.service local-fs.target
 Before=multi-user.target getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.service
 ConditionPathExists=/var/lib/linos/device-id
+ConditionPathExists=!/var/lib/linos/owner
 
 [Service]
 Type=oneshot
