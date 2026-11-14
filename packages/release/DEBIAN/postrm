@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+HOOK='session optional pam_exec.so quiet /usr/lib/linos/linos-login --record-session'
+case "${1:-}" in
+    remove|purge)
+        if [ -f /etc/pam.d/login ] && grep -Fqx "$HOOK" /etc/pam.d/login; then
+            sed -i '\|^session optional pam_exec.so quiet /usr/lib/linos/linos-login --record-session$|d' /etc/pam.d/login
+        fi
+        ;;
+esac
+exit 0
