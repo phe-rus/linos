@@ -22,14 +22,18 @@ const INNER_WIDTH: usize = 42;
 
 fn box_line(text: &str) -> String {
     let used = text.chars().count() + 2;
-    format!("  │  {}{}│\n", text, " ".repeat(INNER_WIDTH.saturating_sub(used)))
+    format!(
+        "  │  {}{}│\n",
+        text,
+        " ".repeat(INNER_WIDTH.saturating_sub(used))
+    )
 }
 
 fn welcome() -> String {
     let title = "Linos 13 · Server setup";
     let mut value = format!(
         "\n  ╭─ {title} {}╮\n",
-        "─".repeat(INNER_WIDTH.saturating_sub(title.chars().count() + 2))
+        "─".repeat(INNER_WIDTH.saturating_sub(title.chars().count() + 3))
     );
     value.push_str(&box_line(""));
     value.push_str(&box_line("Welcome to Linos."));
@@ -42,9 +46,17 @@ fn welcome() -> String {
 fn page(stage: Stage, name: Option<&str>, styled: bool) -> String {
     if !styled {
         return match stage {
-            Stage::Username => "Linos 13 Server setup\nWelcome to Linos. Let's set up your account.\n".to_owned(),
-            Stage::Password => format!("Username: {}\nSet a password to protect your account.\n", name.unwrap_or("")),
-            Stage::Complete => format!("Linos setup complete.\nSign in as {} with the password you created.\n", name.unwrap_or("")),
+            Stage::Username => {
+                "Linos 13 Server setup\nWelcome to Linos. Let's set up your account.\n".to_owned()
+            }
+            Stage::Password => format!(
+                "Username: {}\nSet a password to protect your account.\n",
+                name.unwrap_or("")
+            ),
+            Stage::Complete => format!(
+                "Linos setup complete.\nSign in as {} with the password you created.\n",
+                name.unwrap_or("")
+            ),
         };
     }
     let cyan = "\x1b[36m";
@@ -71,7 +83,9 @@ fn display(stage: Stage, name: Option<&str>) -> io::Result<()> {
     stdout.flush()
 }
 
-pub fn start() -> io::Result<()> { display(Stage::Username, None) }
+pub fn start() -> io::Result<()> {
+    display(Stage::Username, None)
+}
 
 pub fn username_prompt() -> io::Result<()> {
     if !visual() {
@@ -81,8 +95,12 @@ pub fn username_prompt() -> io::Result<()> {
     Ok(())
 }
 
-pub fn password(username: &str) -> io::Result<()> { display(Stage::Password, Some(username)) }
-pub fn completed(username: &str) -> io::Result<()> { display(Stage::Complete, Some(username)) }
+pub fn password(username: &str) -> io::Result<()> {
+    display(Stage::Password, Some(username))
+}
+pub fn completed(username: &str) -> io::Result<()> {
+    display(Stage::Complete, Some(username))
+}
 
 #[cfg(test)]
 mod tests {
@@ -91,9 +109,12 @@ mod tests {
     #[test]
     fn box_borders_align() {
         let frame = welcome();
-        let lines: Vec<_> = frame.lines().filter(|line| {
-            line.starts_with("  ╭") || line.starts_with("  │") || line.starts_with("  ╰")
-        }).collect();
+        let lines: Vec<_> = frame
+            .lines()
+            .filter(|line| {
+                line.starts_with("  ╭") || line.starts_with("  │") || line.starts_with("  ╰")
+            })
+            .collect();
         assert_eq!(lines.len(), 6);
         for line in lines {
             assert_eq!(line.chars().count(), INNER_WIDTH + 4, "{line}");
