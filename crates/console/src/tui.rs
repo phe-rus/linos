@@ -20,6 +20,7 @@ use super::{Action, action_for, geometry, host, memory, ownership, pty, uptime, 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
 const COMMANDS: &[(Action, &str, &str)] = &[
+    (Action::Home, "/home", "Return to the Linos Home workspace"),
     (
         Action::Status,
         "/status",
@@ -157,6 +158,7 @@ impl App {
             View::Help => [
                 "Linos Server commands",
                 "",
+                "/home         Return to the Home workspace",
                 "/status       Overview and device health",
                 "/resources    CPU, memory, swap and filesystem capacity",
                 "/assets       Browse your home directory (read-only)",
@@ -201,6 +203,7 @@ impl App {
         self.input.clear();
         self.highlighted = 0;
         match action {
+            Action::Home => self.navigate(View::Home),
             Action::Status => self.navigate(View::Status),
             Action::Resources => self.navigate(View::Resources),
             Action::Assets => self.navigate(View::Assets),
@@ -313,12 +316,8 @@ impl App {
                     return Ok(self.apply(action));
                 }
                 let command = std::mem::take(&mut self.input);
-                if command == "/home" && !waiting_for_secret {
-                    self.navigate(View::Home);
-                } else {
-                    if let Err(error) = self.run_native_command(command) {
-                        self.notice = format!("Unable to start Linux command: {error}");
-                    }
+                if let Err(error) = self.run_native_command(command) {
+                    self.notice = format!("Unable to start Linux command: {error}");
                 }
             }
             KeyCode::PageDown => {
