@@ -61,3 +61,20 @@ shell but does not stop the VM.
 The `console.qcow2` overlay persists guest state. Running the same launcher
 again does not reset onboarding. Archive or rename that overlay before
 starting a fresh first-boot test; never reset a guest with data you need.
+
+## First-boot guided setup
+
+The first-time enrollment application now clears the normal-boot serial console
+**only when stdin and stdout are interactive terminals** and displays a compact
+line-connected setup flow. The layout is inspired by modern terminal wizards:
+a simple welcome panel, a highlighted active question and completed steps.
+
+The first prompt is simply **Username**. The user chooses an account name and
+then sets the password through the existing system `passwd` command, keeping
+PAM password handling intact. A successful setup shows a completion message
+with the chosen username.
+
+For `NO_COLOR`, `TERM=dumb`, or non-interactive streams, the same program
+uses plain output without ANSI screen clearing. No shell configuration or
+third-party terminal application is affected. Kernel messages remain
+available through `journalctl -b` and `dmesg`; they are not deleted.

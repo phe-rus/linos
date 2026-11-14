@@ -1,3 +1,5 @@
+mod ui;
+
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
@@ -204,7 +206,7 @@ fn ensure_home(username: &str) -> io::Result<()> {
 }
 
 fn prompt_username() -> io::Result<String> {
-    print!("Administrator username: ");
+    ui::username_prompt()?;
     io::stdout().flush()?;
     let mut value = String::new();
     io::stdin().read_line(&mut value)?;
@@ -249,13 +251,7 @@ fn enroll() -> io::Result<()> {
         ));
     }
 
-    println!();
-    println!("  Linos 13  /  First-time setup");
-    println!("  ---------------------------------------");
-    println!("  [1/2] Create your administrator account");
-    println!("  Choose your own username. There is no default login.");
-    println!("  This setup works offline. Use the trusted local console.");
-    println!();
+    ui::start()?;
     let username = prompt_username()?;
     let pending = Path::new(STATE_DIR).join("pending-owner");
 
@@ -288,7 +284,7 @@ fn enroll() -> io::Result<()> {
 
     ensure_home(&username)?;
 
-    println!("  [2/2] Create a strong password for {username}.");
+    ui::password(&username)?;
     run("/usr/bin/passwd", &[&username])?;
 
     create_state(
@@ -297,10 +293,7 @@ fn enroll() -> io::Result<()> {
     )?;
     commit_provisioned_state()?;
     fs::remove_file(pending)?;
-    println!();
-    println!("  [ OK ] Administrator setup complete.");
-    println!("  Sign in as {username} using the password you created.");
-    println!();
+    ui::completed(&username)?;
     Ok(())
 }
 
