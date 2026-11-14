@@ -31,6 +31,9 @@ fn end_boot_status_output() -> io::Result<()> {
 pub fn start() -> io::Result<()> {
     if interactive() {
         end_boot_status_output()?;
+        // Clear the visible terminal AND supported scrollback, not just scroll up.
+        print!("\x1b[3J\x1b[2J\x1b[H");
+        io::stdout().flush()?;
         cliclack::clear_screen()?;
         cliclack::intro(" Linos 13 · Server setup ")?;
         cliclack::log::info("Welcome to Linos. Let's make this server yours.")?;
@@ -72,12 +75,13 @@ pub fn password(username: &str) -> io::Result<()> {
     Ok(())
 }
 
-pub fn configure(current_hostname: &str) -> io::Result<Settings> {
+pub fn configure(username: &str, _current_hostname: &str) -> io::Result<Settings> {
     if !interactive() {
         println!("Using system defaults for region and networking.");
-        return Ok(Settings::defaults(current_hostname));
+        return Ok(Settings::defaults(&crate::setup::hostname_from_username(username)));
     }
 
+    cliclack::log::step("Choose your preferences. Arrow keys scroll options; Enter selects.")?;
     let language = cliclack::select("Language")
         .item(Language::English, "English", "Default")
         .item(Language::French, "Français", "")
@@ -92,7 +96,7 @@ pub fn configure(current_hostname: &str) -> io::Result<Settings> {
         .interact()?;
 
     let timezone: &str = cliclack::select("Time zone / location")
-        .item("Etc/UTC", "UTC", "Default")
+        .item("Etc/UTC", "UTC", "Coordinated Universal Time")
         .item("Africa/Kampala", "Africa / Kampala", "")
         .item("Europe/London", "Europe / London", "")
         .item("Europe/Paris", "Europe / Paris", "")
@@ -102,7 +106,7 @@ pub fn configure(current_hostname: &str) -> io::Result<Settings> {
         .interact()?;
 
     let hostname: String = cliclack::input("Server hostname")
-        .default_input(current_hostname)
+        .default_input(&crate::setup::hostname_from_username(username))
         .validate(|value: &String| {
             if crate::setup::valid_hostname(value) {
                 Ok(())

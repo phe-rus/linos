@@ -56,6 +56,21 @@ pub struct Settings {
     pub network: Network,
 }
 
+pub fn hostname_from_username(username: &str) -> String {
+    let base: String = username
+        .bytes()
+        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+        .map(char::from)
+        .take(58)
+        .collect();
+    let base = base.trim_matches('-');
+    if base.is_empty() {
+        "linos-server".to_owned()
+    } else {
+        format!("{base}-server")
+    }
+}
+
 impl Settings {
     pub fn defaults(hostname: &str) -> Self {
         Self {
@@ -120,6 +135,12 @@ impl Settings {
         symlink(zone, localtime)?;
         fs::write("/etc/timezone", format!("{}\n", self.timezone))?;
         fs::write("/etc/hostname", format!("{}\n", self.hostname))?;
+        let hostname_status = Command::new("/usr/bin/hostnamectl")
+            .args(["hostname", &self.hostname])
+            .status()?;
+        if !hostname_status.success() {
+            return Err(io::Error::other("Unable to activate server hostname"));
+        }
 
         if self.network == Network::Dhcp {
             let config = Path::new("/etc/systemd/network/20-linos-dhcp.network");
@@ -175,6 +196,13 @@ mod tests {
         ] {
             assert!(!valid_hostname(name));
         }
+    }
+
+    #[test]
+    fn hostname_defaults_to_username() {
+        assert_eq!(hostname_from_username("linos"), "linos-server");
+        assert_eq!(hostname_from_username("my_user"), "myuser-server");
+        assert!(valid_hostname(&hostname_from_username("a")));
     }
 
     #[test]

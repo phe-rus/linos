@@ -132,3 +132,22 @@ rather than silently accepting unsafe defaults.
 Noninteractive sessions keep the original minimal plain prompt and use
 English/UTC/offline defaults. The wizard must not run inside SSH startup or
 third-party terminal applications.
+
+## Server home, hostname and clean handoff
+
+After enrollment, Linos automatically requests a clean reboot. The hostname
+suggestion is `<username>-server` but can be changed before applying.
+The current hostname is also activated using `hostnamectl`.
+The enrollment screen sends ANSI erase-scrollback where supported before
+rendering the Clack wizard. This is a best effort and cannot delete scrollback
+stored by every terminal emulator or an external serial-console logger.
+
+A local or SSH **interactive login shell** starts the `linos` home, with
+`/status`, `/network`, `/services`, `/logs`, `/help`, `/shell`.
+`/shell` returns to an ordinary Bash shell. Non-interactive SSH commands
+and pipelines never launch the home. It does not intercept Claude Code,
+Codex or other terminal applications invoked after exiting to the shell.
+
+The standard system login program still authenticates users. A graphical
+Clack login replacement is deliberately not implemented: replacing PAM/getty
+without comprehensive security and recovery testing would be unsafe.

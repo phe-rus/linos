@@ -123,41 +123,58 @@ fn help() {
     println!("  service NAME  Inspect a systemd service");
     println!("  logs NAME     Show recent journal entries for a service");
     println!();
-    println!("Run 'linos' in an interactive terminal for the guided menu.");
+    println!("Run 'linos' to open the interactive Server home with slash commands.");
     println!("Normal shell commands and third-party terminal applications are unchanged.");
 }
 
+fn home() -> io::Result<()> {
+    if decorated() {
+        print!("\x1b[3J\x1b[2J\x1b[H");
+    }
+    heading("Linos 13 / Server");
+    let host = fs::read_to_string("/etc/hostname").unwrap_or_else(|_| "linos".into());
+    let user = env::var("USER").unwrap_or_else(|_| "operator".into());
+    println!("  Welcome, {user}.   {}", host.trim());
+    println!();
+    println!("  /status     System overview     /network   Network");
+    println!("  /services   Running services    /logs      Recent system logs");
+    println!("  /help       Commands            /shell     Return to shell");
+    println!();
+    io::stdout().flush()
+}
+
 fn interactive() -> io::Result<ExitCode> {
+    home()?;
     loop {
-        heading("Linos 13  /  Server");
-        println!("  1  System overview");
-        println!("  2  Network");
-        println!("  3  Running services");
-        println!("  4  Exit to shell");
-        print!("\n  Choose an option: ");
+        print!("  ❯ ");
         io::stdout().flush()?;
         let mut input = String::new();
         if io::stdin().read_line(&mut input)? == 0 {
             return Ok(ExitCode::SUCCESS);
         }
-        match input.trim() {
-            "1" => status(),
-            "2" => {
+        let cmd = input.trim();
+        match cmd {
+            "" | "/" => {
+                if cmd == "/" {
+                    println!("  /status · /network · /services · /logs · /help · /shell");
+                }
+            }
+            "/status" | "status" => status(),
+            "/network" | "network" => {
                 let _ = command("ip", &["-brief", "address"])?;
             }
-            "3" => {
+            "/services" | "services" => {
                 let _ = command(
                     "systemctl",
-                    &[
-                        "list-units",
-                        "--type=service",
-                        "--state=running",
-                        "--no-pager",
-                    ],
+                    &["list-units", "--type=service", "--state=running", "--no-pager"],
                 )?;
             }
-            "4" | "q" | "exit" => return Ok(ExitCode::SUCCESS),
-            _ => println!("  Choose 1, 2, 3 or 4."),
+            "/logs" | "logs" => {
+                let _ = command("journalctl", &["--no-pager", "-n", "30"])?;
+            }
+            "/help" | "help" => home()?,
+            "/shell" | "/exit" | "exit" | "q" => return Ok(ExitCode::SUCCESS),
+            _ => println!("  Unknown action. Type / to see commands, or /shell to exit."),
         }
     }
 }

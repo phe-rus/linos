@@ -285,7 +285,7 @@ fn enroll() -> io::Result<()> {
     run("/usr/bin/passwd", &[&username])?;
 
     let current_hostname = fs::read_to_string("/etc/hostname")?.trim().to_owned();
-    let settings = ui::configure(&current_hostname)?;
+    let settings = ui::configure(&username, &current_hostname)?;
     settings.apply()?;
 
     create_state(
@@ -295,6 +295,11 @@ fn enroll() -> io::Result<()> {
     commit_provisioned_state()?;
     fs::remove_file(pending)?;
     ui::completed(&username)?;
+    // First-time setup needs a clean boot so hostname, locale and network are active.
+    // Do not make the committed account dependent on reboot command availability.
+    let _ = Command::new("/usr/bin/systemctl")
+        .args(["--no-block", "reboot"])
+        .status();
     Ok(())
 }
 
