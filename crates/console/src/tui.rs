@@ -174,7 +174,7 @@ impl App {
                 "/home returns from terminal output to your Home workspace.",
                 "Use Up/Down to select, Enter to run, Esc to clear.",
                 "PageUp/PageDown scroll results. Ctrl+T switches to shell.",
-                "Type exit or press Ctrl+D in the shell to return to Linos.",
+                "Press Ctrl+T at the Bash prompt, exit or Ctrl+D to return to Linos.",
                 "",
                 "Claude Code, Codex and other TUIs run normally in your shell.",
             ]
@@ -591,10 +591,13 @@ fn interactive_shell() -> io::Result<()> {
         .ok()
         .filter(|path| path.starts_with('/') && std::path::Path::new(path).is_file())
         .unwrap_or_else(|| "/bin/sh".into());
-    let status = Command::new(shell)
-        .arg("-i")
-        .env("LINOS_NO_WELCOME", "1")
-        .status()?;
+    let bash = shell.ends_with("/bash")
+        && std::path::Path::new("/usr/lib/linos/linos-shell.bashrc").is_file();
+    let mut child = Command::new(shell);
+    if bash {
+        child.args(["--rcfile", "/usr/lib/linos/linos-shell.bashrc"]);
+    }
+    let status = child.arg("-i").env("LINOS_NO_WELCOME", "1").status()?;
     if !status.success() {
         eprintln!("Shell exited with status {status}");
     }
