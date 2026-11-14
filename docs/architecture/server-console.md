@@ -78,3 +78,23 @@ For `NO_COLOR`, `TERM=dumb`, or non-interactive streams, the same program
 uses plain output without ANSI screen clearing. No shell configuration or
 third-party terminal application is affected. Kernel messages remain
 available through `journalctl -b` and `dmesg`; they are not deleted.
+
+## Visible boot progress and handoff
+
+Systemd shows genuine unit startup statuses with `systemd.show_status=yes`.
+Routine kernel messages remain quiet and errors are not suppressed.
+The first-boot wizard clears prior console output only after startup, when
+it takes control of the interactive terminal. All welcome-panel borders
+are calculated to a consistent width and checked by a Rust unit test.
+
+## Interactive login and SSH
+
+There is still no preset account or password in distributed images.
+For a development VM, enter `linos` as the username during setup and
+choose a password. Do not use a predictable password on a networked server.
+
+SSH authenticates users before a server-side UI can be shown. After
+authentication, local and SSH **interactive login shells** display a
+small Linos welcome banner and offer the `linos` management command.
+Non-interactive SSH commands, pipes, scripts, and nested TUIs receive
+no shell-wide decoration. Set `LINOS_NO_WELCOME=1` to opt out.

@@ -38,4 +38,4 @@ exec qemu-system-x86_64 \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
     -device virtio-blk-pci,drive=rootfs \
-    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.unit=multi-user.target"
+    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=yes rd.systemd.show_status=yes systemd.unit=multi-user.target"

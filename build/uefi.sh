@@ -93,7 +93,7 @@ mcopy -i "$ESP" "$BOOTLOADER" ::/EFI/BOOT/BOOTX64.EFI
 mcopy -i "$ESP" "$KERNEL" ::/linos/kernel
 mcopy -i "$ESP" "$INITRAMFS" ::/linos/initramfs
 
-BOOT_PRESENTATION='quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto'
+BOOT_PRESENTATION='quiet loglevel=3 systemd.show_status=yes rd.systemd.show_status=yes'
 TITLE='Linos 13 Server'
 KERNEL_OPTIONS='systemd.mask=linos-enroll.service systemd.unit=multi-user.target'
 if [[ "$PROFILE" == recovery ]]; then
