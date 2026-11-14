@@ -24,7 +24,7 @@ This is a functional first iteration of Server UX, not the final visual design.
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy -p console --all-targets --locked -- -D warnings
+cargo clippy -p linos-console --all-targets --locked -- -D warnings
 cargo test -p console --locked
 ./build/package.sh
 ```

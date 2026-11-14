@@ -49,7 +49,7 @@ if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
     exit 2
 fi
 
-cargo build --release -p init -p enroll -p console
+cargo build --release -p init -p enroll -p linos-console
 
 STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
