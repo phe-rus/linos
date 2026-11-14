@@ -38,7 +38,7 @@ fi
 # This checks the actual package bytes, not only its unchanged 1.0.0 version.
 verify_package_entry() {
     local name="$1"
-    if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -tf - | grep -Fqx "./$name"; then
+    if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -tf - | grep -Fx "./$name" >/dev/null; then
         printf 'Linos package is missing %s; rebuild with ./build/package.sh\n' "$name" >&2
         exit 1
     fi
@@ -50,7 +50,7 @@ for entry in \
     usr/lib/systemd/system/getty@tty1.service.d/linos-login.conf; do
     verify_package_entry "$entry"
 done
-if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - ./usr/bin/linos | grep -aqF 'Your server is ready'; then
+if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - ./usr/bin/linos | grep -aF 'Your server is ready' >/dev/null; then
     echo "Linos package contains an outdated server TUI binary" >&2
     exit 1
 fi
@@ -128,7 +128,7 @@ mmdebstrap \
 # The Debian package version alone does not establish code freshness.
 verify_rootfs_entry() {
     local entry="$1"
-    if ! tar -tf "$ROOTFS" | grep -Fqx "./$entry"; then
+    if ! tar -tf "$ROOTFS" | grep -Fx "./$entry" >/dev/null; then
         printf 'Incomplete rootfs: missing %s\n' "$entry" >&2
         exit 1
     fi
@@ -141,7 +141,7 @@ for entry in \
     verify_rootfs_entry "$entry"
 done
 
-if ! tar -xOf "$ROOTFS" ./usr/bin/linos | grep -aqF 'Your server is ready'; then
+if ! tar -xOf "$ROOTFS" ./usr/bin/linos | grep -aF 'Your server is ready' >/dev/null; then
     echo "Incomplete rootfs: Linos TUI is not the expected build" >&2
     exit 1
 fi
