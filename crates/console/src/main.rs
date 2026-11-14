@@ -7,6 +7,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod pty;
 mod tui;
 
 const PUBLIC_READY: &str = "/etc/linos/setup-complete";
