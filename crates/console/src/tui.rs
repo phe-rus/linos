@@ -363,7 +363,7 @@ impl App {
                 if self.input.is_empty() {
                     return Ok(None);
                 }
-                let waiting_for_secret = self.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+                let waiting_for_secret = self.view == View::Terminal && self.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
                 let action = if waiting_for_secret { None } else { self
                     .suggestions()
                     .get(self.highlighted)
@@ -594,7 +594,7 @@ fn draw(frame: &mut Frame, app: &App) {
         ]);
     }
 
-    let waiting_for_secret = app.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+    let waiting_for_secret = app.view == View::Terminal && app.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
     let suggestions = if waiting_for_secret { Vec::new() } else { app.suggestions() };
     let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
     let count = suggestions.len().min(5).min(available_suggestions);
