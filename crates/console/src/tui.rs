@@ -322,7 +322,7 @@ fn resources() -> String {
     let swap_free = read_mem_field("SwapFree:").unwrap_or(0) / 1024;
     let cpu = fs::read_to_string("/proc/stat")
         .ok()
-        .and_then(|s| s.lines().filter(|l| l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())).count().checked_sub(0))
+        .map(|s| s.lines().filter(|l| l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())).count())
         .unwrap_or(0);
     let load = fs::read_to_string("/proc/loadavg")
         .ok()
@@ -591,7 +591,7 @@ mod tests {
         let mut app = App::new();
         app.key(press(KeyCode::Char('/'))).unwrap();
         app.key(press(KeyCode::Char('s'))).unwrap();
-        assert_eq!(app.suggestions().len(), 4); // status, services, shell, shutdown
+        assert_eq!(app.suggestions().len(), 5); // status, services, settings, shell, shutdown
         app.key(press(KeyCode::Char('t'))).unwrap();
         app.key(press(KeyCode::Enter)).unwrap();
         assert_eq!(app.view, View::Status);
