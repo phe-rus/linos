@@ -96,7 +96,7 @@ impl Session {
     pub fn echo_enabled(&self) -> bool {
         // SAFETY: master is an open PTY and libc initializes the structure.
         let mut termios: libc::termios = unsafe { std::mem::zeroed() };
-        unsafe { libc::tcgetattr(self.writer.as_raw_fd(), &raw mut termios) } == 0
+        (unsafe { libc::tcgetattr(self.writer.as_raw_fd(), &raw mut termios) }) == 0
             && termios.c_lflag & libc::ECHO != 0
     }
 
