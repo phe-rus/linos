@@ -1,6 +1,6 @@
 # Development roadmap
 
-This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development release: **Marauder, Sequence 9**, generation **1.0.0**, build **20261105.2**.
+This document tracks intended milestones, not promises or shipped features. The repository's `main` branch is the working branch. Current development channel: **development**, product **Linos 13**, generation **1.0.0**. Build IDs are assigned per build and must not be treated as the source revision or an alpha tag.
 
 ## Completed proof of concept
 
@@ -58,6 +58,24 @@ All installation experiments remain confined to disposable virtual disks. Signed
 payload checks alone do not authenticate the full boot chain; physical-disk install
 is deliberately disabled.
 
+## Server Home and management experience (active)
+
+- [x] Cliclack first-boot wizard, local administrator enrollment, remembered username and PAM-backed sign-in demonstrated in QEMU.
+- [x] Native Ratatui Home with slash navigation, status, network/services/logs, Assets, Settings and Resources views.
+- [x] Persistent PTY-backed ordinary Linux commands; the working directory is displayed above the composer.
+- [x] A separate full interactive Shell mode with return-to-Home behaviour.
+- [x] Terminal-size recalibration and adaptive layout observed in supplied amd64 QEMU screenshots.
+- [x] Read-only Assets keyboard navigation and memory/swap/disk usage bars demonstrated visually.
+- [x] Introduced read-only Hardware reporting and Linus store package inventory, search and simulated transactions **in source**, awaiting build and QEMU validation.
+- [ ] Verify embedded shell prompt/secret input handling with actual sudo interactions; **a false Password (hidden) prompt was observed**.
+- [ ] Implement proper ANSI terminal rendering or a robust command-output model for full interactive applications.
+- [ ] Make Assets file previews and management operations safe and usable.
+- [ ] Add accessible navigation, additional small-terminal tests and reliable real-console resize tests.
+- [ ] Implement controlled Settings changes with explicit authorization and rollback/error handling.
+- [ ] Build a transaction-based Linus store UI for install, upgrade, remove, progress and errors.
+
+**Acceptance:** a real user can administer a fresh VM through Home without command lockups or false prompts, inspect hardware and packages, and return to an ordinary shell at any time.
+
 ## Milestone 3: security and ownership
 
 - [ ] Implement local ownership, credentials and device keys with a threat model.
@@ -79,15 +97,40 @@ is deliberately disabled.
 
 **Acceptance:** failed updates recover to a bootable configuration and do not silently discard user data.
 
+## Kernel configuration and portability (not complete)
+
+- [x] Boot using the supported Debian kernel in amd64 and arm64 QEMU images.
+- [ ] Define reproducible Linos kernel config fragments with per-hardware capability profiles.
+- [ ] Record kernel version, configuration, patches, module/firmware inventory and provenance in build artifacts.
+- [ ] Enforce config checks during kernel upgrades, including a kernel version compatibility gate.
+- [ ] Benchmark boot, idle memory, storage, scheduling, networking and security posture.
+- [ ] Validate Pi/RK3588 and physical x86 targets using actual firmware, drivers and power-management behaviour.
+
+**Current kernel status:** the image script installs Debian's kernel package, not an independently compiled or consistently retuned Linos kernel. Do not claim automatic preservation of Linos-specific tuning across upstream updates.
+
 ## Milestone 5: balanced system resources
 
 - [ ] Establish baseline boot time, memory use, disk I/O and command latency.
 - [ ] Observe cgroup v2 and Linux PSI on supported kernels.
+- [x] Display procfs CPU load and memory usage plus root filesystem utilization in the Server UI.
+- [x] Add initial read-only hardware awareness from Linux sysfs/DMI and device tree (source, not yet boot validated).
 - [ ] Define server policies for latency-sensitive and background services.
 - [ ] Add safeguards against disrupting active jobs, network sessions or databases.
 - [ ] Evaluate policies against measured workloads, not aesthetic assumptions.
 
 **Acceptance:** demonstrate reproducible improvements without data loss or starvation.
+
+## Release gates
+
+| Release stage | Current evidence | Gate |
+| --- | --- | --- |
+| Proof of concept | Completed QEMU boot, enrollment, recovered guest identity and native TUI | Met |
+| Developer preview | Functional UI and 54 Rust tests passed at `4db71a0`; subsequent changes need rerun | Active |
+| Alpha | Stable authenticated Home without false password prompts, package/hardware UI validated on rebuilt VM, smoke/CI green, known limitations documented | Not yet met |
+| Beta | Physical hardware matrix, guarded installer, tested updates/rollback, threat-model review and performance regression targets | Not met |
+| Production | Signed reproducible releases, lifecycle support, full security/upgrade/restore/recovery verification, workload soak tests | Not met |
+
+A green unit test suite is not proof of a successful QEMU boot. Screenshots represent observed builds only; source commits made afterward are unverified until rebuilt and tested.
 
 ## Product independence
 
