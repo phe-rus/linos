@@ -2,21 +2,23 @@
 
 <div align="center">
 
-**An operating system that feels like it belongs to you.**
+**Linux, made for the people who use it.**
 
-Made for the server today. Designed for the desktop tomorrow. Built openly for what comes next.
+Linux has the capability. Linos is about making that capability feel natural, dependable and genuinely welcoming to everyday users.
 
 **Linos 13 · Server development preview · Generation 1.0.0**
 
-[Explore Linos](docs/architecture/overview.md) · [See our progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
+[Why Linos exists](docs/vision.md) · [See our progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
 
 </div>
 
 ---
 
-### Thoughtful from the first boot.
+### Linux should feel like home.
 
-Linos is a family of operating systems with a shared foundation and experiences shaped for each device. **Server** is the first edition. **Desktop** follows, with other hardware families planned later.
+Linux is enormously capable, but capability alone does not make a system one that ordinary people can comfortably choose. Linos is being built to close that gap. We want the care, consistency, clarity and responsiveness people expect from mainstream consumer operating systems, without asking everyone to become technically proficient first.
+
+Linos is intended as a family of experiences for everyday devices. **Server** is the first edition in development, not the limit of the vision. Desktop and other device experiences follow as the common platform matures.
 
 We want the experience to feel considered from power-on to daily use: a clear recovery environment, approachable setup, dependable updates and a system that remains useful without a cloud account.
 
