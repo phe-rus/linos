@@ -8,6 +8,6 @@ fi
 # Bash readline owns the key only at its prompt. Child programs such as Vim,
 # SSH, sudo and tmux retain their own terminal input.
 if [[ $- == *i* ]]; then
-    bind -x '"\\C-t": "exit"'
-    PS1='\\[\\e[36m\\]linos\\[\\e[0m\\] \\w ❯ '
+    bind -x '"\C-t": "exit"'
+    PS1='\[\e[36m\]linos\[\e[0m\] \w ❯ '
 fi
