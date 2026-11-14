@@ -9,6 +9,7 @@ ConditionPathExists=/var/lib/linos/device-id
 [Service]
 Type=oneshot
 ExecStart=/usr/lib/linos/linos-enroll
+Environment=TERM=xterm-256color
 StandardInput=tty-force
 StandardOutput=tty
 StandardError=tty

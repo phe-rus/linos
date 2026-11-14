@@ -96,8 +96,7 @@ impl Settings {
         // advertised in the interface.
         let locale = self.language.locale();
         if locale != "C.UTF-8" {
-            let status = Command::new("/usr/sbin/locale-gen")
-                .status()?;
+            let status = Command::new("/usr/sbin/locale-gen").status()?;
             if !status.success() {
                 return Err(io::Error::other("Locale generation failed"));
             }
@@ -124,8 +123,15 @@ impl Settings {
 
         if self.network == Network::Dhcp {
             let config = Path::new("/etc/systemd/network/20-linos-dhcp.network");
-            fs::create_dir_all(config.parent().ok_or_else(|| io::Error::other("Invalid network path"))?)?;
-            let mut file = OpenOptions::new().write(true).create_new(true).open(config)?;
+            fs::create_dir_all(
+                config
+                    .parent()
+                    .ok_or_else(|| io::Error::other("Invalid network path"))?,
+            )?;
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(config)?;
             file.write_all(b"[Match]\nName=en* eth*\n\n[Network]\nDHCP=yes\n")?;
             file.sync_all()?;
             let enabled = Command::new("/usr/bin/systemctl")
@@ -144,7 +150,9 @@ pub fn valid_hostname(host: &str) -> bool {
         && host.len() <= 63
         && !host.starts_with('-')
         && !host.ends_with('-')
-        && host.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 #[cfg(test)]
@@ -156,7 +164,15 @@ mod tests {
         for name in ["linos", "linos-server-1", "host7"] {
             assert!(valid_hostname(name));
         }
-        for name in ["", "Bad", "-linos", "linos-", "has spaces", "a/b", "a".repeat(64).as_str()] {
+        for name in [
+            "",
+            "Bad",
+            "-linos",
+            "linos-",
+            "has spaces",
+            "a/b",
+            "a".repeat(64).as_str(),
+        ] {
             assert!(!valid_hostname(name));
         }
     }
@@ -165,7 +181,10 @@ mod tests {
     fn supported_settings_validate() {
         let valid = Settings::defaults("linos");
         valid.validate().unwrap();
-        let invalid = Settings { timezone: "../etc/passwd".into(), ..valid };
+        let invalid = Settings {
+            timezone: "../etc/passwd".into(),
+            ..valid
+        };
         assert!(invalid.validate().is_err());
     }
 }

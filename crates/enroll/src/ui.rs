@@ -113,8 +113,16 @@ pub fn configure(current_hostname: &str) -> io::Result<Settings> {
         .interact()?;
 
     let network = cliclack::select("Network configuration")
-        .item(Network::Offline, "Configure later", "Recommended for offline testing")
-        .item(Network::Dhcp, "Automatic DHCP", "Enable networkd after setup")
+        .item(
+            Network::Offline,
+            "Configure later",
+            "Recommended for offline testing",
+        )
+        .item(
+            Network::Dhcp,
+            "Automatic DHCP",
+            "Enable networkd after setup",
+        )
         .interact()?;
 
     let summary = format!(
@@ -123,7 +131,9 @@ pub fn configure(current_hostname: &str) -> io::Result<Settings> {
         network.label()
     );
     cliclack::note("Review server settings", summary)?;
-    let accepted = cliclack::confirm("Apply these settings?").initial_value(true).interact()?;
+    let accepted = cliclack::confirm("Apply these settings?")
+        .initial_value(true)
+        .interact()?;
     if !accepted {
         return Err(io::Error::new(
             io::ErrorKind::Interrupted,
