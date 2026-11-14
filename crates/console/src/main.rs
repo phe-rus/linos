@@ -127,11 +127,19 @@ enum Action {
     Logout,
     Reboot,
     Shutdown,
+    Resources,
+    Assets,
+    Settings,
+    Updates,
 }
 
 fn action_for(value: &str) -> Option<Action> {
     match value.trim() {
         "/status" | "status" => Some(Action::Status),
+        "/resources" | "resources" => Some(Action::Resources),
+        "/assets" | "assets" => Some(Action::Assets),
+        "/settings" | "settings" => Some(Action::Settings),
+        "/updates" | "updates" => Some(Action::Updates),
         "/network" | "network" => Some(Action::Network),
         "/services" | "services" => Some(Action::Services),
         "/logs" | "logs" => Some(Action::Logs),
@@ -146,6 +154,10 @@ fn action_for(value: &str) -> Option<Action> {
 
 fn execute(action: Action) -> io::Result<ExitCode> {
     match action {
+        Action::Resources | Action::Assets | Action::Settings | Action::Updates => {
+            eprintln!("Open the interactive Linos Server home for this view.");
+            Ok(ExitCode::from(2))
+        }
         Action::Status => {
             status();
             Ok(ExitCode::SUCCESS)
