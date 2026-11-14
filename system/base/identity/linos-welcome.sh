@@ -8,3 +8,9 @@ case $- in *i*) ;; *) return 0 ;; esac
 if [ -x /usr/bin/linos ]; then
     /usr/bin/linos
 fi
+
+# A short Linos shell prompt when the user explicitly returns from the UI.
+# Bash only; do not alter other shell or remote command environments.
+if [ -n "${BASH_VERSION:-}" ] && [ -z "${LINOS_NO_PROMPT:-}" ]; then
+    PS1='\[\e[36m\]\u@\h\[\e[0m\] \w ❯ '
+fi

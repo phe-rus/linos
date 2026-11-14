@@ -111,6 +111,20 @@ impl Settings {
         // advertised in the interface.
         let locale = self.language.locale();
         if locale != "C.UTF-8" {
+            let entry = format!("{locale} UTF-8");
+            let previous = fs::read_to_string("/etc/locale.gen")?;
+            let updated = previous
+                .lines()
+                .map(|line| {
+                    if line.trim_start().trim_start_matches('#').trim() == entry {
+                        entry.as_str()
+                    } else {
+                        line
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            fs::write("/etc/locale.gen", format!("{updated}\n"))?;
             let status = Command::new("/usr/sbin/locale-gen").status()?;
             if !status.success() {
                 return Err(io::Error::other("Locale generation failed"));
@@ -136,7 +150,7 @@ impl Settings {
         fs::write("/etc/timezone", format!("{}\n", self.timezone))?;
         fs::write("/etc/hostname", format!("{}\n", self.hostname))?;
         let hostname_status = Command::new("/usr/bin/hostnamectl")
-            .args(["hostname", &self.hostname])
+            .args(["set-hostname", &self.hostname])
             .status()?;
         if !hostname_status.success() {
             return Err(io::Error::other("Unable to activate server hostname"));
@@ -151,7 +165,8 @@ impl Settings {
             )?;
             let mut file = OpenOptions::new()
                 .write(true)
-                .create_new(true)
+                .create(true)
+                .truncate(true)
                 .open(config)?;
             file.write_all(b"[Match]\nName=en* eth*\n\n[Network]\nDHCP=yes\n")?;
             file.sync_all()?;

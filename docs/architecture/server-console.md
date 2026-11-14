@@ -151,3 +151,12 @@ Codex or other terminal applications invoked after exiting to the shell.
 The standard system login program still authenticates users. A graphical
 Clack login replacement is deliberately not implemented: replacing PAM/getty
 without comprehensive security and recovery testing would be unsafe.
+
+## Native Linos sign-in identity
+
+The Server image replaces Debian's generic `/etc/motd` with a short Linos
+message, and uses a Linos `/etc/issue` for the local getty. The kernel
+continues identifying its real Debian-derived build in `uname`, kernel logs,
+and diagnostics, rather than falsifying kernel provenance. The regular shell
+uses a minimal Linos-colored prompt for interactive Bash only, after exiting
+`linos` with `/shell`. Standard system directories are preserved.

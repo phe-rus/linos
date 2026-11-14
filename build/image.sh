@@ -59,11 +59,13 @@ fi
 STAGING_DIR="$(mktemp -d /tmp/linos-image.XXXXXXXX)"
 STAGED_PACKAGE="$STAGING_DIR/$(basename "$PACKAGE")"
 STAGED_ISSUE="$STAGING_DIR/issue"
+STAGED_MOTD="$STAGING_DIR/motd"
 STAGED_OS_RELEASE="$STAGING_DIR/os-release"
 trap 'rm -r -- "$STAGING_DIR"' EXIT
 chmod 755 "$STAGING_DIR"
 install -m 644 "$PACKAGE" "$STAGED_PACKAGE"
 install -m 644 system/base/identity/issue "$STAGED_ISSUE"
+install -m 644 system/base/identity/motd "$STAGED_MOTD"
 install -m 644 system/base/identity/os-release "$STAGED_OS_RELEASE"
 
 mkdir -p "$BOOT_DIR"
@@ -95,6 +97,7 @@ mmdebstrap \
     --include="$STAGED_PACKAGE" \
     --customize-hook='rm -f "$1/etc/hostname"' \
     --customize-hook="copy-in $STAGED_ISSUE /etc/" \
+    --customize-hook="copy-in $STAGED_MOTD /etc/" \
     --customize-hook='rm -f "$1/etc/os-release"' \
     --customize-hook="copy-in $STAGED_OS_RELEASE /etc/" \
     "$SUITE" \

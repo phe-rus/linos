@@ -78,7 +78,9 @@ pub fn password(username: &str) -> io::Result<()> {
 pub fn configure(username: &str, _current_hostname: &str) -> io::Result<Settings> {
     if !interactive() {
         println!("Using system defaults for region and networking.");
-        return Ok(Settings::defaults(&crate::setup::hostname_from_username(username)));
+        return Ok(Settings::defaults(&crate::setup::hostname_from_username(
+            username,
+        )));
     }
 
     cliclack::log::step("Choose your preferences. Arrow keys scroll options; Enter selects.")?;

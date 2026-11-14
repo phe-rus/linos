@@ -166,7 +166,12 @@ fn interactive() -> io::Result<ExitCode> {
             "/services" | "services" => {
                 let _ = command(
                     "systemctl",
-                    &["list-units", "--type=service", "--state=running", "--no-pager"],
+                    &[
+                        "list-units",
+                        "--type=service",
+                        "--state=running",
+                        "--no-pager",
+                    ],
                 )?;
             }
             "/logs" | "logs" => {
