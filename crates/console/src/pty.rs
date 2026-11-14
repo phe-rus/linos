@@ -67,10 +67,11 @@ impl Session {
         let (tx, output) = mpsc::sync_channel(128);
         thread::spawn(move || {
             let mut data = [0u8; 8192];
+            let mut escape_state = 0u8;
             while let Ok(len) = reader.read(&mut data) {
-                if len == 0 || tx.send(data[..len].to_vec()).is_err() {
-                    break;
-                }
+                if len == 0 { break; }
+                let clean = plain_text(&data[..len], &mut escape_state);
+                if !clean.is_empty() && tx.send(clean).is_err() { break; }
             }
         });
         Ok(Self { writer, output, child, slave_tty })
@@ -110,7 +111,7 @@ impl Session {
 
     pub fn drain(&self, output: &mut String) {
         while let Ok(bytes) = self.output.try_recv() {
-            output.push_str(&plain_text(&bytes));
+            output.push_str(&String::from_utf8_lossy(&bytes));
             if output.len() > 32_000 {
                 let mut boundary = output.len() - 24_000;
                 while !output.is_char_boundary(boundary) { boundary -= 1; }
@@ -129,30 +130,36 @@ impl Drop for Session {
 
 // Read-only output preview, not a terminal emulator. Keeps command content
 // while avoiding escape sequences that might corrupt Ratatui rendering.
-fn plain_text(bytes: &[u8]) -> String {
+fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
     let mut clean = Vec::with_capacity(bytes.len());
-    let mut state = 0;
-    for &b in bytes {
-        match state {
-            0 if b == 0x1b => state = 1,
-            0 if b == b'\r' => {},
-            0 if b == b'\n' || b == b'\t' || b >= 0x20 => clean.push(b),
-            1 if b == b'[' => state = 2,
-            1 if b == b']' => state = 3,
-            1 => state = 0,
-            2 if (0x40..=0x7e).contains(&b) => state = 0,
-            3 if b == 0x07 => state = 0,
-            3 if b == 0x1b => state = 4,
-            4 => state = if b == b'\\' { 0 } else { 3 },
+    for &byte in bytes {
+        match *state {
+            0 if byte == 0x1b => *state = 1,
+            0 if byte == b'\r' => {},
+            0 if byte == b'\n' || byte == b'\t' || byte >= 0x20 => clean.push(byte),
+            1 if byte == b'[' => *state = 2,
+            1 if byte == b']' => *state = 3,
+            1 => *state = 0,
+            2 if (0x40..=0x7e).contains(&byte) => *state = 0,
+            3 if byte == 0x07 => *state = 0,
+            3 if byte == 0x1b => *state = 4,
+            4 => *state = if byte == b'\\' { 0 } else { 3 },
             _ => {},
         }
     }
-    String::from_utf8_lossy(&clean).into_owned()
+    clean
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn filters_split_escape_sequences() {
+        let mut state = 0;
+        assert_eq!(plain_text(b"ready\x1b[", &mut state), b"ready");
+        assert_eq!(plain_text(b"2Jokay\n", &mut state), b"okay\n");
+    }
+
     #[test]
     fn strips_terminal_controls() {
         assert_eq!(plain_text(b"hello\x1b[31m world\x1b[0m\r\n"), "hello world\n");
