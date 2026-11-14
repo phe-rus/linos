@@ -316,7 +316,9 @@ impl App {
                 if command == "/home" && !waiting_for_secret {
                     self.navigate(View::Home);
                 } else {
-                    self.run_native_command(command)?;
+                    if let Err(error) = self.run_native_command(command) {
+                        self.notice = format!("Unable to start Linux command: {error}");
+                    }
                 }
             }
             KeyCode::PageDown => {
@@ -623,23 +625,30 @@ pub fn run() -> io::Result<ExitCode> {
         // this scope restores the real terminal before entering a child shell.
         let result = ratatui::run(|terminal| {
             let mut last_refresh = Instant::now();
+            let mut dirty = true;
             loop {
                 if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
                     app.content = resources();
                     last_refresh = Instant::now();
+                    dirty = true;
                 }
                 if let Some(shell) = &mut app.session {
+                    let previous = app.terminal_output.len();
                     shell.drain(&mut app.terminal_output);
-                    if app.view == View::Terminal {
+                    if previous != app.terminal_output.len() && app.view == View::Terminal {
                         app.content.clone_from(&app.terminal_output);
                         if app.follow_tail {
                             let height = crossterm::terminal::size().map(|(_, h)| h.saturating_sub(14)).unwrap_or(10);
                             app.scroll = app.content.lines().count().saturating_sub(usize::from(height)).min(usize::from(u16::MAX)) as u16;
                         }
+                        dirty = true;
                     }
                 }
-                terminal.draw(|frame| draw(frame, &app))?;
-                if event::poll(Duration::from_millis(140))? {
+                if dirty {
+                    terminal.draw(|frame| draw(frame, &app))?;
+                    dirty = false;
+                }
+                if event::poll(Duration::from_millis(100))? {
                     match event::read()? {
                         Event::Key(key) => {
                             if key.kind == KeyEventKind::Press
@@ -652,16 +661,19 @@ pub fn run() -> io::Result<ExitCode> {
                                     "Terminal does not support size reporting; use stty rows/cols".into()
                                 };
                                 terminal.autoresize()?;
+                                dirty = true;
                                 continue;
                             }
                             if let Some(exit) = app.key(key)? {
                                 break Ok::<Exit, io::Error>(exit);
                             }
+                            dirty = true;
                         }
                         Event::Resize(width, height) => {
                             if let Some(shell) = &mut app.session {
                                 shell.resize(height.saturating_sub(12), width.saturating_sub(4))?;
                             }
+                            dirty = true;
                         }
                         _ => {}
                     }
