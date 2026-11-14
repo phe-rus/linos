@@ -8,7 +8,7 @@ Linux has the capability. Linos is about making that capability feel natural, de
 
 **Linos 13 · Server development preview · Generation 1.0.0**
 
-[Why Linos exists](docs/vision.md) · [Architecture](docs/architecture/overview.md) · [Development progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
+[Why Linos exists](docs/vision.md) · [Product](PRODUCT.md) · [Master plan](docs/plans/linos13-master-plan.md) · [Architecture](docs/architecture/overview.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
 
 </div>
 
@@ -82,6 +82,14 @@ cargo test --workspace --locked
 ```
 
 See the build scripts and GitHub Actions workflow for full prerequisites and architecture-specific tests. For a new development image use `bash build/next-build.sh amd64` before building. Images already assembled do not change when source code changes. Never run installer experiments against disks containing data; the present integration tests use disposable virtual disks.
+
+### From the vision to a working operating system.
+
+Linos development is guided by a [durable product definition](PRODUCT.md), a [staged master plan](docs/plans/linos13-master-plan.md) and a [proposed repository structure](docs/architecture/proposed-repository-structure.md). These are separate from the existing implementation: the current Server works in QEMU, while kernel ownership, native Rust applications and a managed software platform are still being designed and tested.
+
+We use the [Impeccable](https://github.com/pbakaus/impeccable) design workflow for product context and focused UX review. The initial `PRODUCT.md` is in place. `DESIGN.md` will be created only after documenting and critiquing the existing Linos interface, not by inventing a new visual system.
+
+The release gates are evidence-based: development preview, alpha, beta and stable each have different requirements. The [current status](docs/architecture/current-status.md) tracks what is demonstrated and what still blocks a release.
 
 ### Where we're going.
 
