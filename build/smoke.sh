@@ -81,7 +81,7 @@ timeout --signal=TERM --kill-after=5s 180s "${COMMAND[@]}" "${SNAPSHOT_ARGS[@]}"
 QEMU_PID=$!
 STATUS=0
 while kill -0 "$QEMU_PID" 2>/dev/null; do
-    if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:|Username' "$LOG" &&
+    if grep -Fq 'Linos 13 · Sign in' "$LOG" &&
        grep -q "Provisioning state: unclaimed" "$LOG"; then
         kill -TERM "$QEMU_PID" 2>/dev/null || true
         break
@@ -93,16 +93,16 @@ if wait "$QEMU_PID"; then
 else
     STATUS=$?
 fi
-if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:|Username' "$LOG"; then
+if grep -Fq 'Linos 13 · Sign in' "$LOG"; then
     if ! grep -q "Provisioning state: unclaimed" "$LOG"; then
         echo "FAIL: login observed but Linos device initialization was not confirmed" >&2
         exit 1
     fi
-    echo "PASS: local Linos sign-in UI and first-boot identity initialization observed"
+    echo "PASS: cliclack local sign-in and first-boot identity initialization observed"
     exit 0
 fi
 
-printf 'FAIL: local sign-in prompt not observed (QEMU exit: %s)\n' "$STATUS" >&2
+printf 'FAIL: cliclack sign-in screen not observed (QEMU exit: %s)\n' "$STATUS" >&2
 tail -n 35 "$LOG" >&2
 if [[ -s "$QEMU_LOG" ]]; then
     echo "QEMU diagnostics:" >&2
