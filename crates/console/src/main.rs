@@ -111,6 +111,7 @@ fn help() {
     println!("Usage: linos [status|network|services|service NAME|logs NAME|help]");
     println!("       linos /status | /network | /services | /logs | /shell");
     println!("       linos /logout | /reboot | /shutdown");
+    println!("       linos default home|shell");
     println!("Linos Home is the default interactive Server environment.");
     println!("Use /shell or Ctrl+T to enter your shell, then exit to return to Home.");
 }
@@ -187,6 +188,20 @@ fn execute(action: Action) -> io::Result<ExitCode> {
     }
 }
 
+fn set_default_mode(mode: &str) -> io::Result<ExitCode> {
+    if mode != "home" && mode != "shell" {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Choose home or shell"));
+    }
+    let home = env::var_os("HOME")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+    let config_dir = Path::new(&home).join(".config/linos");
+    fs::create_dir_all(&config_dir)?;
+    // A per-user preference, not a privileged system authentication setting.
+    fs::write(config_dir.join("default-mode"), format!("{mode}\n"))?;
+    println!("Linos default mode: {mode}. Effective at your next sign-in.");
+    Ok(ExitCode::SUCCESS)
+}
+
 fn home() -> io::Result<ExitCode> {
     tui::run()
 }
@@ -198,6 +213,7 @@ fn run(args: &[String]) -> io::Result<ExitCode> {
             help();
             Ok(ExitCode::SUCCESS)
         }
+        [command, mode] if command == "default" => set_default_mode(mode),
         [arg] if arg == "--help" || arg == "-h" => {
             help();
             Ok(ExitCode::SUCCESS)
