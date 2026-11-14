@@ -34,6 +34,27 @@ if [[ "$PACKAGE_VERSION" != "$(awk '/^Version:/ { print $2 }' packages/release/D
     exit 1
 fi
 
+# Fail before assembling an image if the .deb is stale or incomplete.
+# This checks the actual package bytes, not only its unchanged 1.0.0 version.
+verify_package_entry() {
+    local name="$1"
+    if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -tf - | grep -Fqx "./$name"; then
+        printf 'Linos package is missing %s; rebuild with ./build/package.sh\n' "$name" >&2
+        exit 1
+    fi
+}
+for entry in \
+    usr/bin/linos \
+    usr/lib/linos/linos-login \
+    usr/lib/systemd/system/serial-getty@ttyS0.service.d/linos-login.conf \
+    usr/lib/systemd/system/getty@tty1.service.d/linos-login.conf; do
+    verify_package_entry "$entry"
+done
+if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - ./usr/bin/linos | grep -aqF 'Your server is ready'; then
+    echo "Linos package contains an outdated server TUI binary" >&2
+    exit 1
+fi
+
 PACKAGE_ARCH="$(dpkg-deb -f "$PACKAGE" Architecture)"
 if [[ "$PACKAGE_ARCH" != "$ARCH" ]]; then
     echo "Package architecture $PACKAGE_ARCH does not match image architecture $ARCH" >&2
@@ -102,6 +123,36 @@ mmdebstrap \
     --customize-hook="copy-in $STAGED_OS_RELEASE /etc/" \
     "$SUITE" \
     "$ROOT/$ROOTFS"
+
+# Verify what mmdebstrap actually installed before producing the disk.
+# The Debian package version alone does not establish code freshness.
+verify_rootfs_entry() {
+    local entry="$1"
+    if ! tar -tf "$ROOTFS" | grep -Fqx "./$entry"; then
+        printf 'Incomplete rootfs: missing %s\n' "$entry" >&2
+        exit 1
+    fi
+}
+for entry in \
+    usr/bin/linos \
+    usr/lib/linos/linos-login \
+    usr/lib/systemd/system/serial-getty@ttyS0.service.d/linos-login.conf \
+    usr/lib/systemd/system/getty@tty1.service.d/linos-login.conf; do
+    verify_rootfs_entry "$entry"
+done
+
+if ! tar -xOf "$ROOTFS" ./usr/bin/linos | grep -aqF 'Your server is ready'; then
+    echo "Incomplete rootfs: Linos TUI is not the expected build" >&2
+    exit 1
+fi
+for entry in usr/bin/linos usr/lib/linos/linos-login; do
+    package_hash="$(dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - "./$entry" | sha256sum | cut -d' ' -f1)"
+    rootfs_hash="$(tar -xOf "$ROOTFS" "./$entry" | sha256sum | cut -d' ' -f1)"
+    if [[ "$package_hash" != "$rootfs_hash" ]]; then
+        echo "Incomplete rootfs: $entry differs from the packaged executable" >&2
+        exit 1
+    fi
+done
 
 KERNEL_MEMBER="$(
     tar -tf "$ROOTFS" |
