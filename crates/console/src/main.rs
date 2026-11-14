@@ -273,6 +273,9 @@ mod tests {
         assert!(action_for("/shell") == Some(Action::Shell));
         assert!(action_for("/logout") == Some(Action::Logout));
         assert!(action_for("/shutdown") == Some(Action::Shutdown));
+        assert!(action_for("/home") == Some(Action::Home));
+        assert!(action_for("ls -la").is_none());
+        assert!(action_for("/usr/bin/id").is_none());
         assert!(action_for("/status;id").is_none());
         assert!(action_for("not-a-command").is_none());
     }
