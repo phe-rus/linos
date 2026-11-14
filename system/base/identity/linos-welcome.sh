@@ -13,7 +13,7 @@ fi
 if [ "$_linos_mode" != shell ] && [ -x /usr/bin/linos ]; then
     # Present the native Linos session without leftover PAM/MOTD text.
     if [ "${TERM:-dumb}" != dumb ]; then
-        printf '\\033[3J\\033[2J\\033[H'
+        printf '\033[3J\033[2J\033[H'
     fi
     /usr/bin/linos
     _linos_result=$?
