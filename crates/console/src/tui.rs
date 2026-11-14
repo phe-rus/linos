@@ -627,7 +627,7 @@ fn draw(frame: &mut Frame, app: &App) {
         paragraph_at(frame, Rect::new(left, suggestion_y + index as u16, inner_width, 1), vec![
             Line::from(vec![
                 Span::styled(
-                    format!("{} {command:<12}", if active { "❯" } else { " " }),
+                    format!("{} {command:<12}", if active { "›" } else { " " }),
                     Style::default().fg(if active { ACCENT } else { DIM }),
                 ),
                 Span::styled(*description, Style::default().fg(if active { Color::White } else { DIM })),
@@ -657,7 +657,7 @@ fn draw(frame: &mut Frame, app: &App) {
     };
     paragraph_at(frame, Rect::new(left, composer_y + 1, inner_width, 1), vec![
         Line::from(vec![
-            Span::styled("❯ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled("› ", Style::default().fg(ACCENT)),
             Span::styled(
                 if app.input.is_empty() { if waiting_for_secret { "Password (hidden)" } else { "Type / for commands or enter a Linux command" } } else { &display_input },
                 Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
