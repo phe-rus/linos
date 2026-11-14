@@ -198,6 +198,16 @@ fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
 mod tests {
     use super::*;
     #[test]
+    fn password_prompt_requires_explicit_request() {
+        assert!(Session::password_prompt_visible(
+            "bash-5.2$ sudo -v\n[sudo] password for linos: "
+        ));
+        assert!(Session::password_prompt_visible("Enter passphrase: "));
+        assert!(!Session::password_prompt_visible("bash-5.2$ "));
+        assert!(!Session::password_prompt_visible("bash-5.2$ linos"));
+    }
+
+    #[test]
     fn idle_shell_prompt_is_not_a_password_prompt() {
         assert!(Session::prompt_ready("bash-5.2$ "));
         assert!(Session::prompt_ready("ls\nbash-5.2$ "));
@@ -297,6 +307,16 @@ mod tests {
 }
 ) || line.ends_with('#'));
         is_bash || line == "$" || line == "#"
+    }
+
+    pub fn password_prompt_visible(output: &str) -> bool {
+        let line = output.rsplit(['\n', '\r']).next().unwrap_or_default().trim();
+        let line = line.to_ascii_lowercase();
+        let asks_for_secret = line.contains("password")
+            || line.contains("passphrase")
+            || line.contains("verification code")
+            || line.contains("pin:");
+        asks_for_secret && (line.ends_with(':') || line.ends_with('?'))
     }
 
     pub fn echo_enabled(&self) -> bool {
