@@ -151,7 +151,12 @@ fn execute(action: Action) -> io::Result<ExitCode> {
         Action::Network => command("ip", &["-brief", "address"]),
         Action::Services => command(
             "systemctl",
-            &["list-units", "--type=service", "--state=running", "--no-pager"],
+            &[
+                "list-units",
+                "--type=service",
+                "--state=running",
+                "--no-pager",
+            ],
         ),
         Action::Logs => command("journalctl", &["--no-pager", "-n", "30"]),
         Action::Help => {
@@ -165,7 +170,7 @@ fn execute(action: Action) -> io::Result<ExitCode> {
             // Non-interactive power commands are intentionally rejected.
             eprintln!("Use the interactive Linos home to confirm power actions.");
             Ok(ExitCode::from(2))
-        },
+        }
     }
 }
 
