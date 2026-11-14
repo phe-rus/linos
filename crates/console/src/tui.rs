@@ -88,6 +88,7 @@ struct App {
     user: String,
     session: Option<pty::Session>,
     terminal_output: String,
+    follow_tail: bool,
 }
 
 impl App {
@@ -103,6 +104,7 @@ impl App {
             user: env::var("USER").unwrap_or_else(|_| "operator".into()),
             session: None,
             terminal_output: String::new(),
+            follow_tail: true,
         }
     }
 
@@ -228,7 +230,8 @@ impl App {
         }
         self.view = View::Terminal;
         self.content = self.terminal_output.clone();
-        self.scroll = u16::MAX;
+        self.scroll = 0;
+        self.follow_tail = true;
         self.notice = "Linux PTY session · /home returns to Home".into();
         Ok(())
     }
@@ -260,10 +263,16 @@ impl App {
             }
             return Ok(None);
         }
-        if matches!(key.code, KeyCode::Char('t') | KeyCode::Char('c'))
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
-            return Ok(Some(Exit::Shell));
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            if key.code == KeyCode::Char('t') {
+                return Ok(Some(Exit::Shell));
+            }
+            if key.code == KeyCode::Char('c') {
+                if self.view == View::Terminal && let Some(shell) = &mut self.session {
+                    shell.key(3)?;
+                }
+                return Ok(None);
+            }
         }
         match key.code {
             KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -304,18 +313,20 @@ impl App {
                     return Ok(self.apply(action));
                 }
                 let command = std::mem::take(&mut self.input);
-                if command.starts_with('/') && !waiting_for_secret {
-                    if command == "/home" {
-                        self.navigate(View::Home);
-                    } else {
-                        self.notice = "Unknown command. Type / to see available actions.".into();
-                    }
+                if command == "/home" && !waiting_for_secret {
+                    self.navigate(View::Home);
                 } else {
                     self.run_native_command(command)?;
                 }
             }
-            KeyCode::PageDown => self.scroll = self.scroll.saturating_add(7),
-            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(7),
+            KeyCode::PageDown => {
+                self.scroll = self.scroll.saturating_add(7);
+                self.follow_tail = false;
+            }
+            KeyCode::PageUp => {
+                self.scroll = self.scroll.saturating_sub(7);
+                self.follow_tail = false;
+            }
             _ => {}
         }
         Ok(None)
@@ -621,6 +632,10 @@ pub fn run() -> io::Result<ExitCode> {
                     shell.drain(&mut app.terminal_output);
                     if app.view == View::Terminal {
                         app.content.clone_from(&app.terminal_output);
+                        if app.follow_tail {
+                            let height = crossterm::terminal::size().map(|(_, h)| h.saturating_sub(14)).unwrap_or(10);
+                            app.scroll = app.content.lines().count().saturating_sub(usize::from(height)).min(usize::from(u16::MAX)) as u16;
+                        }
                     }
                 }
                 terminal.draw(|frame| draw(frame, &app))?;
