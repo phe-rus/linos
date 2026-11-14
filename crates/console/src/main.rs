@@ -120,6 +120,7 @@ fn help() {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
+    Home,
     Status,
     Network,
     Services,
@@ -137,6 +138,7 @@ enum Action {
 
 fn action_for(value: &str) -> Option<Action> {
     match value.trim() {
+        "/home" | "home" => Some(Action::Home),
         "/status" | "status" => Some(Action::Status),
         "/resources" | "resources" => Some(Action::Resources),
         "/assets" | "assets" => Some(Action::Assets),
@@ -156,6 +158,10 @@ fn action_for(value: &str) -> Option<Action> {
 
 fn execute(action: Action) -> io::Result<ExitCode> {
     match action {
+        Action::Home => {
+            println!("Run linos to open Home.");
+            Ok(ExitCode::SUCCESS)
+        }
         Action::Resources | Action::Assets | Action::Settings | Action::Updates => {
             eprintln!("Open the interactive Linos Server home for this view.");
             Ok(ExitCode::from(2))
