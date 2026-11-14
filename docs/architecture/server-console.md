@@ -47,3 +47,17 @@ The first boot has **no default username or password**. Enrollment prompts
 for a new administrator name and password, and getty units are ordered after
 the enrollment service so no competing login prompt appears during setup.
 After enrollment, log in with the credentials just created.
+
+## Leaving the local VM
+
+In `./build/console.sh amd64`, the guest is connected through QEMU
+`-nographic`. A Linux login prompt will not accept `clear`, Ctrl+C or
+Ctrl+Z as a VM exit. To return to ChromeOS Debian, press **Ctrl+A**,
+release the keys, then press **X**. This is QEMU's escape sequence, not
+Ctrl+X. Alternatively Ctrl+A, release, C switches to the QEMU monitor;
+type `quit` and press Enter. After logging in, `exit` leaves the guest
+shell but does not stop the VM.
+
+The `console.qcow2` overlay persists guest state. Running the same launcher
+again does not reset onboarding. Archive or rename that overlay before
+starting a fresh first-boot test; never reset a guest with data you need.

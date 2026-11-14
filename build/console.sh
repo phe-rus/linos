@@ -28,7 +28,9 @@ echo "Linos 13 interactive console"
 echo "Persistent guest changes are stored only in: $OVERLAY"
 echo "No default login exists. On first boot, create a username and password in Linos enrollment."
 echo "After setup, sign in using the username/password you selected."
-echo "No network access is configured. Press Ctrl+A, then X to exit QEMU."
+echo "No network access is configured."
+echo "To exit: press Ctrl+A, release both keys, then press X (not Ctrl+X)."
+echo "Alternatively: Ctrl+A, release, C to open QEMU monitor, then type quit."
 
 exec qemu-system-x86_64 \
     -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048 \

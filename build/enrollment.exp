@@ -72,7 +72,7 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
         send -- "$env(LINOS_ENROLL_PASSWORD)\r"
         await {Retype new password:}
         send -- "$env(LINOS_ENROLL_PASSWORD)\r"
-        await {administrator enrollment complete}
+        await {Administrator setup complete[.]}
     }
 } elseif {$phase eq "verify"} {
     await {This device is already enrolled[.]}
