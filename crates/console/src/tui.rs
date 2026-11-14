@@ -287,114 +287,139 @@ fn paragraph_at(frame: &mut Frame, rect: Rect, text: Vec<Line<'_>>) {
 
 fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
-    if area.width < 24 || area.height < 9 {
+    if area.width < 36 || area.height < 14 {
         frame.render_widget(
-            Paragraph::new(
-                "Linos 13 Server\n\nEnlarge your terminal to use the dashboard.\nCtrl+C to return.",
-            ),
+            Paragraph::new("Linos 13 Server\n\nResize the terminal for the interactive workspace.\nCtrl+C: shell"),
             area,
         );
         return;
     }
-    let left = area.x.saturating_add(2);
-    let usable = area.width.saturating_sub(4);
-    // A quiet, fixed brand block at the top. No permanent sidebar or dashboard grid.
-    paragraph_at(
-        frame,
-        Rect::new(left, area.y + 2, usable, 4),
-        vec![
-            Line::from(vec![
-                Span::styled(
-                    "◆  Linos 13",
-                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!("  v{}", version()), Style::default().fg(DIM)),
-            ]),
-            Line::styled(
-                "   Server  ·  Marauder / Sequence 9",
-                Style::default().fg(DIM),
-            ),
-            Line::styled(
-                format!("   {}@{}", app.user, host()),
-                Style::default().fg(DIM),
-            ),
-        ],
-    );
 
-    let composer_y = area.bottom().saturating_sub(4);
+    // Keep the main workspace centred on wide terminals, like a modern CLI.
+    let width = area.width.saturating_sub(4).min(94);
+    let x = area.x + (area.width - width) / 2;
+    let top = area.y + 1;
+    let composer_y = area.bottom().saturating_sub(5);
+    let left = x + 2;
+    let inner_width = width.saturating_sub(4);
+
+    paragraph_at(frame, Rect::new(x, top, width, 1), vec![
+        Line::from(vec![
+            Span::styled("◆  LINOS", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled("  13  /  SERVER", Style::default().fg(DIM)),
+            Span::styled(format!("    •    {}@{}", app.user, host()), Style::default().fg(DIM)),
+        ]),
+    ]);
+
+    if app.view == View::Home {
+        let hero_y = top + 3;
+        paragraph_at(frame, Rect::new(left, hero_y, inner_width, 2), vec![
+            Line::styled(format!("Welcome back, {}.", app.user), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Line::styled("Your server is ready. What would you like to do?", Style::default().fg(DIM)),
+        ]);
+
+        if composer_y > hero_y + 11 {
+            let status_y = hero_y + 4;
+            frame.render_widget(
+                Block::default().title("  SERVER OVERVIEW  ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+                Rect::new(x, status_y, width, 6),
+            );
+            paragraph_at(frame, Rect::new(left, status_y + 1, inner_width, 4), vec![
+                Line::from(vec![
+                    Span::styled("Device       ", Style::default().fg(DIM)),
+                    Span::raw(host()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Uptime       ", Style::default().fg(DIM)),
+                    Span::raw(uptime().unwrap_or_else(|| "Unavailable".into())),
+                ]),
+                Line::from(vec![
+                    Span::styled("Memory       ", Style::default().fg(DIM)),
+                    Span::raw(memory().unwrap_or_else(|| "Unavailable".into())),
+                ]),
+                Line::from(vec![
+                    Span::styled("Setup        ", Style::default().fg(DIM)),
+                    Span::raw(ownership()),
+                ]),
+            ]);
+
+            if composer_y > status_y + 9 {
+                paragraph_at(frame, Rect::new(left, status_y + 7, inner_width, 2), vec![
+                    Line::styled("EXPLORE YOUR SERVER", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
+                    Line::from(vec![
+                        Span::styled("/status  ", Style::default().fg(ACCENT)),
+                        Span::styled("Overview    ", Style::default().fg(DIM)),
+                        Span::styled("/network  ", Style::default().fg(ACCENT)),
+                        Span::styled("Network    ", Style::default().fg(DIM)),
+                        Span::styled("/services  ", Style::default().fg(ACCENT)),
+                        Span::styled("Services", Style::default().fg(DIM)),
+                    ]),
+                ]);
+            }
+        }
+    } else {
+        let title = match app.view {
+            View::Home => "Home",
+            View::Status => "System overview",
+            View::Network => "Network interfaces",
+            View::Services => "Running services",
+            View::Logs => "System logs",
+            View::Help => "Help and shortcuts",
+        };
+        paragraph_at(frame, Rect::new(left, top + 3, inner_width, 1), vec![
+            Line::styled(title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        ]);
+    }
+
     let suggestions = app.suggestions();
-    let max_suggestions = composer_y.saturating_sub(area.y + 8) as usize;
-    let count = suggestions.len().min(4).min(max_suggestions);
-    let results_bottom = composer_y.saturating_sub(count as u16 + 1);
-
-    if !app.content.is_empty() && results_bottom > area.y + 8 {
+    let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
+    let count = suggestions.len().min(5).min(available_suggestions);
+    let suggestion_y = composer_y.saturating_sub(count as u16 + 1);
+    if app.view != View::Home && suggestion_y > top + 6 {
         frame.render_widget(
             Paragraph::new(app.content.as_str())
                 .wrap(Wrap { trim: false })
                 .scroll((app.scroll, 0))
                 .style(Style::default().fg(Color::White)),
-            Rect::new(
-                left + 1,
-                area.y + 8,
-                usable.saturating_sub(2),
-                results_bottom - (area.y + 8),
-            ),
+            Rect::new(left, top + 6, inner_width, suggestion_y - (top + 6)),
         );
     }
 
-    if count > 0 {
-        let start_y = composer_y.saturating_sub(count as u16 + 1);
-        for (index, (_, command, description)) in suggestions.iter().take(count).enumerate() {
-            let active = index == app.highlighted.min(count - 1);
-            let marker = if active { "❯" } else { " " };
-            let command_color = if active { ACCENT } else { DIM };
-            paragraph_at(
-                frame,
-                Rect::new(left, start_y + index as u16, usable, 1),
-                vec![Line::from(vec![
-                    Span::styled(
-                        format!("{marker} {command:<13}"),
-                        Style::default().fg(command_color),
-                    ),
-                    Span::styled(
-                        *description,
-                        Style::default().fg(if active { Color::White } else { DIM }),
-                    ),
-                ])],
-            );
-        }
+    for (index, (_, command, description)) in suggestions.iter().take(count).enumerate() {
+        let active = index == app.highlighted.min(count - 1);
+        paragraph_at(frame, Rect::new(left, suggestion_y + index as u16, inner_width, 1), vec![
+            Line::from(vec![
+                Span::styled(
+                    format!("{} {command:<12}", if active { "❯" } else { " " }),
+                    Style::default().fg(if active { ACCENT } else { DIM }),
+                ),
+                Span::styled(*description, Style::default().fg(if active { Color::White } else { DIM })),
+            ]),
+        ]);
     }
 
-    let line = Block::default()
-        .borders(Borders::TOP | Borders::BOTTOM)
-        .border_style(Style::default().fg(Color::DarkGray));
     frame.render_widget(
-        line,
-        Rect::new(area.x + 1, composer_y, area.width.saturating_sub(2), 3),
+        Block::default().title("  COMMAND  ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(if app.input.is_empty() { Color::DarkGray } else { ACCENT })),
+        Rect::new(x, composer_y, width, 3),
     );
-    paragraph_at(
-        frame,
-        Rect::new(left, composer_y + 1, usable, 1),
-        vec![Line::from(vec![
+    paragraph_at(frame, Rect::new(left, composer_y + 1, inner_width, 1), vec![
+        Line::from(vec![
+            Span::styled("❯ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled(
-                "❯ ",
-                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                if app.input.is_empty() { "Type / for commands" } else { &app.input },
+                Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
             ),
-            Span::styled(
-                if app.input.is_empty() {
-                    "Type / for commands"
-                } else {
-                    &app.input
-                },
-                Style::default().fg(if app.input.is_empty() {
-                    DIM
-                } else {
-                    Color::White
-                }),
-            ),
-            Span::styled("▏", Style::default().fg(ACCENT)),
-        ])],
-    );
+        ]),
+    ]);
+    // The cursor follows the user input rather than showing a static cursor glyph.
+    let cursor_x = left.saturating_add(2).saturating_add(app.input.chars().count() as u16)
+        .min(x + width.saturating_sub(2));
+    frame.set_cursor_position((cursor_x, composer_y + 1));
+
     let footer = if let Some(action) = app.confirm {
         if action == Action::Reboot {
             "Restart server?  Y Confirm · Enter Cancel"
@@ -404,14 +429,12 @@ fn draw(frame: &mut Frame, app: &App) {
     } else {
         &app.notice
     };
-    paragraph_at(
-        frame,
-        Rect::new(left, area.bottom().saturating_sub(1), usable, 1),
-        vec![Line::styled(
-            format!("◆  {footer}    / Commands · ↑↓ Select · Ctrl+C Shell"),
-            Style::default().fg(DIM),
-        )],
-    );
+    paragraph_at(frame, Rect::new(x, area.bottom().saturating_sub(1), width, 1), vec![
+        Line::from(vec![
+            Span::styled(format!("◆  {footer}"), Style::default().fg(DIM)),
+            Span::styled("    / Commands · ↑↓ Select · Ctrl+C Shell", Style::default().fg(DIM)),
+        ]),
+    ]);
 }
 
 pub fn run() -> io::Result<ExitCode> {
