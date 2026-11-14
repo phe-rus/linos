@@ -55,6 +55,8 @@ STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
 mkdir -p "$STAGING_DIR/package"
 cp -a packages/release/. "$STAGING_DIR/package/"
+# GitHub-created maintainer scripts may not retain executable mode.
+chmod 755 "$STAGING_DIR/package/DEBIAN/postinst" "$STAGING_DIR/package/DEBIAN/postrm"
 
 sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN/control"
 install -m 755 target/release/init "$STAGING_DIR/package/usr/lib/linos/linos-init"
