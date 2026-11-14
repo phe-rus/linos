@@ -220,7 +220,8 @@ impl App {
 
     fn run_native_command(&mut self, command: String) -> io::Result<()> {
         if self.session.is_none() {
-            self.session = Some(pty::Session::start(24, 80)?);
+            let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+            self.session = Some(pty::Session::start(rows.saturating_sub(12), cols.saturating_sub(4))?);
         }
         if let Some(shell) = &mut self.session {
             shell.command(&command)?;
