@@ -305,11 +305,13 @@ impl App {
                 KeyCode::Up => {
                     self.assets.select_previous();
                     self.content = self.assets.display();
+                    self.scroll = self.assets.selected.saturating_sub(5).min(u16::MAX as usize) as u16;
                     return Ok(None);
                 }
                 KeyCode::Down => {
                     self.assets.select_next();
                     self.content = self.assets.display();
+                    self.scroll = self.assets.selected.saturating_sub(5).min(u16::MAX as usize) as u16;
                     return Ok(None);
                 }
                 KeyCode::Enter => {
@@ -319,6 +321,7 @@ impl App {
                         Err(error) => self.notice = format!("Cannot open: {error}"),
                     }
                     self.content = self.assets.display();
+                    self.scroll = 0;
                     return Ok(None);
                 }
                 KeyCode::Backspace => {
