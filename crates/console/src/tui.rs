@@ -3,7 +3,7 @@
 use std::{
     env, fs, io,
     process::{Command, ExitCode},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -347,7 +347,7 @@ fn assets() -> String {
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let kind = entry.file_type().ok()?;
-            let name = entry.file_name().to_string_lossy().into_owned();
+            let name: String = entry.file_name().to_string_lossy().chars().filter(|c| !c.is_control()).collect();
             Some((kind.is_dir(), name))
         })
         .collect();
@@ -544,7 +544,12 @@ fn draw(frame: &mut Frame, app: &App) {
 pub fn run() -> io::Result<ExitCode> {
     let result = ratatui::run(|terminal| {
         let mut app = App::new();
+        let mut last_refresh = Instant::now();
         loop {
+            if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
+                app.content = resources();
+                last_refresh = Instant::now();
+            }
             terminal.draw(|frame| draw(frame, &app))?;
             if event::poll(Duration::from_millis(140))?
                 && let Event::Key(key) = event::read()?
@@ -571,7 +576,7 @@ mod tests {
 
     #[test]
     fn is_responsive_at_common_terminal_sizes() {
-        for (width, height) in [(30, 10), (48, 18), (80, 24), (120, 32)] {
+        for (width, height) in [(30, 10), (48, 18), (80, 24), (120, 32), (160, 42)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal.draw(|frame| draw(frame, &App::new())).unwrap();
             let screen: String = terminal
@@ -583,6 +588,20 @@ mod tests {
                 .collect();
             assert!(screen.contains("LINOS") || screen.contains("Linos 13"));
             assert!(screen.contains("Type / for commands") || width < 36 || height < 14);
+        }
+    }
+
+    #[test]
+    fn new_management_views_are_reachable() {
+        let mut app = App::new();
+        for (action, expected) in [
+            (Action::Resources, View::Resources),
+            (Action::Assets, View::Assets),
+            (Action::Settings, View::Settings),
+            (Action::Updates, View::Updates),
+        ] {
+            assert!(app.apply(action).is_none());
+            assert_eq!(app.view, expected);
         }
     }
 
