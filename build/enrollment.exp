@@ -61,7 +61,7 @@ proc ssh_banner_available {port} {
 }
 
 if {$phase eq "interrupt" || $phase eq "complete"} {
-    await {Username:}
+    await {Username}
     if {[ssh_banner_available $sshport]} {
         puts stderr "SSH was reachable before local administrator enrollment"
         exit 1
