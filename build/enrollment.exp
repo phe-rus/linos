@@ -93,8 +93,15 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     await {Password:}
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
     # Interactive sign-in enters the Linos Server home first.
-    await {Linos 13 / Server}
-    send -- "/shell\r"
+    await {Linos 13}
+    await {What would you like to do[?]}
+    # Arrow through the cliclack list to Return to shell.
+    for {set i 0} {$i < 5} {incr i} {
+        send -- "\033\[B"
+        after 120
+    }
+    send -- "\r"
+    await {Returning to your shell}
     await {❯ }
     send -- "stty -echo\r"
     await {❯ }

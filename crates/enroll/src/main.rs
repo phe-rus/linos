@@ -232,6 +232,9 @@ fn enroll() -> io::Result<()> {
         let owner = read_state("owner")?;
         let _username = parse_owner_record(&owner, &device_id)?;
         commit_provisioned_state()?;
+        // Upgrade previously enrolled systems to the non-sensitive marker.
+        fs::create_dir_all("/etc/linos")?;
+        fs::write("/etc/linos/setup-complete", b"ready\n")?;
         let pending = Path::new(STATE_DIR).join("pending-owner");
         if pending.exists() {
             fs::remove_file(pending)?;
