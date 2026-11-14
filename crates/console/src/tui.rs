@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::{Action, action_for, host, memory, ownership, uptime, version};
+use super::{Action, action_for, host, memory, ownership, pty, uptime, version};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
@@ -67,6 +67,7 @@ enum View {
     Assets,
     Settings,
     Updates,
+    Terminal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +86,7 @@ struct App {
     confirm: Option<Action>,
     scroll: u16,
     user: String,
+    session: Option<pty::Session>,
 }
 
 impl App {
@@ -98,6 +100,7 @@ impl App {
             confirm: None,
             scroll: 0,
             user: env::var("USER").unwrap_or_else(|_| "operator".into()),
+            session: None,
         }
     }
 
@@ -131,6 +134,7 @@ impl App {
             View::Assets => assets(),
             View::Settings => settings(),
             View::Updates => updates(),
+            View::Terminal => self.content.clone(),
             View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
             View::Services => system_output(
                 "/usr/bin/systemctl",
@@ -163,7 +167,9 @@ impl App {
                 "/reboot       Restart (requires confirmation)",
                 "/shutdown     Power off (requires confirmation)",
                 "",
-                "Type / to discover commands.",
+                "Type / to discover commands, or enter a Linux shell command.",
+                "Linux commands run in a persistent PTY, including cd and pipelines.",
+                "/home returns from terminal output to your Home workspace.",
                 "Use Up/Down to select, Enter to run, Esc to clear.",
                 "PageUp/PageDown scroll results. Ctrl+T switches to shell.",
                 "Type exit or press Ctrl+D in the shell to return to Linos.",
@@ -183,6 +189,7 @@ impl App {
             View::Assets => "Assets · home directory".into(),
             View::Settings => "System settings".into(),
             View::Updates => "Update information".into(),
+            View::Terminal => "Linux command session · PTY".into(),
         };
     }
 
@@ -207,6 +214,19 @@ impl App {
             }
         }
         None
+    }
+
+    fn run_native_command(&mut self, command: String) -> io::Result<()> {
+        if self.session.is_none() {
+            self.session = Some(pty::Session::start(24, 80)?);
+        }
+        if let Some(shell) = &mut self.session {
+            shell.command(&command)?;
+        }
+        self.view = View::Terminal;
+        self.scroll = u16::MAX;
+        self.notice = "Linux PTY session · /home returns to Home".into();
+        Ok(())
     }
 
     fn key(&mut self, key: KeyEvent) -> io::Result<Option<Exit>> {
@@ -278,8 +298,16 @@ impl App {
                 if let Some(action) = action {
                     return Ok(self.apply(action));
                 }
-                self.notice = "Unknown command. Type / to see available actions.".into();
-                self.input.clear();
+                let command = std::mem::take(&mut self.input);
+                if command.starts_with('/') {
+                    if command == "/home" {
+                        self.navigate(View::Home);
+                    } else {
+                        self.notice = "Unknown command. Type / to see available actions.".into();
+                    }
+                } else {
+                    self.run_native_command(command)?;
+                }
             }
             KeyCode::PageDown => self.scroll = self.scroll.saturating_add(7),
             KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(7),
@@ -474,6 +502,7 @@ fn draw(frame: &mut Frame, app: &App) {
             View::Assets => "Assets",
             View::Settings => "Settings",
             View::Updates => "Updates",
+            View::Terminal => "Terminal",
         };
         paragraph_at(frame, Rect::new(left, top + 3, inner_width, 1), vec![
             Line::styled(title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
@@ -517,7 +546,7 @@ fn draw(frame: &mut Frame, app: &App) {
         Line::from(vec![
             Span::styled("❯ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled(
-                if app.input.is_empty() { "Type / for commands" } else { &app.input },
+                if app.input.is_empty() { "Type / for commands or enter a Linux command" } else { &app.input },
                 Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
             ),
         ]),
@@ -573,6 +602,9 @@ pub fn run() -> io::Result<ExitCode> {
                 if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
                     app.content = resources();
                     last_refresh = Instant::now();
+                }
+                if let Some(shell) = &mut app.session {
+                    shell.drain(&mut app.content);
                 }
                 terminal.draw(|frame| draw(frame, &app))?;
                 if event::poll(Duration::from_millis(140))?
