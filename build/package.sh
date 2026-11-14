@@ -84,7 +84,8 @@ for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.s
     mkdir -p "$DROPIN_DIR"
     install -m 644 system/services/linos-getty-after-enrollment.conf "$DROPIN_DIR/linos-enrollment-order.conf"
     case "$unit" in
-      serial-getty@*) install -m 644 system/services/linos-serial-login.conf "$DROPIN_DIR/linos-serial-login.conf" ;;
+      getty@*) install -m 644 system/services/linos-tty-login.conf "$DROPIN_DIR/linos-login.conf" ;;
+      serial-getty@*) install -m 644 system/services/linos-serial-login.conf "$DROPIN_DIR/linos-login.conf" ;;
     esac
 done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
