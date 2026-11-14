@@ -7,6 +7,8 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod tui;
+
 const PUBLIC_READY: &str = "/etc/linos/setup-complete";
 
 fn interactive_terminal() -> bool {
@@ -110,7 +112,7 @@ fn help() {
     println!("Usage: linos [status|network|services|service NAME|logs NAME|help]");
     println!("       linos /status | /network | /services | /logs | /shell");
     println!("       linos /logout | /reboot | /shutdown");
-    println!("Run 'linos' in an interactive terminal for guided management.");
+    println!("Run 'linos' in an interactive terminal for the Ratatui Server dashboard.");
     println!("A normal shell remains available after selecting 'Return to shell'.");
 }
 
@@ -174,83 +176,8 @@ fn execute(action: Action) -> io::Result<ExitCode> {
     }
 }
 
-fn choose_action() -> io::Result<Action> {
-    cliclack::select("What would you like to do?")
-        .item(Action::Status, "System overview", "/status")
-        .item(Action::Network, "Network", "/network")
-        .item(Action::Services, "Services", "/services")
-        .item(Action::Logs, "Recent logs", "/logs")
-        .item(Action::Help, "Commands", "/help")
-        .item(Action::Shell, "Return to shell", "/shell")
-        .item(Action::Logout, "Sign out", "/logout")
-        .item(Action::Reboot, "Restart server", "/reboot")
-        .item(Action::Shutdown, "Shut down server", "/shutdown")
-        .interact()
-}
-
 fn home() -> io::Result<ExitCode> {
-    // The app controls the screen only while active. It does not modify PS1,
-    // login files, terminal modes or any third-party process.
-    print!("\x1b[3J\x1b[2J\x1b[H");
-    cliclack::intro(" Linos 13 · Server ")?;
-    let user = env::var("USER").unwrap_or_else(|_| "operator".into());
-    cliclack::log::info(format!("Welcome, {user}.  Host: {}", host()))?;
-    cliclack::note("Your server", overview())?;
-    loop {
-        let action = choose_action()?;
-        if action == Action::Shell {
-            cliclack::outro("Returning to your shell")?;
-            return Ok(ExitCode::SUCCESS);
-        }
-        if action == Action::Logout {
-            cliclack::outro("Signing out. See you next time.")?;
-            return Ok(ExitCode::from(20));
-        }
-        if matches!(action, Action::Reboot | Action::Shutdown) {
-            let is_reboot = action == Action::Reboot;
-            let verb = if is_reboot { "Restart" } else { "Shut down" };
-            let confirmed = cliclack::confirm(format!(
-                "{verb} {}? Active connections and services will be interrupted.",
-                host()
-            ))
-            .initial_value(false)
-            .interact()?;
-            if !confirmed {
-                cliclack::log::info("Cancelled. Your server is still running.")?;
-                continue;
-            }
-            cliclack::log::step(if is_reboot {
-                "Restarting Linos safely"
-            } else {
-                "Shutting down Linos safely"
-            })?;
-            let operation = if is_reboot { "reboot" } else { "poweroff" };
-            let result = command("/usr/bin/systemctl", &[operation])?;
-            if result != ExitCode::SUCCESS {
-                cliclack::log::error("The system rejected the request. Check your permissions.")?;
-            } else {
-                cliclack::outro("The system is closing your session.")?;
-                return Ok(ExitCode::SUCCESS);
-            }
-            continue;
-        }
-        if action == Action::Help {
-            cliclack::note(
-                "Quick commands",
-                "linos status · linos network · linos services\n\
-                 linos service ssh.service · linos logs ssh.service\n\
-                 All commands can be used non-interactively.",
-            )?;
-            continue;
-        }
-        if action == Action::Status {
-            cliclack::note("System overview", overview())?;
-            continue;
-        }
-        cliclack::log::step("Opening system output")?;
-        let _ = execute(action)?;
-        cliclack::log::info("Press the arrow keys to select another action.")?;
-    }
+    tui::run()
 }
 
 fn run(args: &[String]) -> io::Result<ExitCode> {

@@ -177,3 +177,22 @@ Exiting the Bash login shell similarly clears the display. This behavior is
 never applied to noninteractive SSH commands. The first-boot enrollment unit
 skips future boots when its protected owner record already exists, so it
 cannot print an unrelated enrollment message after sign-out.
+
+## Ratatui Server home
+
+The interactive Server home now uses Ratatui 0.30.2 with Crossterm events.
+It is a responsive, full-screen TUI, while first-time enrollment, installation
+questions and limited guided confirmations keep using Clack-style prompts.
+Only the Linos process occupies the alternate terminal screen. On return to
+Bash, it restores the terminal without intercepting Vim, Claude Code, Codex,
+SSH commands, or other terminal applications.
+
+Controls: Up/Down, Tab, Enter, 1-5 to switch views, / to type slash commands,
+PageUp/PageDown to scroll content, q/Esc to return to Bash. Sign out exits
+the login shell; shutdown/reboot display a confirmation defaulting to no
+and delegate authorization to systemd. No default passwords are embedded.
+Network, services and logs are initially read-only views.
+
+For scripted commands, `linos status`, `linos network`, `linos services`
+and `linos logs ssh.service` retain their stdout-based API. The TUI renders
+read-only command output after filtering terminal control characters.

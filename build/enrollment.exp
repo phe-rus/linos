@@ -92,23 +92,17 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     send -- "$username\r"
     await {Password:}
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
-    # Interactive sign-in enters the Linos Server home first.
-    await {Linos 13}
-    await {What would you like to do[?]}
-    # Arrow through the cliclack list to Return to shell.
-    for {set i 0} {$i < 5} {incr i} {
-        send -- "\033\[B"
-        after 120
-    }
-    send -- "\r"
-    await {Returning to your shell}
+    # Ratatui draws into the alternate screen. /shell exits the dashboard.
+    # The dashboard has a slash command palette that accepts typed commands.
+    after 1200
+    send -- "/shell\r"
     await {❯ }
     send -- "stty -echo\r"
     await {❯ }
 
     # Confirm the packaged Linos UI command runs inside the real guest.
     # No shell startup file or prompt customization is required.
-    send -- "linos status | grep -q 'Linos 13  /  Server' && echo LINOS_CONSOLE_OK\r"
+    send -- "linos status | grep -q 'Linos 13 Server' && echo LINOS_CONSOLE_OK\r"
     await {LINOS_CONSOLE_OK}
     send -- "test \"\$(hostname)\" = '$username-server' && echo LINOS_HOSTNAME_OK\r"
     await {LINOS_HOSTNAME_OK}
