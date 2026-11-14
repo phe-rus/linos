@@ -480,34 +480,6 @@ fn resources() -> String {
     output
 }
 
-fn assets() -> String {
-    let home = env::var("HOME").unwrap_or_else(|_| "/".into());
-    let root = std::path::Path::new(&home);
-    let mut output = format!("HOME  {home}\n\n");
-    let Ok(entries) = fs::read_dir(root) else {
-        return format!("{output}Unable to read this directory.");
-    };
-    let mut names: Vec<(bool, String)> = entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let kind = entry.file_type().ok()?;
-            let name: String = entry.file_name().to_string_lossy().chars().filter(|c| !c.is_control()).collect();
-            Some((kind.is_dir(), name))
-        })
-        .collect();
-    names.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase())));
-    for (directory, name) in names.iter().take(120) {
-        output.push_str(if *directory { "▸  " } else { "   " });
-        output.push_str(name);
-        output.push('\n');
-    }
-    if names.len() > 120 {
-        output.push_str("\nMore entries available through /shell.");
-    }
-    output.push_str("\nRead-only preview. File operations will require explicit confirmation.");
-    output
-}
-
 fn settings() -> String {
     let timezone = fs::read_to_string("/etc/timezone")
         .unwrap_or_else(|_| "System default".into());
