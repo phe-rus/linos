@@ -69,6 +69,10 @@ impl Session {
         Ok(Self { writer, output, child })
     }
 
+    pub fn current_dir(&self) -> Option<std::path::PathBuf> {
+        std::fs::read_link(format!("/proc/{}/cwd", self.child.id())).ok()
+    }
+
     pub fn command(&mut self, command: &str) -> io::Result<()> {
         self.writer.write_all(command.as_bytes())?;
         self.writer.write_all(b"\n")?;
