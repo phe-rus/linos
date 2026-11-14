@@ -6,7 +6,7 @@
 
 Made for the server today. Designed for the desktop tomorrow. Built openly for what comes next.
 
-**Marauder · Sequence 9 · Development generation 1.0.0**
+**Linos 13 · Server development preview · Generation 1.0.0**
 
 [Explore Linos](docs/architecture/overview.md) · [See our progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
 
@@ -33,10 +33,12 @@ The edition is defined by the installation media. Setup is tailored to the devic
 
 ### Real progress, tested continuously.
 
-**Working and tested**
+**Observed or tested**
 
 - amd64 and arm64 Server images boot in QEMU.
-- First-boot console enrollment and persistent device identity.
+- First-boot Cliclack enrollment and remembered-user sign-in using PAM, demonstrated in QEMU.
+- Adaptive Server Home, navigation palette, read-only Assets browser and live Resources view in QEMU screenshots.
+- Persistent PTY-backed Linux command handling, with an outstanding reported false-password-prompt bug.
 - amd64 UEFI firmware boot and independent Server Recovery.
 - Read-only hardware inspection, GPT layout validation and offline payload creation.
 - Disposable virtual-disk installation simulation that boots the installed system.
@@ -45,7 +47,9 @@ The edition is defined by the installation media. Setup is tailored to the devic
 
 - Authenticated offline installer media and complete recovery workflows.
 - Safe installation onto real devices, A/B updates and rollback.
-- A polished interactive Server experience and hardware validation beyond QEMU.
+- Correct embedded prompt/password handling and complete controlled Settings interactions.
+- Hardware awareness (new source, QEMU validation pending), Linus store inventory/search/simulation (new source, validation pending), physical hardware support beyond QEMU.
+- Reproducible kernel configuration, independent package release policy and production hardening.
 
 The Linux kernel and Debian 13 (Trixie) packages currently provide the bootstrap foundation. Linos-specific services and tools are being developed in Rust. We do not yet claim our own kernel, independent repository or finished installer.
 
@@ -71,7 +75,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-See the build scripts and GitHub Actions workflow for full prerequisites and architecture-specific tests. Never run installer experiments against disks containing data; the present integration tests use disposable virtual disks.
+See the build scripts and GitHub Actions workflow for full prerequisites and architecture-specific tests. For a new development image use `bash build/next-build.sh amd64` before building. Images already assembled do not change when source code changes. Never run installer experiments against disks containing data; the present integration tests use disposable virtual disks.
 
 ### Where we're going.
 
@@ -81,7 +85,7 @@ See the build scripts and GitHub Actions workflow for full prerequisites and arc
 4. **Desktop:** graphical environment and hardware-specific editions.
 5. **Beyond desktop:** mobile and other supported device families, with their own boot and recovery requirements.
 
-The [architecture roadmap](docs/architecture/roadmap.md) distinguishes validated functionality from designs and future goals. Contributions and issue reports are welcome.
+The [architecture roadmap](docs/architecture/roadmap.md) distinguishes validated functionality from designs and future goals. The [current engineering status](docs/architecture/current-status.md) records completed stages, unverified features, blockers and alpha release gates. Contributions and issue reports are welcome.
 
 ### Yours, by default.
 
