@@ -209,3 +209,30 @@ It is a terminal application, not a shell wrapper or an imitation of Claude
 Code's branding. Clack remains the toolkit for first-boot questions and
 the local login presentation. Returning from the TUI restores the regular
 terminal so Claude Code, Codex, Vim and other full-screen programs own it.
+
+## Native session model (current development direction)
+
+Linos Home is the default local interactive session, not a command menu layered
+on top of a permanently visible Bash prompt. The user can choose the classic
+shell as their default with `linos default shell` and switch back using
+`linos default home`. This preference is per user and takes effect on their
+next login. It does not change their system login shell, PAM configuration,
+or scripting behaviour.
+
+From Home, `/shell` or Ctrl+T temporarily yields the terminal to the user's
+actual interactive shell. Ratatui restores terminal modes before the shell
+starts, and Home is redrawn when the shell exits with `exit` or Ctrl+D.
+This ensures real shell built-ins, command pipelines, `sudo`, `cd`,
+`ls`, editors and SSH work according to the shell's own semantics.
+Running `linos` from a conventional shell also opens Home directly.
+
+The Home composer currently accepts Linos slash commands, not arbitrary shell
+syntax. Native execution of arbitrary commands within the Home workspace
+requires proper PTY-backed shell integration with process-group handling,
+terminal resize propagation, exit statuses, signals and interactive programs.
+Do not approximate it using `sh -c` with captured output or pretend that
+partial built-in emulation is a replacement for a shell.
+
+Login banners must not remain in the Home workspace after authentication.
+The interactive session clears the console immediately before starting Home.
+Non-interactive sessions and scripts remain unaffected.
