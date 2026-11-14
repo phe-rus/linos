@@ -504,17 +504,17 @@ fn resources() -> String {
             Some((used, capacity))
         });
     let mut output = format!(
-        "SYSTEM RESOURCES\n\nCPU  ·  {cpu} logical processors\nLoad average (1 / 5 / 15 min)\n{load}\n\nMEMORY\n{}\n{memory_used} / {total} MiB used    {available} MiB available\n\nSWAP\n{}\n{swap_used} / {swap_total} MiB used\n\n",
+        "System resources\n\nCPU  ·  {cpu} logical processors\nLoad average (1 / 5 / 15 min)\n{load}\n\nMemory\n{}\n{memory_used} / {total} MiB used    {available} MiB available\n\nSwap\n{}\n{swap_used} / {swap_total} MiB used\n\n",
         usage_bar(memory_used, total, 28),
         usage_bar(swap_used, swap_total, 28)
     );
     if let Some((used, capacity)) = disk {
         output.push_str(&format!(
-            "STORAGE  ·  Root filesystem\n{}\n{used} / {capacity} MiB used\n",
+            "Storage  ·  Root filesystem\n{}\n{used} / {capacity} MiB used\n",
             usage_bar(used, capacity, 28),
         ));
     } else {
-        output.push_str("STORAGE\nUsage unavailable\n");
+        output.push_str("Storage\nUsage unavailable\n");
     }
     output.push_str("\nLive memory and disk usage refresh every two seconds. CPU load is not CPU utilization.");
     output
@@ -524,7 +524,7 @@ fn settings() -> String {
     let timezone = fs::read_to_string("/etc/timezone")
         .unwrap_or_else(|_| "System default".into());
     format!(
-        "ABOUT\nLinos {} Server\nMarauder · Sequence 9\nHostname               {}\n\nPREFERENCES\nTime zone              {}\nLanguage               {}\n\nSECURITY\nAuthentication         Local PAM\nCloud account          Optional\n\nSettings are currently read-only. Administrative changes will require explicit confirmation.",
+        "About\nLinos {} Server\nHostname               {}\n\nPreferences\nTime zone              {}\nLanguage               {}\n\nSecurity\nAuthentication         Local PAM\nCloud account          Optional\n\nSettings are currently read-only. Administrative changes will require explicit confirmation.",
         version(), host(), timezone.trim(), env::var("LANG").unwrap_or_else(|_| "Unset".into()),
     )
 }
@@ -532,7 +532,7 @@ fn settings() -> String {
 fn updates() -> String {
     let version = system_output("/usr/bin/dpkg-query", &["-W", "-f=${Version}", "linos"]);
     format!(
-        "LINOS UPDATES\nInstalled package      linos {}\n\nUpdate channel         Development\nAutomatic OS updates   Disabled (not configured)\nRollback               Not implemented\n\nSystem packages currently use Debian apt. No update was started.\nA verified update mechanism and rollback policy are required before automatic Linos updates can be enabled.",
+        "Linos updates\nInstalled package      linos {}\n\nUpdate channel         Development\nAutomatic OS updates   Disabled (not configured)\nRollback               Not implemented\n\nSystem packages currently use Debian apt. No update was started.\nA verified update mechanism and rollback policy are required before automatic Linos updates can be enabled.",
         version.trim(),
     )
 }
@@ -561,8 +561,8 @@ fn draw(frame: &mut Frame, app: &App) {
 
     paragraph_at(frame, Rect::new(x, top, width, 1), vec![
         Line::from(vec![
-            Span::styled("◆  LINOS", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("  13  /  SERVER", Style::default().fg(DIM)),
+            Span::styled("◆  Linos", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled("  13  /  Server", Style::default().fg(DIM)),
             Span::styled(format!("    •    {}@{}", app.user, host()), Style::default().fg(DIM)),
         ]),
     ]);
@@ -577,7 +577,7 @@ fn draw(frame: &mut Frame, app: &App) {
         if composer_y > hero_y + 11 {
             let status_y = hero_y + 4;
             frame.render_widget(
-                Block::default().title("  SERVER OVERVIEW  ")
+                Block::default().title("  Server overview  ")
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::DarkGray)),
                 Rect::new(x, status_y, width, 6),
@@ -603,7 +603,7 @@ fn draw(frame: &mut Frame, app: &App) {
 
             if composer_y > status_y + 9 {
                 paragraph_at(frame, Rect::new(left, status_y + 7, inner_width, 2), vec![
-                    Line::styled("EXPLORE YOUR SERVER", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
+                    Line::styled("Explore your server", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
                     Line::from(vec![
                         Span::styled("/status  ", Style::default().fg(ACCENT)),
                         Span::styled("Overview    ", Style::default().fg(DIM)),
@@ -668,13 +668,13 @@ fn draw(frame: &mut Frame, app: &App) {
         frame,
         Rect::new(left, composer_y.saturating_sub(1), inner_width, 1),
         vec![Line::styled(
-            format!("  {}  {}", if app.view == View::Assets { "ASSETS" } else { "DIRECTORY" },
+            format!("  {}  {}", if app.view == View::Assets { "Assets" } else { "Directory" },
                 if app.view == View::Assets { app.assets.path.display().to_string() } else { app.cwd.display().to_string() }),
             Style::default().fg(DIM),
         )],
     );
     frame.render_widget(
-        Block::default().title("  COMMAND  ")
+        Block::default().title("  Command  ")
             .borders(Borders::ALL)
             .border_style(Style::default().fg(if app.input.is_empty() { Color::DarkGray } else { ACCENT })),
         Rect::new(x, composer_y, width, 3),
