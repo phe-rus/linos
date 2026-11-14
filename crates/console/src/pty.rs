@@ -162,6 +162,7 @@ mod tests {
 
     #[test]
     fn strips_terminal_controls() {
-        assert_eq!(plain_text(b"hello\x1b[31m world\x1b[0m\r\n"), "hello world\n");
+        let mut state = 0;
+        assert_eq!(plain_text(b"hello\\x1b[31m world\\x1b[0m\\r\\n", &mut state), b"hello world\\n");
     }
 }
