@@ -137,6 +137,168 @@ impl Session {
         Ok(())
     }
 
+    /// A command is finished when the interactive shell has printed its
+    /// prompt again. Echo can be disabled even at an idle readline prompt,
+    /// so echo state on its own must never trigger a password UI.
+    pub fn prompt_ready(output: &str) -> bool {
+        let line = output.rsplit(['\n', '\r']).next().unwrap_or_default().trim_end();
+        let is_bash = line.starts_with("bash-")
+            && line.rsplit_once(['
+        // Read the PTY slave's termios, not the master. On failure, never
+        // invent a password prompt simply because the query failed.
+        let mut termios: libc::termios = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::tcgetattr(self.slave_tty.as_raw_fd(), &raw mut termios) };
+        result != 0 || (termios.c_lflag & libc::ECHO != 0)
+    }
+
+    pub fn drain(&self, output: &mut String) {
+        while let Ok(bytes) = self.output.try_recv() {
+            output.push_str(&String::from_utf8_lossy(&bytes));
+            if output.len() > 32_000 {
+                let mut boundary = output.len() - 24_000;
+                while !output.is_char_boundary(boundary) {
+                    boundary -= 1;
+                }
+                output.drain(..boundary);
+            }
+        }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+// Read-only output preview, not a terminal emulator. Keeps command content
+// while avoiding escape sequences that might corrupt Ratatui rendering.
+fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
+    let mut clean = Vec::with_capacity(bytes.len());
+    for &byte in bytes {
+        match *state {
+            0 if byte == 0x1b => *state = 1,
+            0 if byte == b'\r' => {}
+            0 if byte == b'\n' || byte == b'\t' || byte >= 0x20 => clean.push(byte),
+            1 if byte == b'[' => *state = 2,
+            1 if byte == b']' => *state = 3,
+            1 => *state = 0,
+            2 if (0x40..=0x7e).contains(&byte) => *state = 0,
+            3 if byte == 0x07 => *state = 0,
+            3 if byte == 0x1b => *state = 4,
+            4 => *state = if byte == b'\\' { 0 } else { 3 },
+            _ => {}
+        }
+    }
+    clean
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn idle_shell_prompt_is_not_a_password_prompt() {
+        assert!(Session::prompt_ready("bash-5.2$ "));
+        assert!(Session::prompt_ready("ls\nbash-5.2$ "));
+        assert!(Session::prompt_ready("$ "));
+        assert!(!Session::prompt_ready("[sudo] password for linos: "));
+        assert!(!Session::prompt_ready("running command"));
+    }
+
+    #[test]
+    fn filters_split_escape_sequences() {
+        let mut state = 0;
+        assert_eq!(plain_text(b"ready\x1b[", &mut state), b"ready");
+        assert_eq!(plain_text(b"2Jokay\n", &mut state), b"okay\n");
+    }
+
+    #[test]
+    fn strips_terminal_controls() {
+        let mut state = 0;
+        assert_eq!(
+            plain_text(b"hello\x1b[31m world\x1b[0m\r\n", &mut state),
+            b"hello world\n"
+        );
+    }
+}
+, '#']).is_some_and(|(prefix, _)| {
+                prefix.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+            })
+            && (line.ends_with('
+        // Read the PTY slave's termios, not the master. On failure, never
+        // invent a password prompt simply because the query failed.
+        let mut termios: libc::termios = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::tcgetattr(self.slave_tty.as_raw_fd(), &raw mut termios) };
+        result != 0 || (termios.c_lflag & libc::ECHO != 0)
+    }
+
+    pub fn drain(&self, output: &mut String) {
+        while let Ok(bytes) = self.output.try_recv() {
+            output.push_str(&String::from_utf8_lossy(&bytes));
+            if output.len() > 32_000 {
+                let mut boundary = output.len() - 24_000;
+                while !output.is_char_boundary(boundary) {
+                    boundary -= 1;
+                }
+                output.drain(..boundary);
+            }
+        }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+// Read-only output preview, not a terminal emulator. Keeps command content
+// while avoiding escape sequences that might corrupt Ratatui rendering.
+fn plain_text(bytes: &[u8], state: &mut u8) -> Vec<u8> {
+    let mut clean = Vec::with_capacity(bytes.len());
+    for &byte in bytes {
+        match *state {
+            0 if byte == 0x1b => *state = 1,
+            0 if byte == b'\r' => {}
+            0 if byte == b'\n' || byte == b'\t' || byte >= 0x20 => clean.push(byte),
+            1 if byte == b'[' => *state = 2,
+            1 if byte == b']' => *state = 3,
+            1 => *state = 0,
+            2 if (0x40..=0x7e).contains(&byte) => *state = 0,
+            3 if byte == 0x07 => *state = 0,
+            3 if byte == 0x1b => *state = 4,
+            4 => *state = if byte == b'\\' { 0 } else { 3 },
+            _ => {}
+        }
+    }
+    clean
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn filters_split_escape_sequences() {
+        let mut state = 0;
+        assert_eq!(plain_text(b"ready\x1b[", &mut state), b"ready");
+        assert_eq!(plain_text(b"2Jokay\n", &mut state), b"okay\n");
+    }
+
+    #[test]
+    fn strips_terminal_controls() {
+        let mut state = 0;
+        assert_eq!(
+            plain_text(b"hello\x1b[31m world\x1b[0m\r\n", &mut state),
+            b"hello world\n"
+        );
+    }
+}
+) || line.ends_with('#'));
+        is_bash || line == "$" || line == "#"
+    }
+
     pub fn echo_enabled(&self) -> bool {
         // Read the PTY slave's termios, not the master. On failure, never
         // invent a password prompt simply because the query failed.
