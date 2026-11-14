@@ -90,6 +90,7 @@ struct App {
     session: Option<pty::Session>,
     terminal_output: String,
     follow_tail: bool,
+    command_pending: bool,
     assets: Browser,
     cwd: std::path::PathBuf,
 }
@@ -108,6 +109,7 @@ impl App {
             session: None,
             terminal_output: String::new(),
             follow_tail: true,
+            command_pending: false,
             assets: Browser::new(),
             cwd: env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/")),
         }
@@ -231,6 +233,15 @@ impl App {
         None
     }
 
+    fn password_input_active(&self) -> bool {
+        // An idle Bash prompt can disable ECHO while readline is active.
+        // Password masking is only meaningful while a submitted command
+        // still owns the pseudo-terminal.
+        self.view == View::Terminal
+            && self.command_pending
+            && self.session.as_ref().is_some_and(|shell| !shell.echo_enabled())
+    }
+
     fn run_native_command(&mut self, command: String) -> io::Result<()> {
         if command.trim() == "clear" || command.trim() == "/clear" {
             self.terminal_output.clear();
@@ -248,6 +259,7 @@ impl App {
         }
         if let Some(shell) = &mut self.session {
             shell.command(&command)?;
+            self.command_pending = true;
         }
         self.view = View::Terminal;
         self.content = self.terminal_output.clone();
@@ -363,7 +375,7 @@ impl App {
                 if self.input.is_empty() {
                     return Ok(None);
                 }
-                let waiting_for_secret = self.view == View::Terminal && self.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+                let waiting_for_secret = self.password_input_active();
                 let action = if waiting_for_secret { None } else { self
                     .suggestions()
                     .get(self.highlighted)
@@ -594,7 +606,7 @@ fn draw(frame: &mut Frame, app: &App) {
         ]);
     }
 
-    let waiting_for_secret = app.view == View::Terminal && app.session.as_ref().is_some_and(|shell| !shell.echo_enabled());
+    let waiting_for_secret = app.password_input_active();
     let suggestions = if waiting_for_secret { Vec::new() } else { app.suggestions() };
     let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
     let count = suggestions.len().min(5).min(available_suggestions);
@@ -729,6 +741,11 @@ pub fn run() -> io::Result<ExitCode> {
                     }
                     let previous = app.terminal_output.len();
                     shell.drain(&mut app.terminal_output);
+                    if previous != app.terminal_output.len()
+                        && pty::Session::prompt_ready(&app.terminal_output)
+                    {
+                        app.command_pending = false;
+                    }
                     if previous != app.terminal_output.len() && app.view == View::Terminal {
                         app.content.clone_from(&app.terminal_output);
                         if app.follow_tail {
@@ -854,6 +871,14 @@ mod tests {
         assert_eq!(app.view, View::Home);
         let shortcut = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
         assert_eq!(app.key(shortcut).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn idle_terminal_does_not_invent_password_request() {
+        let mut app = App::new();
+        app.view = View::Terminal;
+        app.command_pending = false;
+        assert!(!app.password_input_active());
     }
 
     #[test]
