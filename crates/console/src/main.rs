@@ -7,6 +7,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod assets;
 mod geometry;
 mod pty;
 mod tui;
