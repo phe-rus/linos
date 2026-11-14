@@ -8,7 +8,7 @@ Linux has the capability. Linos is about making that capability feel natural, de
 
 **Linos 13 · Server development preview · Generation 1.0.0**
 
-[Why Linos exists](docs/vision.md) · [See our progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
+[Why Linos exists](docs/vision.md) · [Architecture](docs/architecture/overview.md) · [Development progress](docs/architecture/roadmap.md) · [Builds & tests](https://github.com/phe-rus/linos/actions) · [Get involved](https://github.com/phe-rus/linos/issues)
 
 </div>
 
@@ -17,6 +17,10 @@ Linux has the capability. Linos is about making that capability feel natural, de
 ### Linux should feel like home.
 
 Linux is enormously capable, but capability alone does not make a system one that ordinary people can comfortably choose. Linos is being built to close that gap. We want the care, consistency, clarity and responsiveness people expect from mainstream consumer operating systems, without asking everyone to become technically proficient first.
+
+Linos is **not intended to be a Debian spin or a conventional Linux distribution with a different skin**. We initially draw software from stable upstream repositories, but the operating-system structure, kernel policy, app experience, developer tools, updates and interactions are intended to be designed and validated as Linos. Today those independent layers are still under development, and our booted images continue to rely on Debian's kernel and packages.
+
+Our long-term target is a first-class **Rust-native application platform**, a full **Assets** file manager, **Linus store** for developers and users, and a repeatable Linos kernel and performance contract. Those goals are not features already shipped.
 
 Linos is intended as a family of experiences for everyday devices. **Server** is the first edition in development, not the limit of the vision. Desktop and other device experiences follow as the common platform matures.
 
