@@ -42,20 +42,25 @@ fn prompt() -> io::Result<String> {
     cliclack::intro(" Linos 13 · Sign in ")?;
     cliclack::log::info("Welcome back. Sign in to manage your server.")?;
     let hint = suggested_username();
-    let mut question = cliclack::input("Username").placeholder("Your account name");
-    if !hint.is_empty() {
-        question = question.default_input(&hint);
-    }
-    let username: String = question
-        .validate(|text: &String| {
-            if allowed_username(text) {
-                Ok(())
-            } else {
-                Err("Enter a valid local account name.")
-            }
-        })
-        .interact()?;
-    cliclack::log::step(format!("Continue as {username}"))?;
+    let username = if !hint.is_empty() {
+        // The remembered username is display-only; PAM still authenticates
+        // the selected account and always requires its normal credentials.
+        cliclack::log::step(format!("Signing in as {hint}"))?;
+        hint
+    } else {
+        let username: String = cliclack::input("Username")
+            .placeholder("Your account name")
+            .validate(|text: &String| {
+                if allowed_username(text) {
+                    Ok(())
+                } else {
+                    Err("Enter a valid local account name.")
+                }
+            })
+            .interact()?;
+        cliclack::log::step(format!("Continue as {username}"))?;
+        username
+    };
     // We do not ask for or store passwords. login(1) handles the PAM flow.
     Ok(username)
 }
