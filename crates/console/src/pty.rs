@@ -139,13 +139,17 @@ impl Session {
 
     /// Idle interactive shells can disable echo without requesting a password.
     pub fn prompt_ready(output: &str) -> bool {
-        let line = output.rsplit('\n').next().unwrap_or_default().trim_end();
-        line == "$" || line == "#"
-            || (line.starts_with("bash-") && (line.ends_with('$') || line.ends_with('#')))
+        let last_line = output.rsplit('\n').next().unwrap_or_default();
+        let line = last_line.trim_end();
+        if line == "$" || line == "#" {
+            return true;
+        }
+        line.starts_with("bash-") && (line.ends_with('$') || line.ends_with('#'))
     }
 
     pub fn password_prompt_visible(output: &str) -> bool {
-        let line = output.rsplit('\n').next().unwrap_or_default().trim().to_ascii_lowercase();
+        let last_line = output.rsplit('\n').next().unwrap_or_default();
+        let line = last_line.trim().to_ascii_lowercase();
         let requests_secret = line.contains("password")
             || line.contains("passphrase")
             || line.contains("verification code")
