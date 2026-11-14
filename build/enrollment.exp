@@ -91,8 +91,18 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     # The local serial getty runs the Clack username screen, then execs
     # the standard PAM-backed login program for the password prompt.
     await {Username}
-    send -- "$username\r"
-    await {Password:}
+    # Accept the remembered username first. Fall back to typing it if the
+    # terminal implementation leaves the optional default unselected.
+    send -- "\r"
+    expect {
+        -re {Password:} {}
+        -re {Input required} {
+            send -- "$username\r"
+            await {Password:}
+        }
+        timeout { puts stderr "Login UI failed to reach PAM password prompt"; exit 1 }
+        eof { puts stderr "Login UI exited before password authentication"; exit 1 }
+    }
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
     # Ratatui draws into the alternate screen. /shell exits the dashboard.
     # The dashboard has a slash command palette that accepts typed commands.
