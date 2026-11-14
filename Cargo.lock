@@ -743,6 +743,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "linos-login"
+version = "0.1.0"
+dependencies = [
+ "cliclack",
+]
+
+[[package]]
 name = "linos-console"
 version = "0.1.0"
 dependencies = [

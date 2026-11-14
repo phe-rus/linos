@@ -37,14 +37,6 @@ jobs:
       - name: Set up stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
 
-      - name: Resolve new console login dependency lockfile
-        run: |
-          cargo +stable generate-lockfile
-          echo LINOS_LOCKFILE_BEGIN
-          base64 -w0 Cargo.lock
-          echo
-          echo LINOS_LOCKFILE_END
-
       - name: Rust formatting, linting and tests
         run: |
           cargo +stable fmt --all -- --check
