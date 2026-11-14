@@ -4,7 +4,7 @@
 //! the native Shell mode until an ANSI terminal emulator is integrated.
 use std::{
     env, fs::File, io::{self, Read, Write},
-    os::{fd::FromRawFd, unix::process::CommandExt},
+    os::{fd::{AsRawFd, FromRawFd}, unix::process::CommandExt},
     process::{Child, Command, Stdio},
     sync::mpsc::{self, Receiver},
     thread,
@@ -89,11 +89,19 @@ impl Session {
         Ok(())
     }
 
+    pub fn echo_enabled(&self) -> bool {
+        // SAFETY: master is an open PTY and libc initializes the structure.
+        let mut termios: libc::termios = unsafe { std::mem::zeroed() };
+        unsafe { libc::tcgetattr(self.writer.as_raw_fd(), &raw mut termios) } == 0
+            && termios.c_lflag & libc::ECHO != 0
+    }
+
     pub fn drain(&self, output: &mut String) {
         while let Ok(bytes) = self.output.try_recv() {
             output.push_str(&plain_text(&bytes));
             if output.len() > 32_000 {
-                let boundary = output.floor_char_boundary(output.len() - 24_000);
+                let mut boundary = output.len() - 24_000;
+                while !output.is_char_boundary(boundary) { boundary -= 1; }
                 output.drain(..boundary);
             }
         }
