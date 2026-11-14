@@ -159,6 +159,7 @@ impl App {
                 "Linos Server commands",
                 "",
                 "/home         Return to the Home workspace",
+                "clear          Clear PTY output without resetting shell state",
                 "/status       Overview and device health",
                 "/resources    CPU, memory, swap and filesystem capacity",
                 "/assets       Browse your home directory (read-only)",
@@ -224,6 +225,11 @@ impl App {
     }
 
     fn run_native_command(&mut self, command: String) -> io::Result<()> {
+        if command.trim() == "clear" || command.trim() == "/clear" {
+            self.terminal_output.clear();
+            self.content.clear();
+            self.scroll = 0;
+        }
         if self.session.is_none() {
             let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
             self.session = Some(pty::Session::start(rows.saturating_sub(12), cols.saturating_sub(4))?);
@@ -269,6 +275,11 @@ impl App {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             if key.code == KeyCode::Char('t') {
                 return Ok(Some(Exit::Shell));
+            }
+            if key.code == KeyCode::Char('l') {
+                self.terminal_output.clear();
+                if self.view == View::Terminal { self.content.clear(); self.scroll = 0; }
+                return Ok(None);
             }
             if key.code == KeyCode::Char('c') {
                 if self.view == View::Terminal && let Some(shell) = &mut self.session {
