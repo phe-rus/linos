@@ -66,6 +66,7 @@ mkdir -p "$STAGING_DIR/package/usr/bin"
 install -m 755 target/release/linos "$STAGING_DIR/package/usr/bin/linos"
 mkdir -p "$STAGING_DIR/package/etc/profile.d"
 install -m 644 system/base/identity/linos-welcome.sh "$STAGING_DIR/package/etc/profile.d/linos-welcome.sh"
+install -m 644 system/base/identity/linos-shell.bashrc "$STAGING_DIR/package/usr/lib/linos/linos-shell.bashrc"
 
 UNIT_DIR="$STAGING_DIR/package/usr/lib/systemd/system"
 WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
