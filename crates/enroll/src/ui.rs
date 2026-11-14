@@ -36,7 +36,9 @@ fn terminal_width() -> usize {
         .filter(|output| output.status.success())
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .and_then(|size| size.split_whitespace().nth(1)?.parse::<usize>().ok());
-    let from_env = env::var("COLUMNS").ok().and_then(|value| value.parse().ok());
+    let from_env = env::var("COLUMNS")
+        .ok()
+        .and_then(|value| value.parse().ok());
     let columns = from_stty.filter(|width| *width > 0).or(from_env);
     columns.unwrap_or(DEFAULT_WIDTH + 2).saturating_sub(4)
 }
@@ -65,13 +67,8 @@ fn frame(width: usize) -> String {
 
 fn plain_page(stage: Stage, name: Option<&str>) -> String {
     match stage {
-        Stage::Username => {
-            "Linos 13 Server setup\nWelcome to Linos.\nUsername: ".to_owned()
-        }
-        Stage::Password => format!(
-            "Username: {}\nSet your password.\n",
-            name.unwrap_or("")
-        ),
+        Stage::Username => "Linos 13 Server setup\nWelcome to Linos.\nUsername: ".to_owned(),
+        Stage::Password => format!("Username: {}\nSet your password.\n", name.unwrap_or("")),
         Stage::Complete => format!(
             "Setup complete.\nSign in as {} with your password.\n",
             name.unwrap_or("")
