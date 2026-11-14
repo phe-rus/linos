@@ -235,8 +235,8 @@ fn enroll() -> io::Result<()> {
         // Upgrade previously enrolled systems to the non-sensitive marker.
         fs::create_dir_all("/etc/linos")?;
         fs::write("/etc/linos/setup-complete", b"ready\n")?;
-    // The local login screen remembers only the username, never credentials.
-    fs::write("/etc/linos/login-user", format!("{_username}\n"))?;
+        // The local login screen remembers only the username, never credentials.
+        fs::write("/etc/linos/login-user", format!("{_username}\n"))?;
         let pending = Path::new(STATE_DIR).join("pending-owner");
         if pending.exists() {
             fs::remove_file(pending)?;

@@ -20,15 +20,35 @@ use super::{Action, action_for, host, memory, ownership, uptime, version};
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
 const COMMANDS: &[(Action, &str, &str)] = &[
-    (Action::Status, "/status", "Show the health and identity of this server"),
-    (Action::Network, "/network", "Inspect connected network interfaces"),
-    (Action::Services, "/services", "Inspect running system services"),
+    (
+        Action::Status,
+        "/status",
+        "Show the health and identity of this server",
+    ),
+    (
+        Action::Network,
+        "/network",
+        "Inspect connected network interfaces",
+    ),
+    (
+        Action::Services,
+        "/services",
+        "Inspect running system services",
+    ),
     (Action::Logs, "/logs", "Read recent journal messages"),
     (Action::Help, "/help", "See keyboard shortcuts and commands"),
     (Action::Shell, "/shell", "Open a normal Linux shell"),
     (Action::Logout, "/logout", "Sign out of this server"),
-    (Action::Reboot, "/reboot", "Restart safely (asks for confirmation)"),
-    (Action::Shutdown, "/shutdown", "Power off safely (asks for confirmation)"),
+    (
+        Action::Reboot,
+        "/reboot",
+        "Restart safely (asks for confirmation)",
+    ),
+    (
+        Action::Shutdown,
+        "/shutdown",
+        "Power off safely (asks for confirmation)",
+    ),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,7 +122,13 @@ impl App {
             View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
             View::Services => system_output(
                 "/usr/bin/systemctl",
-                &["list-units", "--type=service", "--state=running", "--no-pager", "--plain"],
+                &[
+                    "list-units",
+                    "--type=service",
+                    "--state=running",
+                    "--no-pager",
+                    "--plain",
+                ],
             ),
             View::Logs => system_output(
                 "/usr/bin/journalctl",
@@ -185,9 +211,7 @@ impl App {
             }
             return Ok(None);
         }
-        if key.code == KeyCode::Char('c')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-        {
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return Ok(Some(Exit::Shell));
         }
         match key.code {
@@ -219,7 +243,8 @@ impl App {
                 if self.input.is_empty() {
                     return Ok(None);
                 }
-                let action = self.suggestions()
+                let action = self
+                    .suggestions()
                     .get(self.highlighted)
                     .map(|item| item.0)
                     .or_else(|| action_for(&self.input));
@@ -246,7 +271,8 @@ fn system_output(program: &str, args: &[&str]) -> String {
                 &output.stderr
             };
             let value = String::from_utf8_lossy(raw);
-            value.chars()
+            value
+                .chars()
                 .filter(|c| *c == '\n' || *c == '\t' || !c.is_control())
                 .take(8000)
                 .collect()
@@ -263,7 +289,9 @@ fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     if area.width < 24 || area.height < 9 {
         frame.render_widget(
-            Paragraph::new("Linos 13 Server\n\nEnlarge your terminal to use the dashboard.\nCtrl+C to return."),
+            Paragraph::new(
+                "Linos 13 Server\n\nEnlarge your terminal to use the dashboard.\nCtrl+C to return.",
+            ),
             area,
         );
         return;
@@ -271,14 +299,27 @@ fn draw(frame: &mut Frame, app: &App) {
     let left = area.x.saturating_add(2);
     let usable = area.width.saturating_sub(4);
     // A quiet, fixed brand block at the top. No permanent sidebar or dashboard grid.
-    paragraph_at(frame, Rect::new(left, area.y + 2, usable, 4), vec![
-        Line::from(vec![
-            Span::styled("◆  Linos 13", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("  v{}", version()), Style::default().fg(DIM)),
-        ]),
-        Line::styled("   Server  ·  Marauder / Sequence 9", Style::default().fg(DIM)),
-        Line::styled(format!("   {}@{}", app.user, host()), Style::default().fg(DIM)),
-    ]);
+    paragraph_at(
+        frame,
+        Rect::new(left, area.y + 2, usable, 4),
+        vec![
+            Line::from(vec![
+                Span::styled(
+                    "◆  Linos 13",
+                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!("  v{}", version()), Style::default().fg(DIM)),
+            ]),
+            Line::styled(
+                "   Server  ·  Marauder / Sequence 9",
+                Style::default().fg(DIM),
+            ),
+            Line::styled(
+                format!("   {}@{}", app.user, host()),
+                Style::default().fg(DIM),
+            ),
+        ],
+    );
 
     let composer_y = area.bottom().saturating_sub(4);
     let suggestions = app.suggestions();
@@ -292,7 +333,12 @@ fn draw(frame: &mut Frame, app: &App) {
                 .wrap(Wrap { trim: false })
                 .scroll((app.scroll, 0))
                 .style(Style::default().fg(Color::White)),
-            Rect::new(left + 1, area.y + 8, usable.saturating_sub(2), results_bottom - (area.y + 8)),
+            Rect::new(
+                left + 1,
+                area.y + 8,
+                usable.saturating_sub(2),
+                results_bottom - (area.y + 8),
+            ),
         );
     }
 
@@ -306,8 +352,14 @@ fn draw(frame: &mut Frame, app: &App) {
                 frame,
                 Rect::new(left, start_y + index as u16, usable, 1),
                 vec![Line::from(vec![
-                    Span::styled(format!("{marker} {command:<13}"), Style::default().fg(command_color)),
-                    Span::styled(*description, Style::default().fg(if active { Color::White } else { DIM })),
+                    Span::styled(
+                        format!("{marker} {command:<13}"),
+                        Style::default().fg(command_color),
+                    ),
+                    Span::styled(
+                        *description,
+                        Style::default().fg(if active { Color::White } else { DIM }),
+                    ),
                 ])],
             );
         }
@@ -316,17 +368,33 @@ fn draw(frame: &mut Frame, app: &App) {
     let line = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(line, Rect::new(area.x + 1, composer_y, area.width.saturating_sub(2), 3));
-    paragraph_at(frame, Rect::new(left, composer_y + 1, usable, 1), vec![
-        Line::from(vec![
-            Span::styled("❯ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
+    frame.render_widget(
+        line,
+        Rect::new(area.x + 1, composer_y, area.width.saturating_sub(2), 3),
+    );
+    paragraph_at(
+        frame,
+        Rect::new(left, composer_y + 1, usable, 1),
+        vec![Line::from(vec![
             Span::styled(
-                if app.input.is_empty() { "Type / for commands" } else { &app.input },
-                Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
+                "❯ ",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                if app.input.is_empty() {
+                    "Type / for commands"
+                } else {
+                    &app.input
+                },
+                Style::default().fg(if app.input.is_empty() {
+                    DIM
+                } else {
+                    Color::White
+                }),
             ),
             Span::styled("▏", Style::default().fg(ACCENT)),
-        ]),
-    ]);
+        ])],
+    );
     let footer = if let Some(action) = app.confirm {
         if action == Action::Reboot {
             "Restart server?  Y Confirm · Enter Cancel"
@@ -336,12 +404,14 @@ fn draw(frame: &mut Frame, app: &App) {
     } else {
         &app.notice
     };
-    paragraph_at(frame, Rect::new(left, area.bottom().saturating_sub(1), usable, 1), vec![
-        Line::styled(
+    paragraph_at(
+        frame,
+        Rect::new(left, area.bottom().saturating_sub(1), usable, 1),
+        vec![Line::styled(
             format!("◆  {footer}    / Commands · ↑↓ Select · Ctrl+C Shell"),
             Style::default().fg(DIM),
-        ),
-    ]);
+        )],
+    );
 }
 
 pub fn run() -> io::Result<ExitCode> {
@@ -377,8 +447,13 @@ mod tests {
         for (width, height) in [(30, 10), (48, 18), (80, 24), (120, 32)] {
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal.draw(|frame| draw(frame, &App::new())).unwrap();
-            let screen: String = terminal.backend().buffer().content().iter()
-                .map(|cell| cell.symbol().to_owned()).collect();
+            let screen: String = terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|cell| cell.symbol().to_owned())
+                .collect();
             assert!(screen.contains("Linos 13") || width < 24);
             assert!(screen.contains("Type / for commands") || width < 24);
         }

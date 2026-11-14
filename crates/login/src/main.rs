@@ -32,7 +32,9 @@ fn prompt() -> io::Result<String> {
     }
     // Boot progress remains visible until local sign-in takes ownership.
     // Switching off console progress does not change journal logging.
-    let _ = Command::new("/usr/bin/kill").args(["-s", "RTMIN+21", "1"]).status();
+    let _ = Command::new("/usr/bin/kill")
+        .args(["-s", "RTMIN+21", "1"])
+        .status();
     print!("\x1b[3J\x1b[2J\x1b[H");
     io::stdout().flush()?;
 
