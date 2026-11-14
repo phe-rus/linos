@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::{Action, action_for, host, memory, ownership, pty, uptime, version};
+use super::{Action, action_for, geometry, host, memory, ownership, pty, uptime, version};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
@@ -174,7 +174,7 @@ impl App {
                 "/home returns from terminal output to your Home workspace.",
                 "Use Up/Down to select, Enter to run, Esc to clear.",
                 "PageUp/PageDown scroll results. Ctrl+T switches to shell.",
-                "Press Ctrl+T at the Bash prompt, exit or Ctrl+D to return to Linos.",
+                "Ctrl+T switches Home/Shell · Ctrl+R fits serial terminal size.",
                 "",
                 "Claude Code, Codex and other TUIs run normally in your shell.",
             ]
@@ -578,7 +578,7 @@ fn draw(frame: &mut Frame, app: &App) {
     paragraph_at(frame, Rect::new(x, area.bottom().saturating_sub(1), width, 1), vec![
         Line::from(vec![
             Span::styled(format!("◆  {footer}"), Style::default().fg(DIM)),
-            Span::styled("    / Commands · ↑↓ Select · Ctrl+T Shell", Style::default().fg(DIM)),
+            Span::styled("    / Commands · Ctrl+T Shell · Ctrl+R Fit", Style::default().fg(DIM)),
         ]),
     ]);
 }
@@ -626,6 +626,18 @@ pub fn run() -> io::Result<ExitCode> {
                 if event::poll(Duration::from_millis(140))? {
                     match event::read()? {
                         Event::Key(key) => {
+                            if key.kind == KeyEventKind::Press
+                                && key.code == KeyCode::Char('r')
+                                && key.modifiers.contains(KeyModifiers::CONTROL)
+                            {
+                                app.notice = if geometry::negotiate()? {
+                                    "Terminal geometry refreshed".into()
+                                } else {
+                                    "Terminal does not support size reporting; use stty rows/cols".into()
+                                };
+                                terminal.autoresize()?;
+                                continue;
+                            }
                             if let Some(exit) = app.key(key)? {
                                 break Ok::<Exit, io::Error>(exit);
                             }
