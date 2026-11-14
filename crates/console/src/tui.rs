@@ -239,6 +239,7 @@ impl App {
         // still owns the pseudo-terminal.
         self.view == View::Terminal
             && self.command_pending
+            && pty::Session::password_prompt_visible(&self.terminal_output)
             && self.session.as_ref().is_some_and(|shell| !shell.echo_enabled())
     }
 
