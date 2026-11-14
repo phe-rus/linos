@@ -16,7 +16,7 @@ fn visual() -> bool {
     io::stdin().is_terminal()
         && io::stdout().is_terminal()
         && env::var_os("NO_COLOR").is_none()
-        && env::var("TERM").is_err_or(|term| term != "dumb")
+        && env::var("TERM").map_or(true, |term| term != "dumb")
 }
 
 fn page(stage: Stage, name: Option<&str>, styled: bool) -> String {
