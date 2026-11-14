@@ -14,7 +14,6 @@ const PUBLIC_READY: &str = "/etc/linos/setup-complete";
 fn interactive_terminal() -> bool {
     io::stdin().is_terminal()
         && io::stdout().is_terminal()
-        && env::var_os("NO_COLOR").is_none()
         && env::var("TERM").is_ok_and(|term| term != "dumb")
 }
 
@@ -112,8 +111,8 @@ fn help() {
     println!("Usage: linos [status|network|services|service NAME|logs NAME|help]");
     println!("       linos /status | /network | /services | /logs | /shell");
     println!("       linos /logout | /reboot | /shutdown");
-    println!("Run 'linos' in an interactive terminal for the Ratatui Server dashboard.");
-    println!("A normal shell remains available after selecting 'Return to shell'.");
+    println!("Linos Home is the default interactive Server environment.");
+    println!("Use /shell or Ctrl+T to enter your shell, then exit to return to Home.");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
