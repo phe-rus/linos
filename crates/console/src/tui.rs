@@ -41,7 +41,7 @@ const COMMANDS: &[(Action, &str, &str)] = &[
     ),
     (Action::Logs, "/logs", "Read recent journal messages"),
     (Action::Help, "/help", "See keyboard shortcuts and commands"),
-    (Action::Shell, "/shell", "Open a normal Linux shell"),
+    (Action::Shell, "/shell", "Switch to the interactive Linux shell"),
     (Action::Logout, "/logout", "Sign out of this server"),
     (
         Action::Reboot,
@@ -158,14 +158,15 @@ impl App {
                 "/services     Running services",
                 "/logs         Recent system events",
                 "/help         This guide",
-                "/shell        Return to your shell",
+                "/shell        Switch temporarily to the Linux shell",
                 "/logout       Sign out",
                 "/reboot       Restart (requires confirmation)",
                 "/shutdown     Power off (requires confirmation)",
                 "",
                 "Type / to discover commands.",
                 "Use Up/Down to select, Enter to run, Esc to clear.",
-                "PageUp/PageDown scroll results. Ctrl+C returns to shell.",
+                "PageUp/PageDown scroll results. Ctrl+T switches to shell.",
+                "Type exit or press Ctrl+D in the shell to return to Linos.",
                 "",
                 "Claude Code, Codex and other TUIs run normally in your shell.",
             ]
@@ -235,7 +236,9 @@ impl App {
             }
             return Ok(None);
         }
-        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        if matches!(key.code, KeyCode::Char('t') | KeyCode::Char('c'))
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
             return Ok(Some(Exit::Shell));
         }
         match key.code {
@@ -536,33 +539,61 @@ fn draw(frame: &mut Frame, app: &App) {
     paragraph_at(frame, Rect::new(x, area.bottom().saturating_sub(1), width, 1), vec![
         Line::from(vec![
             Span::styled(format!("◆  {footer}"), Style::default().fg(DIM)),
-            Span::styled("    / Commands · ↑↓ Select · Ctrl+C Shell", Style::default().fg(DIM)),
+            Span::styled("    / Commands · ↑↓ Select · Ctrl+T Shell", Style::default().fg(DIM)),
         ]),
     ]);
 }
 
+fn interactive_shell() -> io::Result<()> {
+    // The Ratatui terminal has already been restored before this child starts.
+    // Run the user's genuine interactive shell with normal shell behaviour:
+    // cd, sudo, jobs, pipes, SSH and nested TUIs all work normally.
+    let shell = env::var("SHELL")
+        .ok()
+        .filter(|path| path.starts_with('/') && std::path::Path::new(path).is_file())
+        .unwrap_or_else(|| "/bin/sh".into());
+    let status = Command::new(shell)
+        .arg("-i")
+        .env("LINOS_NO_WELCOME", "1")
+        .status()?;
+    if !status.success() {
+        eprintln!("Shell exited with status {status}");
+    }
+    Ok(())
+}
+
 pub fn run() -> io::Result<ExitCode> {
-    let result = ratatui::run(|terminal| {
-        let mut app = App::new();
-        let mut last_refresh = Instant::now();
-        loop {
-            if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
-                app.content = resources();
-                last_refresh = Instant::now();
+    let mut app = App::new();
+    loop {
+        // Ratatui owns the terminal only while Linos Home is active. Leaving
+        // this scope restores the real terminal before entering a child shell.
+        let result = ratatui::run(|terminal| {
+            let mut last_refresh = Instant::now();
+            loop {
+                if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
+                    app.content = resources();
+                    last_refresh = Instant::now();
+                }
+                terminal.draw(|frame| draw(frame, &app))?;
+                if event::poll(Duration::from_millis(140))?
+                    && let Event::Key(key) = event::read()?
+                    && let Some(exit) = app.key(key)?
+                {
+                    break Ok::<Exit, io::Error>(exit);
+                }
             }
-            terminal.draw(|frame| draw(frame, &app))?;
-            if event::poll(Duration::from_millis(140))?
-                && let Event::Key(key) = event::read()?
-                && let Some(exit) = app.key(key)?
-            {
-                break Ok::<Exit, io::Error>(exit);
+        })?;
+        match result {
+            Exit::Shell => {
+                // Exiting the nested shell (exit/Ctrl+D) returns here rather
+                // than terminating the Linos Home session.
+                interactive_shell()?;
+                app.navigate(View::Home);
             }
+            Exit::Power => return Ok(ExitCode::SUCCESS),
+            Exit::Logout => return Ok(ExitCode::from(20)),
         }
-    })?;
-    Ok(match result {
-        Exit::Shell | Exit::Power => ExitCode::SUCCESS,
-        Exit::Logout => ExitCode::from(20),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -623,6 +654,15 @@ mod tests {
             app.key(press(KeyCode::Char(c))).unwrap();
         }
         assert_eq!(app.key(press(KeyCode::Enter)).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn shell_switch_is_a_temporary_session_mode() {
+        let mut app = App::new();
+        assert_eq!(app.apply(Action::Shell), Some(Exit::Shell));
+        assert_eq!(app.view, View::Home);
+        let shortcut = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+        assert_eq!(app.key(shortcut).unwrap(), Some(Exit::Shell));
     }
 
     #[test]
