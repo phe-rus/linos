@@ -721,11 +721,11 @@ pub fn run() -> io::Result<ExitCode> {
                     dirty = true;
                 }
                 if let Some(shell) = &mut app.session {
-                    if let Some(cwd) = shell.current_dir() {
-                        if app.cwd != cwd {
-                            app.cwd = cwd;
-                            dirty = true;
-                        }
+                    if let Some(cwd) = shell.current_dir()
+                        && app.cwd != cwd
+                    {
+                        app.cwd = cwd;
+                        dirty = true;
                     }
                     let previous = app.terminal_output.len();
                     shell.drain(&mut app.terminal_output);
