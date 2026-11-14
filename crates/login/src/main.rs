@@ -2,8 +2,9 @@
 //! Does NOT authenticate users: replaces itself with login(1), which uses PAM.
 //! This program is invoked by agetty as root, and must not shell-expand input.
 use std::{
-    fs,
+    fs::{self, OpenOptions},
     io::{self, IsTerminal, Write},
+    os::unix::fs::OpenOptionsExt,
     os::unix::process::CommandExt,
     process::Command,
 };
@@ -59,7 +60,48 @@ fn prompt() -> io::Result<String> {
     Ok(username)
 }
 
+// Invoked only by the PAM login session hook after successful authentication.
+// The remembered value is a public username hint, never an authentication token.
+fn record_authenticated_session() -> io::Result<()> {
+    if std::env::var("PAM_SERVICE").as_deref() != Ok("login")
+        || std::env::var("PAM_TYPE").as_deref() != Ok("open_session")
+    {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Not a PAM login session"));
+    }
+    let tty = std::env::var("PAM_TTY").unwrap_or_default();
+    let tty = tty.strip_prefix("/dev/").unwrap_or(&tty);
+    if tty != "tty1" && !tty.starts_with("ttyS") && !tty.starts_with("ttyAMA") {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Not a supported local console"));
+    }
+    let user = std::env::var("PAM_USER").unwrap_or_default();
+    if !allowed_username(&user) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid local username"));
+    }
+    fs::create_dir_all("/etc/linos")?;
+    // The containing directory is root-owned. Create and atomically rename a
+    // private temporary file rather than following an existing destination.
+    let temp = format!("/etc/linos/.login-user-{}", std::process::id());
+    let result = (|| {
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temp)?;
+        writeln!(file, "{user}")?;
+        file.sync_all()?;
+        fs::rename(&temp, "/etc/linos/login-user")?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--record-session") {
+        if let Err(error) = record_authenticated_session() {
+            eprintln!("Unable to remember login username: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     // agetty's login-program runs as root. Treat all parameters as untrusted.
     // Only an absolute program path is used; a user value follows "--".
     let mut cmd = Command::new("/bin/login");
