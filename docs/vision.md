@@ -1,87 +1,80 @@
-# The vision for Linos
+# Why Linos exists
 
-**One operating-system family. Different devices. A system that feels like yours.**
+**Made to feel at home.**
 
-Linos began with a question: what would Linux feel like if installing it, signing in, managing it, updating it, recovering it and using it were designed as parts of one experience, rather than a collection of unrelated tools?
+Linux powers much of the world. It is free, capable, adaptable and central to modern computing. Yet for ordinary people choosing a personal computer, phone, television or another everyday device, Linux-based experiences have not consistently offered the same degree of approachability, continuity and attention to detail as the most familiar consumer platforms.
 
-Linos is a Linux-based operating-system project. It is not a theme, a desktop environment, a replacement shell, or a new name for Debian. Our ambition is to build and eventually own the integration between the kernel, system services, system management, user experience, updates, recovery, identity and device-specific capabilities. We intend to remain compatible with useful Linux software while being deliberate about which distribution conventions we keep.
+The question behind Linos is not whether Linux is powerful enough. **It is why that power so often fails to become an experience people can comfortably choose, trust and enjoy without becoming technically proficient.**
 
-**Linos 13 Server is the first step, not the limit of the project.**
+## What is Linos?
 
-## The platform we're building
+**Linos is a Linux-based operating system being built for people, not just for people who understand computers.**
 
-A future Linos device should feel recognisably Linos, while presenting the right environment for its role.
+Its goal is to make the capabilities of Linux genuinely suitable for everyday use. Not merely *usable* in the sense that a task can eventually be completed, but *comfortable to consume*: understandable from the first encounter, coherent from one interaction to the next, responsive, considerate and dependable enough to recommend to someone who has never opened a terminal.
 
-| Linos edition | Intended experience | Current maturity |
-| --- | --- | --- |
-| **Server** | A native terminal-first environment for setup, services, packages, storage, networking, security, monitoring and recovery | Active development preview |
-| **Desktop** | A complete graphical desktop with its own interaction model and applications, using the same system foundations | Long-term design |
-| **Single-board and embedded systems** | Hardware-aware boot, firmware, energy and peripheral controls appropriate to supported boards | Initial discovery and target profiles |
-| **Other device families** | Future device-specific experiences built on common foundations, not a stretched desktop layout | Exploratory vision |
+Linos is not an attempt to teach everyone how to be a Linux enthusiast. It is an attempt to make that knowledge unnecessary for enjoying a capable operating system.
 
-A universal OS does **not** mean the same interface, bootloader, driver or power policy is appropriate for every device. Shared contracts and per-device implementations matter more than uniform branding.
+**Linos 13** is the first generation of this effort. We are developing the Server edition first, not because servers define Linos, but because the foundations need to be built, tested and understood before broader everyday device experiences can rest on them.
 
-## Eight design commitments
+## The difference between usable and made for use
 
-### 1. The complete journey matters
+Linux has many excellent distributions, applications and communities. People can accomplish extraordinary work with them. But the existence of a feature is not the same as a considerate experience of using it.
 
-The experience begins before the first login: hardware discovery, installation, recovery, owner setup and initial preferences. It continues through day-to-day use, maintenance, troubleshooting and replacement. These stages should form a coherent journey, not require users to learn separate design languages for every operation.
+A system may technically support installing applications while making the user learn repositories, dependency errors and package formats. It may support hardware while exposing inconsistent configuration and recovery paths. It may offer customization while demanding that users assemble their own coherent experience.
 
-### 2. Human-friendly without hiding Linux
+Linos asks a different question at every layer:
 
-Ordinary commands, real Linux tools and administrator access remain available. Linos Home is a helpful environment, not a locked-down substitute for a shell. When a command needs special privileges, normal authorization rules still apply.
+**What would this feel like for someone who simply wants their device to work beautifully?**
 
-### 3. The system belongs to its owner
+This is not about removing depth or freedom. It is about refusing to make complexity the price of entry. Technical users should retain real control. Everyone else should be able to live comfortably without needing it.
 
-Local setup and administration work without an internet account. Optional Passid integration may be useful later, but the device should remain usable and recoverable when cloud services are unavailable.
+## What we're learning from Apple
 
-### 4. Hardware-aware by design
+Apple's contribution to computing is not simply attractive interfaces. It is the care given to how experiences fit together: wording, timing, transitions, physical expectations, interaction, defaults, performance, predictability and the relationship between hardware and software.
 
-An ARM single-board computer, an AMD64 server and a battery-powered laptop have different constraints. Linos should discover the actual hardware, display clear facts, apply only supported defaults, and avoid pretending that unidentified hardware has certified compatibility.
+Linos takes inspiration from that way of thinking, not from copying Apple's appearance or abandoning Linux's openness. We want to apply similarly rigorous care to an open Linux-based platform that people can use, understand and make their own.
 
-### 5. Performance backed by measurement
+The standard is not **“Does this feature work?”** alone. It is **“Does this experience make sense, feel natural, respect the user's attention and behave consistently?”**
 
-Resource management should use supported Linux facilities such as cgroup v2, CPU scheduling, I/O controls and pressure stall information. A server must not lose work because an OS aggressively pauses background processes. We will measure boot time, latency, power use and reliability before claiming improvements.
+## The promise of Linos
 
-### 6. Recovery is part of the operating system
+- **People before implementation.** Users should not have to learn the architecture to accomplish ordinary things.
+- **Care in every interaction.** Words, navigation, errors, transitions, responsiveness and defaults are part of the system, not decoration applied later.
+- **One familiar experience across devices.** A server, desktop, laptop, television, mobile device or supported board may need different controls, but the same care, clarity and design philosophy should remain recognizable.
+- **Power without intimidation.** Advanced capability is available when wanted, without forcing it on everyone.
+- **Freedom without fragmentation becoming the user's burden.** Compatibility and choices matter, but Linos should make coherent decisions instead of outsourcing the experience to the user.
+- **Comfort backed by engineering.** Performance, security, power management, updates and recovery should be dependable precisely so that people do not have to think about them.
+- **Offline ownership.** A person should be able to use and administer their own device without a mandatory online account.
+- **Polish that is earned.** Interface beauty means little if authentication, updates, packages or recovery are unreliable.
 
-Recovery should be accessible, intelligible and tested before risky installation or upgrade operations are enabled. The long-term goal is verified updates, guarded rollback, repair and reinstall procedures that preserve user data where feasible.
+## What Linos is not
 
-### 7. One considered language of interaction
+Linos is not another collection of Linux features promoted as innovation. It is not a terminal theme, a nicer installer, an administration dashboard or an effort to make every user into a developer.
 
-The console and future graphical experiences should share a vocabulary: calm composition, contextual navigation, legible status, explicit actions, useful progress, correct platform naming and predictable behaviour. **Linos**, **Linus store** and other names use their canonical casing. Acronyms like CPU, RAM, EFI and API may remain uppercase.
+It is also not finished. The present code relies on Debian packages and a Debian-provided kernel, and the current Server implementation has documented interaction and release-engineering gaps. Those are foundations and engineering responsibilities, not the product's purpose.
 
-### 8. Open development with honest evidence
+## Why begin with a server?
 
-A screenshot is evidence of a particular running build, not proof of universal device compatibility. A unit test is not a boot test. A Debian kernel is not yet a Linos-tuned kernel. We'll distinguish implemented, demonstrated, experimentally working and proposed systems in documentation.
+Starting with a server may seem counterintuitive for a project built around everyday users. But the design philosophy should apply just as strongly to someone administering a server as it does to someone watching television or using a laptop.
 
-## What we've demonstrated
+Our current Server work demonstrates how the same thinking can shape setup, sign-in, system information, file browsing and terminal administration. These are proofs of direction, not the whole vision.
 
-Our initial Server work has produced QEMU-bootable images, a native Cliclack first-boot setup, local account provisioning and sign-in, a Ratatui Home interface, a responsive terminal layout, a read-only Assets browser and resource usage views. Our [visual showcase](showcase/README.md) documents these with captured screenshots.
+Future Linos editions should be judged by whether someone can pick up a device, understand it, trust it and feel at home without first studying the operating system.
 
-Development also includes a PTY-backed command composer, hardware discovery and **Linus store**, an early package browsing and simulation interface using Debian's dpkg/APT ecosystem. The command composer still has a documented incorrect password-state issue; the newer hardware and store views await boot verification.
+## How we'll judge success
 
-These are substantial steps toward the interaction model, **not** proof of a production-ready operating system.
+Not by the number of toggles or commands, and not by claiming a better kernel than everyone else.
 
-## What Linos must eventually own
+We should test whether first-time users complete common tasks without instructions; whether they understand errors and recover; whether performance feels predictable; whether defaults respect their expectations; whether system operations are safe; and whether ordinary users would willingly choose and recommend Linos over the alternatives.
 
-Linos is currently bootstrapped using Debian 13 packages, systemd, PAM and Linux kernel packages. These are useful compatibility foundations. The target is to own Linos-specific policies, tested integration, release infrastructure, installation contracts, kernel configuration profiles, hardware support decisions and lifecycle maintenance.
+**A technically excellent system that people don't want to use is not enough.**
 
-A future kernel policy should pin and verify configuration fragments and driver support on each upgrade. It must not confuse *using* a Linux kernel with *having built* a kernel tuned and validated for Linos.
+## The current state
 
-Similarly, Linus store starts with familiar package infrastructure but aims to provide a cohesive, safe management experience with permissions, transaction previews, install progress, history, recovery and, eventually, Linos-managed repositories.
+Linos 13 is a development preview. The native Server Home, guided first-boot experience and adaptive terminal layout are early examples of this philosophy. They demonstrate interface direction, not finished quality or device support.
 
-## What would make Linos different?
+See the [showcase](showcase/README.md), [engineering status](architecture/current-status.md) and [development roadmap](architecture/roadmap.md) for what is demonstrated, under development and still planned.
 
-Our ambition is not to out-feature Debian, Ubuntu or Fedora overnight. Those distributions have mature release engineering, security processes, package ecosystems and hardware coverage.
+---
 
-Linos is exploring the integration of an operating system with a **product-level experience across the whole device lifecycle**, beginning with a native server-first interface. It must earn its claims through reliable engineering, not just a distinctive screen.
-
-## Read the evidence
-
-- [Visual showcase](showcase/README.md): real captured interfaces.
-- [Current engineering status](architecture/current-status.md): evidence and known limitations.
-- [Development roadmap](architecture/roadmap.md): stages and release gates.
-- [Architecture](architecture/overview.md): layers, boundaries and safeguards.
-
-> **Status: development preview.** Linos 13 is not yet suitable for production server workloads or installation on important personal hardware.
+**Linos. Made to feel at home.**
