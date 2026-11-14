@@ -625,8 +625,20 @@ pub fn run() -> io::Result<ExitCode> {
         // this scope restores the real terminal before entering a child shell.
         let result = ratatui::run(|terminal| {
             let mut last_refresh = Instant::now();
+            let mut last_geometry = Instant::now();
+            let serial_console = geometry::serial_console();
             let mut dirty = true;
             loop {
+                if serial_console
+                    && last_geometry.elapsed() >= Duration::from_secs(4)
+                    && app.input.is_empty()
+                {
+                    if geometry::negotiate().unwrap_or(false) {
+                        terminal.autoresize()?;
+                        dirty = true;
+                    }
+                    last_geometry = Instant::now();
+                }
                 if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
                     app.content = resources();
                     last_refresh = Instant::now();
