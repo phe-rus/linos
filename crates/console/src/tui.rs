@@ -1,7 +1,7 @@
 //! A composer-first Linos Server terminal experience.
 //! Deliberately sparse: the workspace expands, command entry stays at the bottom.
 use std::{
-    env, io,
+    env, fs, io,
     process::{Command, ExitCode},
     time::Duration,
 };
@@ -25,6 +25,10 @@ const COMMANDS: &[(Action, &str, &str)] = &[
         "/status",
         "Show the health and identity of this server",
     ),
+    (Action::Resources, "/resources", "CPU, memory, swap and storage"),
+    (Action::Assets, "/assets", "Browse your home directory"),
+    (Action::Settings, "/settings", "System settings and About"),
+    (Action::Updates, "/updates", "Update policy and package status"),
     (
         Action::Network,
         "/network",
@@ -59,6 +63,10 @@ enum View {
     Services,
     Logs,
     Help,
+    Resources,
+    Assets,
+    Settings,
+    Updates,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,6 +127,10 @@ impl App {
                 memory().unwrap_or_else(|| "Unavailable".into()),
                 ownership(),
             ),
+            View::Resources => resources(),
+            View::Assets => assets(),
+            View::Settings => settings(),
+            View::Updates => updates(),
             View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
             View::Services => system_output(
                 "/usr/bin/systemctl",
@@ -138,6 +150,10 @@ impl App {
                 "Linos Server commands",
                 "",
                 "/status       Overview and device health",
+                "/resources    CPU, memory, swap and filesystem capacity",
+                "/assets       Browse your home directory (read-only)",
+                "/settings     Device settings and About",
+                "/updates      Update policy and installed package status",
                 "/network      Network interfaces",
                 "/services     Running services",
                 "/logs         Recent system events",
@@ -162,6 +178,10 @@ impl App {
             View::Services => "Active system services".into(),
             View::Logs => "Recent system events".into(),
             View::Help => "Quick guide".into(),
+            View::Resources => "System resources".into(),
+            View::Assets => "Assets · home directory".into(),
+            View::Settings => "System settings".into(),
+            View::Updates => "Update information".into(),
         };
     }
 
@@ -170,6 +190,10 @@ impl App {
         self.highlighted = 0;
         match action {
             Action::Status => self.navigate(View::Status),
+            Action::Resources => self.navigate(View::Resources),
+            Action::Assets => self.navigate(View::Assets),
+            Action::Settings => self.navigate(View::Settings),
+            Action::Updates => self.navigate(View::Updates),
             Action::Network => self.navigate(View::Network),
             Action::Services => self.navigate(View::Services),
             Action::Logs => self.navigate(View::Logs),
@@ -281,6 +305,82 @@ fn system_output(program: &str, args: &[&str]) -> String {
     }
 }
 
+fn read_mem_field(key: &str) -> Option<u64> {
+    let text = fs::read_to_string("/proc/meminfo").ok()?;
+    text.lines()
+        .find(|line| line.starts_with(key))?
+        .split_whitespace()
+        .nth(1)?
+        .parse::<u64>()
+        .ok()
+}
+
+fn resources() -> String {
+    let total = read_mem_field("MemTotal:").unwrap_or(0) / 1024;
+    let available = read_mem_field("MemAvailable:").unwrap_or(0) / 1024;
+    let swap_total = read_mem_field("SwapTotal:").unwrap_or(0) / 1024;
+    let swap_free = read_mem_field("SwapFree:").unwrap_or(0) / 1024;
+    let cpu = fs::read_to_string("/proc/stat")
+        .ok()
+        .and_then(|s| s.lines().filter(|l| l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())).count().checked_sub(0))
+        .unwrap_or(0);
+    let load = fs::read_to_string("/proc/loadavg")
+        .ok()
+        .map(|s| s.split_whitespace().take(3).collect::<Vec<_>>().join(" "))
+        .unwrap_or_else(|| "Unavailable".into());
+    let disk = system_output("/usr/bin/df", &["-h", "-P", "/"]);
+    format!(
+        "PROCESSOR\nLogical CPUs           {cpu}\nLoad average           {load}\n\nMEMORY\nUsed                   {} MiB\nAvailable              {available} MiB\nInstalled              {total} MiB\n\nSWAP\nUsed                   {} MiB\nTotal                  {swap_total} MiB\n\nSTORAGE\n{disk}\n\nTip: /status for device identity.",
+        total.saturating_sub(available),
+        swap_total.saturating_sub(swap_free),
+    )
+}
+
+fn assets() -> String {
+    let home = env::var("HOME").unwrap_or_else(|_| "/".into());
+    let root = std::path::Path::new(&home);
+    let mut output = format!("HOME  {home}\n\n");
+    let Ok(entries) = fs::read_dir(root) else {
+        return format!("{output}Unable to read this directory.");
+    };
+    let mut names: Vec<(bool, String)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let kind = entry.file_type().ok()?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            Some((kind.is_dir(), name))
+        })
+        .collect();
+    names.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.to_lowercase().cmp(&b.1.to_lowercase())));
+    for (directory, name) in names.iter().take(120) {
+        output.push_str(if *directory { "▸  " } else { "   " });
+        output.push_str(name);
+        output.push('\n');
+    }
+    if names.len() > 120 {
+        output.push_str("\nMore entries available through /shell.");
+    }
+    output.push_str("\nRead-only preview. File operations will require explicit confirmation.");
+    output
+}
+
+fn settings() -> String {
+    let timezone = fs::read_to_string("/etc/timezone")
+        .unwrap_or_else(|_| "System default".into());
+    format!(
+        "ABOUT\nLinos {} Server\nMarauder · Sequence 9\nHostname               {}\n\nPREFERENCES\nTime zone              {}\nLanguage               {}\n\nSECURITY\nAuthentication         Local PAM\nCloud account          Optional\n\nSettings are currently read-only. Administrative changes will require explicit confirmation.",
+        version(), host(), timezone.trim(), env::var("LANG").unwrap_or_else(|_| "Unset".into()),
+    )
+}
+
+fn updates() -> String {
+    let version = system_output("/usr/bin/dpkg-query", &["-W", "-f=${Version}", "linos"]);
+    format!(
+        "LINOS UPDATES\nInstalled package      linos {}\n\nUpdate channel         Development\nAutomatic OS updates   Disabled (not configured)\nRollback               Not implemented\n\nSystem packages currently use Debian apt. No update was started.\nA verified update mechanism and rollback policy are required before automatic Linos updates can be enabled.",
+        version.trim(),
+    )
+}
+
 fn paragraph_at(frame: &mut Frame, rect: Rect, text: Vec<Line<'_>>) {
     frame.render_widget(Paragraph::new(text), rect);
 }
@@ -296,7 +396,7 @@ fn draw(frame: &mut Frame, app: &App) {
     }
 
     // Keep the main workspace centred on wide terminals, like a modern CLI.
-    let width = area.width.saturating_sub(4).min(94);
+    let width = area.width.saturating_sub(if area.width > 100 { 8 } else { 2 });
     let x = area.x + (area.width - width) / 2;
     let top = area.y + 1;
     let composer_y = area.bottom().saturating_sub(5);
@@ -367,6 +467,10 @@ fn draw(frame: &mut Frame, app: &App) {
             View::Services => "Running services",
             View::Logs => "System logs",
             View::Help => "Help and shortcuts",
+            View::Resources => "System resources",
+            View::Assets => "Assets",
+            View::Settings => "Settings",
+            View::Updates => "Updates",
         };
         paragraph_at(frame, Rect::new(left, top + 3, inner_width, 1), vec![
             Line::styled(title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
