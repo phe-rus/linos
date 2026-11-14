@@ -71,23 +71,36 @@ fn record_authenticated_session() -> io::Result<()> {
     if std::env::var("PAM_SERVICE").as_deref() != Ok("login")
         || std::env::var("PAM_TYPE").as_deref() != Ok("open_session")
     {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Not a PAM login session"));
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Not a PAM login session",
+        ));
     }
     let tty = std::env::var("PAM_TTY").unwrap_or_default();
     let tty = tty.strip_prefix("/dev/").unwrap_or(&tty);
     if tty != "tty1" && !tty.starts_with("ttyS") && !tty.starts_with("ttyAMA") {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Not a supported local console"));
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Not a supported local console",
+        ));
     }
     let user = std::env::var("PAM_USER").unwrap_or_default();
     if !allowed_username(&user) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid local username"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid local username",
+        ));
     }
     fs::create_dir_all("/etc/linos")?;
     // The containing directory is root-owned. Create and atomically rename a
     // private temporary file rather than following an existing destination.
     let temp = format!("/etc/linos/.login-user-{}", std::process::id());
     let result = (|| {
-        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temp)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temp)?;
         writeln!(file, "{user}")?;
         file.sync_all()?;
         fs::rename(&temp, "/etc/linos/login-user")?;

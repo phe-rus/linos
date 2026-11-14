@@ -13,16 +13,26 @@ fn field(path: &str) -> String {
 
 fn classify(vendor: &str, model: &str, battery: bool) -> &'static str {
     let info = format!("{vendor} {model}").to_ascii_lowercase();
-    if info.contains("qemu") || info.contains("kvm") || info.contains("vmware")
-        || info.contains("virtualbox") || info.contains("virtual machine") {
+    if info.contains("qemu")
+        || info.contains("kvm")
+        || info.contains("vmware")
+        || info.contains("virtualbox")
+        || info.contains("virtual machine")
+    {
         "Virtual machine"
-    } else if info.contains("raspberry pi") || info.contains("orange pi")
-        || info.contains("rockchip") || info.contains("radxa") {
+    } else if info.contains("raspberry pi")
+        || info.contains("orange pi")
+        || info.contains("rockchip")
+        || info.contains("radxa")
+    {
         "Single-board computer"
     } else if battery {
         "Laptop or portable computer"
-    } else if info.contains("server") || info.contains("poweredge")
-        || info.contains("proliant") || info.contains("thinksystem") {
+    } else if info.contains("server")
+        || info.contains("poweredge")
+        || info.contains("proliant")
+        || info.contains("thinksystem")
+    {
         "Physical server"
     } else {
         "Physical computer (type unconfirmed)"
@@ -41,22 +51,32 @@ pub fn report() -> String {
     let kind = classify(&vendor, &model, battery);
     let architecture = std::env::consts::ARCH;
     let cpu = read("/proc/cpuinfo")
-        .and_then(|s| s.lines().find_map(|line| {
-            let (key, value) = line.split_once(':')?;
-            (key.trim() == "model name" || key.trim() == "Hardware")
-                .then(|| value.trim().to_owned())
-        })).unwrap_or_else(|| "Not reported".into());
-    let processors = fs::read_to_string("/proc/stat")
-        .map(|s| s.lines().filter(|line| {
-            line.strip_prefix("cpu").is_some_and(|rest| {
-                rest.chars().next().is_some_and(|c| c.is_ascii_digit())
+        .and_then(|s| {
+            s.lines().find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                (key.trim() == "model name" || key.trim() == "Hardware")
+                    .then(|| value.trim().to_owned())
             })
-        }).count()).unwrap_or(0);
+        })
+        .unwrap_or_else(|| "Not reported".into());
+    let processors = fs::read_to_string("/proc/stat")
+        .map(|s| {
+            s.lines()
+                .filter(|line| {
+                    line.strip_prefix("cpu")
+                        .is_some_and(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()))
+                })
+                .count()
+        })
+        .unwrap_or(0);
     let memory = read("/proc/meminfo")
-        .and_then(|s| s.lines().find(|line| line.starts_with("MemTotal:"))
-            .and_then(|line| line.split_whitespace().nth(1))
-            .and_then(|num| num.parse::<u64>().ok())
-        ).map(|size| format!("{} MiB", size / 1024))
+        .and_then(|s| {
+            s.lines()
+                .find(|line| line.starts_with("MemTotal:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|num| num.parse::<u64>().ok())
+        })
+        .map(|size| format!("{} MiB", size / 1024))
         .unwrap_or_else(|| "Unknown".into());
     let firmware = field("/sys/class/dmi/id/bios_version");
     let kernel = read("/proc/sys/kernel/osrelease").unwrap_or_else(|| "Unknown".into());
@@ -72,8 +92,17 @@ mod tests {
     #[test]
     fn platform_classification_is_conservative() {
         assert_eq!(classify("QEMU", "Standard PC", false), "Virtual machine");
-        assert_eq!(classify("Unknown", "Raspberry Pi 5", false), "Single-board computer");
-        assert_eq!(classify("Dell", "Latitude", true), "Laptop or portable computer");
-        assert_eq!(classify("Unknown", "Unknown", false), "Physical computer (type unconfirmed)");
+        assert_eq!(
+            classify("Unknown", "Raspberry Pi 5", false),
+            "Single-board computer"
+        );
+        assert_eq!(
+            classify("Dell", "Latitude", true),
+            "Laptop or portable computer"
+        );
+        assert_eq!(
+            classify("Unknown", "Unknown", false),
+            "Physical computer (type unconfirmed)"
+        );
     }
 }

@@ -217,7 +217,9 @@ mod tests {
         assert!(Session::prompt_ready("ls\nbash-5.2$ "));
         assert!(Session::prompt_ready("bash-5.2$ bash-5.2$ "));
         assert!(!Session::prompt_ready("[sudo] password for linos: "));
-        assert!(Session::password_prompt_visible("[sudo] password for linos: "));
+        assert!(Session::password_prompt_visible(
+            "[sudo] password for linos: "
+        ));
         assert!(Session::password_prompt_visible("Enter passphrase: "));
         assert!(!Session::password_prompt_visible("bash-5.2$ "));
     }

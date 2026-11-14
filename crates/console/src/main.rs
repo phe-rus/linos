@@ -10,8 +10,8 @@ use std::{
 mod assets;
 mod geometry;
 mod hardware;
-mod store;
 mod pty;
+mod store;
 mod tui;
 
 const PUBLIC_READY: &str = "/etc/linos/setup-complete";
@@ -169,7 +169,12 @@ fn execute(action: Action) -> io::Result<ExitCode> {
             println!("Run linos to open Home.");
             Ok(ExitCode::SUCCESS)
         }
-        Action::Resources | Action::Assets | Action::Settings | Action::Updates | Action::Hardware | Action::Store => {
+        Action::Resources
+        | Action::Assets
+        | Action::Settings
+        | Action::Updates
+        | Action::Hardware
+        | Action::Store => {
             eprintln!("Open the interactive Linos Server home for this view.");
             Ok(ExitCode::from(2))
         }
@@ -205,7 +210,10 @@ fn execute(action: Action) -> io::Result<ExitCode> {
 
 fn set_default_mode(mode: &str) -> io::Result<ExitCode> {
     if mode != "home" && mode != "shell" {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Choose home or shell"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Choose home or shell",
+        ));
     }
     let home = env::var_os("HOME")
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;

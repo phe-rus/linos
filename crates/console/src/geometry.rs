@@ -33,7 +33,11 @@ pub fn negotiate() -> io::Result<bool> {
         io::stdout().write_all(b"\x1b[18t")?;
         io::stdout().flush()?;
         let mut data = Vec::new();
-        let mut poll = libc::pollfd { fd, events: libc::POLLIN, revents: 0 };
+        let mut poll = libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
         while data.len() < 96 {
             // SAFETY: poll reads the initialized pollfd and does not outlive it.
             let ready = unsafe { libc::poll(&raw mut poll, 1, 180) };
@@ -43,19 +47,28 @@ pub fn negotiate() -> io::Result<bool> {
             let mut buffer = [0u8; 96];
             // SAFETY: the buffer is valid and the TTY is in raw mode.
             let count = unsafe { libc::read(fd, buffer.as_mut_ptr().cast(), buffer.len()) };
-            if count <= 0 { break; }
+            if count <= 0 {
+                break;
+            }
             data.extend_from_slice(&buffer[..count as usize]);
-            if data.ends_with(b"t") { break; }
+            if data.ends_with(b"t") {
+                break;
+            }
         }
         Ok(data)
     })();
     // SAFETY: always restore the original terminal mode, including on errors.
     let restored = unsafe { libc::tcsetattr(fd, libc::TCSANOW, &saved) };
-    if restored != 0 { return Err(io::Error::last_os_error()); }
+    if restored != 0 {
+        return Err(io::Error::last_os_error());
+    }
     let response = response?;
     if let Some((rows, cols)) = parse_report(&response) {
         let win = libc::winsize {
-            ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0,
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
         };
         // SAFETY: win is valid, and TIOCSWINSZ accepts the TTY's window size.
         if unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &win) } == 0 {
@@ -72,8 +85,7 @@ fn parse_report(bytes: &[u8]) -> Option<(u16, u16)> {
     let (rows, cols) = digits.split_once(';')?;
     let rows = rows.parse::<u16>().ok()?;
     let cols = cols.parse::<u16>().ok()?;
-    (rows >= 14 && cols >= 36 && rows <= 500 && cols <= 1000)
-        .then_some((rows, cols))
+    (rows >= 14 && cols >= 36 && rows <= 500 && cols <= 1000).then_some((rows, cols))
 }
 
 #[cfg(test)]

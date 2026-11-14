@@ -15,7 +15,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::{Action, action_for, assets::Browser, geometry, hardware, host, memory, ownership, pty, store, uptime, version};
+use super::{
+    Action, action_for, assets::Browser, geometry, hardware, host, memory, ownership, pty, store,
+    uptime, version,
+};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
@@ -26,12 +29,28 @@ const COMMANDS: &[(Action, &str, &str)] = &[
         "/status",
         "Show the health and identity of this server",
     ),
-    (Action::Resources, "/resources", "CPU, memory, swap and storage"),
+    (
+        Action::Resources,
+        "/resources",
+        "CPU, memory, swap and storage",
+    ),
     (Action::Assets, "/assets", "Browse your home directory"),
     (Action::Settings, "/settings", "System settings and About"),
-    (Action::Updates, "/updates", "Update policy and package status"),
-    (Action::Hardware, "/hardware", "Inspect detected hardware and capabilities"),
-    (Action::Store, "/store", "Browse the Linus store package inventory"),
+    (
+        Action::Updates,
+        "/updates",
+        "Update policy and package status",
+    ),
+    (
+        Action::Hardware,
+        "/hardware",
+        "Inspect detected hardware and capabilities",
+    ),
+    (
+        Action::Store,
+        "/store",
+        "Browse the Linus store package inventory",
+    ),
     (
         Action::Network,
         "/network",
@@ -44,7 +63,11 @@ const COMMANDS: &[(Action, &str, &str)] = &[
     ),
     (Action::Logs, "/logs", "Read recent journal messages"),
     (Action::Help, "/help", "See keyboard shortcuts and commands"),
-    (Action::Shell, "/shell", "Switch to the interactive Linux shell"),
+    (
+        Action::Shell,
+        "/shell",
+        "Switch to the interactive Linux shell",
+    ),
     (Action::Logout, "/logout", "Sign out of this server"),
     (
         Action::Reboot,
@@ -226,7 +249,7 @@ impl App {
             Action::Assets => {
                 self.assets.refresh().ok();
                 self.navigate(View::Assets);
-            },
+            }
             Action::Settings => self.navigate(View::Settings),
             Action::Updates => self.navigate(View::Updates),
             Action::Hardware => self.navigate(View::Hardware),
@@ -252,7 +275,10 @@ impl App {
         self.view == View::Terminal
             && self.command_pending
             && pty::Session::password_prompt_visible(&self.terminal_output)
-            && self.session.as_ref().is_some_and(|shell| !shell.echo_enabled())
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|shell| !shell.echo_enabled())
     }
 
     fn run_native_command(&mut self, command: String) -> io::Result<()> {
@@ -268,7 +294,10 @@ impl App {
         }
         if self.session.is_none() {
             let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
-            self.session = Some(pty::Session::start(rows.saturating_sub(12), cols.saturating_sub(4))?);
+            self.session = Some(pty::Session::start(
+                rows.saturating_sub(12),
+                cols.saturating_sub(4),
+            )?);
         }
         if let Some(shell) = &mut self.session {
             shell.command(&command)?;
@@ -315,11 +344,16 @@ impl App {
             }
             if key.code == KeyCode::Char('l') {
                 self.terminal_output.clear();
-                if self.view == View::Terminal { self.content.clear(); self.scroll = 0; }
+                if self.view == View::Terminal {
+                    self.content.clear();
+                    self.scroll = 0;
+                }
                 return Ok(None);
             }
             if key.code == KeyCode::Char('c') {
-                if self.view == View::Terminal && let Some(shell) = &mut self.session {
+                if self.view == View::Terminal
+                    && let Some(shell) = &mut self.session
+                {
                     shell.key(3)?;
                 }
                 return Ok(None);
@@ -330,18 +364,28 @@ impl App {
                 KeyCode::Up => {
                     self.assets.select_previous();
                     self.content = self.assets.display();
-                    self.scroll = self.assets.selected.saturating_sub(5).min(u16::MAX as usize) as u16;
+                    self.scroll = self
+                        .assets
+                        .selected
+                        .saturating_sub(5)
+                        .min(u16::MAX as usize) as u16;
                     return Ok(None);
                 }
                 KeyCode::Down => {
                     self.assets.select_next();
                     self.content = self.assets.display();
-                    self.scroll = self.assets.selected.saturating_sub(5).min(u16::MAX as usize) as u16;
+                    self.scroll = self
+                        .assets
+                        .selected
+                        .saturating_sub(5)
+                        .min(u16::MAX as usize) as u16;
                     return Ok(None);
                 }
                 KeyCode::Enter => {
                     match self.assets.activate() {
-                        Ok(Some(path)) => self.notice = format!("File selected: {}", path.display()),
+                        Ok(Some(path)) => {
+                            self.notice = format!("File selected: {}", path.display())
+                        }
                         Ok(None) => self.notice = "Folder opened".into(),
                         Err(error) => self.notice = format!("Cannot open: {error}"),
                     }
@@ -389,11 +433,14 @@ impl App {
                     return Ok(None);
                 }
                 let waiting_for_secret = self.password_input_active();
-                let action = if waiting_for_secret { None } else { self
-                    .suggestions()
-                    .get(self.highlighted)
-                    .map(|item| item.0)
-                    .or_else(|| action_for(&self.input)) };
+                let action = if waiting_for_secret {
+                    None
+                } else {
+                    self.suggestions()
+                        .get(self.highlighted)
+                        .map(|item| item.0)
+                        .or_else(|| action_for(&self.input))
+                };
                 if let Some(rest) = self.input.strip_prefix("/store ") {
                     let parts: Vec<_> = rest.split_whitespace().collect();
                     let output = match parts.as_slice() {
@@ -474,10 +521,16 @@ fn read_mem_field(key: &str) -> Option<u64> {
 }
 
 fn usage_bar(used: u64, total: u64, width: usize) -> String {
-    if total == 0 { return "Not configured".into(); }
+    if total == 0 {
+        return "Not configured".into();
+    }
     let filled = ((used.min(total) as u128 * width as u128) / total as u128) as usize;
     let percentage = ((used.min(total) as u128 * 100) / total as u128) as u64;
-    format!("[{}{}] {percentage:>3}%", "█".repeat(filled), "░".repeat(width - filled))
+    format!(
+        "[{}{}] {percentage:>3}%",
+        "█".repeat(filled),
+        "░".repeat(width - filled)
+    )
 }
 
 fn resources() -> String {
@@ -487,7 +540,13 @@ fn resources() -> String {
     let swap_free = read_mem_field("SwapFree:").unwrap_or(0) / 1024;
     let cpu = fs::read_to_string("/proc/stat")
         .ok()
-        .map(|s| s.lines().filter(|l| l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())).count())
+        .map(|s| {
+            s.lines()
+                .filter(|l| {
+                    l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())
+                })
+                .count()
+        })
         .unwrap_or(0);
     let load = fs::read_to_string("/proc/loadavg")
         .ok()
@@ -496,13 +555,12 @@ fn resources() -> String {
     let memory_used = total.saturating_sub(available);
     let swap_used = swap_total.saturating_sub(swap_free);
     let storage = system_output("/usr/bin/df", &["-k", "-P", "/"]);
-    let disk = storage.lines().nth(1)
-        .and_then(|line| {
-            let values: Vec<_> = line.split_whitespace().collect();
-            let capacity = values.get(1)?.parse::<u64>().ok()? / 1024;
-            let used = values.get(2)?.parse::<u64>().ok()? / 1024;
-            Some((used, capacity))
-        });
+    let disk = storage.lines().nth(1).and_then(|line| {
+        let values: Vec<_> = line.split_whitespace().collect();
+        let capacity = values.get(1)?.parse::<u64>().ok()? / 1024;
+        let used = values.get(2)?.parse::<u64>().ok()? / 1024;
+        Some((used, capacity))
+    });
     let mut output = format!(
         "System resources\n\nCPU  ·  {cpu} logical processors\nLoad average (1 / 5 / 15 min)\n{load}\n\nMemory\n{}\n{memory_used} / {total} MiB used    {available} MiB available\n\nSwap\n{}\n{swap_used} / {swap_total} MiB used\n\n",
         usage_bar(memory_used, total, 28),
@@ -516,16 +574,20 @@ fn resources() -> String {
     } else {
         output.push_str("Storage\nUsage unavailable\n");
     }
-    output.push_str("\nLive memory and disk usage refresh every two seconds. CPU load is not CPU utilization.");
+    output.push_str(
+        "\nLive memory and disk usage refresh every two seconds. CPU load is not CPU utilization.",
+    );
     output
 }
 
 fn settings() -> String {
-    let timezone = fs::read_to_string("/etc/timezone")
-        .unwrap_or_else(|_| "System default".into());
+    let timezone = fs::read_to_string("/etc/timezone").unwrap_or_else(|_| "System default".into());
     format!(
         "About\nLinos {} Server\nHostname               {}\n\nPreferences\nTime zone              {}\nLanguage               {}\n\nSecurity\nAuthentication         Local PAM\nCloud account          Optional\n\nSettings are currently read-only. Administrative changes will require explicit confirmation.",
-        version(), host(), timezone.trim(), env::var("LANG").unwrap_or_else(|_| "Unset".into()),
+        version(),
+        host(),
+        timezone.trim(),
+        env::var("LANG").unwrap_or_else(|_| "Unset".into()),
     )
 }
 
@@ -552,67 +614,101 @@ fn draw(frame: &mut Frame, app: &App) {
     }
 
     // Keep the main workspace centred on wide terminals, like a modern CLI.
-    let width = area.width.saturating_sub(if area.width > 100 { 8 } else { 2 });
+    let width = area
+        .width
+        .saturating_sub(if area.width > 100 { 8 } else { 2 });
     let x = area.x + (area.width - width) / 2;
     let top = area.y + 1;
     let composer_y = area.bottom().saturating_sub(5);
     let left = x + 2;
     let inner_width = width.saturating_sub(4);
 
-    paragraph_at(frame, Rect::new(x, top, width, 1), vec![
-        Line::from(vec![
-            Span::styled("◆  Linos", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
+    paragraph_at(
+        frame,
+        Rect::new(x, top, width, 1),
+        vec![Line::from(vec![
+            Span::styled(
+                "◆  Linos",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ),
             Span::styled("  13  /  Server", Style::default().fg(DIM)),
-            Span::styled(format!("    •    {}@{}", app.user, host()), Style::default().fg(DIM)),
-        ]),
-    ]);
+            Span::styled(
+                format!("    •    {}@{}", app.user, host()),
+                Style::default().fg(DIM),
+            ),
+        ])],
+    );
 
     if app.view == View::Home {
         let hero_y = top + 3;
-        paragraph_at(frame, Rect::new(left, hero_y, inner_width, 2), vec![
-            Line::styled(format!("Welcome back, {}.", app.user), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-            Line::styled("Your server is ready. What would you like to do?", Style::default().fg(DIM)),
-        ]);
+        paragraph_at(
+            frame,
+            Rect::new(left, hero_y, inner_width, 2),
+            vec![
+                Line::styled(
+                    format!("Welcome back, {}.", app.user),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Line::styled(
+                    "Your server is ready. What would you like to do?",
+                    Style::default().fg(DIM),
+                ),
+            ],
+        );
 
         if composer_y > hero_y + 11 {
             let status_y = hero_y + 4;
             frame.render_widget(
-                Block::default().title("  Server overview  ")
+                Block::default()
+                    .title("  Server overview  ")
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::DarkGray)),
                 Rect::new(x, status_y, width, 6),
             );
-            paragraph_at(frame, Rect::new(left, status_y + 1, inner_width, 4), vec![
-                Line::from(vec![
-                    Span::styled("Device       ", Style::default().fg(DIM)),
-                    Span::raw(host()),
-                ]),
-                Line::from(vec![
-                    Span::styled("Uptime       ", Style::default().fg(DIM)),
-                    Span::raw(uptime().unwrap_or_else(|| "Unavailable".into())),
-                ]),
-                Line::from(vec![
-                    Span::styled("Memory       ", Style::default().fg(DIM)),
-                    Span::raw(memory().unwrap_or_else(|| "Unavailable".into())),
-                ]),
-                Line::from(vec![
-                    Span::styled("Setup        ", Style::default().fg(DIM)),
-                    Span::raw(ownership()),
-                ]),
-            ]);
+            paragraph_at(
+                frame,
+                Rect::new(left, status_y + 1, inner_width, 4),
+                vec![
+                    Line::from(vec![
+                        Span::styled("Device       ", Style::default().fg(DIM)),
+                        Span::raw(host()),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Uptime       ", Style::default().fg(DIM)),
+                        Span::raw(uptime().unwrap_or_else(|| "Unavailable".into())),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Memory       ", Style::default().fg(DIM)),
+                        Span::raw(memory().unwrap_or_else(|| "Unavailable".into())),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Setup        ", Style::default().fg(DIM)),
+                        Span::raw(ownership()),
+                    ]),
+                ],
+            );
 
             if composer_y > status_y + 9 {
-                paragraph_at(frame, Rect::new(left, status_y + 7, inner_width, 2), vec![
-                    Line::styled("Explore your server", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
-                    Line::from(vec![
-                        Span::styled("/status  ", Style::default().fg(ACCENT)),
-                        Span::styled("Overview    ", Style::default().fg(DIM)),
-                        Span::styled("/network  ", Style::default().fg(ACCENT)),
-                        Span::styled("Network    ", Style::default().fg(DIM)),
-                        Span::styled("/services  ", Style::default().fg(ACCENT)),
-                        Span::styled("Services", Style::default().fg(DIM)),
-                    ]),
-                ]);
+                paragraph_at(
+                    frame,
+                    Rect::new(left, status_y + 7, inner_width, 2),
+                    vec![
+                        Line::styled(
+                            "Explore your server",
+                            Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+                        ),
+                        Line::from(vec![
+                            Span::styled("/status  ", Style::default().fg(ACCENT)),
+                            Span::styled("Overview    ", Style::default().fg(DIM)),
+                            Span::styled("/network  ", Style::default().fg(ACCENT)),
+                            Span::styled("Network    ", Style::default().fg(DIM)),
+                            Span::styled("/services  ", Style::default().fg(ACCENT)),
+                            Span::styled("Services", Style::default().fg(DIM)),
+                        ]),
+                    ],
+                );
             }
         }
     } else {
@@ -631,13 +727,24 @@ fn draw(frame: &mut Frame, app: &App) {
             View::Store => "Linus store",
             View::Terminal => "Terminal",
         };
-        paragraph_at(frame, Rect::new(left, top + 3, inner_width, 1), vec![
-            Line::styled(title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-        ]);
+        paragraph_at(
+            frame,
+            Rect::new(left, top + 3, inner_width, 1),
+            vec![Line::styled(
+                title,
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )],
+        );
     }
 
     let waiting_for_secret = app.password_input_active();
-    let suggestions = if waiting_for_secret { Vec::new() } else { app.suggestions() };
+    let suggestions = if waiting_for_secret {
+        Vec::new()
+    } else {
+        app.suggestions()
+    };
     let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
     let count = suggestions.len().min(5).min(available_suggestions);
     let suggestion_y = composer_y.saturating_sub(count as u16 + 1);
@@ -653,30 +760,51 @@ fn draw(frame: &mut Frame, app: &App) {
 
     for (index, (_, command, description)) in suggestions.iter().take(count).enumerate() {
         let active = index == app.highlighted.min(count - 1);
-        paragraph_at(frame, Rect::new(left, suggestion_y + index as u16, inner_width, 1), vec![
-            Line::from(vec![
+        paragraph_at(
+            frame,
+            Rect::new(left, suggestion_y + index as u16, inner_width, 1),
+            vec![Line::from(vec![
                 Span::styled(
                     format!("{} {command:<12}", if active { "›" } else { " " }),
                     Style::default().fg(if active { ACCENT } else { DIM }),
                 ),
-                Span::styled(*description, Style::default().fg(if active { Color::White } else { DIM })),
-            ]),
-        ]);
+                Span::styled(
+                    *description,
+                    Style::default().fg(if active { Color::White } else { DIM }),
+                ),
+            ])],
+        );
     }
 
     paragraph_at(
         frame,
         Rect::new(left, composer_y.saturating_sub(1), inner_width, 1),
         vec![Line::styled(
-            format!("  {}  {}", if app.view == View::Assets { "Assets" } else { "Directory" },
-                if app.view == View::Assets { app.assets.path.display().to_string() } else { app.cwd.display().to_string() }),
+            format!(
+                "  {}  {}",
+                if app.view == View::Assets {
+                    "Assets"
+                } else {
+                    "Directory"
+                },
+                if app.view == View::Assets {
+                    app.assets.path.display().to_string()
+                } else {
+                    app.cwd.display().to_string()
+                }
+            ),
             Style::default().fg(DIM),
         )],
     );
     frame.render_widget(
-        Block::default().title("  Command  ")
+        Block::default()
+            .title("  Command  ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(if app.input.is_empty() { Color::DarkGray } else { ACCENT })),
+            .border_style(Style::default().fg(if app.input.is_empty() {
+                Color::DarkGray
+            } else {
+                ACCENT
+            })),
         Rect::new(x, composer_y, width, 3),
     );
     let display_input = if waiting_for_secret {
@@ -684,17 +812,33 @@ fn draw(frame: &mut Frame, app: &App) {
     } else {
         app.input.clone()
     };
-    paragraph_at(frame, Rect::new(left, composer_y + 1, inner_width, 1), vec![
-        Line::from(vec![
+    paragraph_at(
+        frame,
+        Rect::new(left, composer_y + 1, inner_width, 1),
+        vec![Line::from(vec![
             Span::styled("› ", Style::default().fg(ACCENT)),
             Span::styled(
-                if app.input.is_empty() { if waiting_for_secret { "Password (hidden)" } else { "Type / for commands or enter a Linux command" } } else { &display_input },
-                Style::default().fg(if app.input.is_empty() { DIM } else { Color::White }),
+                if app.input.is_empty() {
+                    if waiting_for_secret {
+                        "Password (hidden)"
+                    } else {
+                        "Type / for commands or enter a Linux command"
+                    }
+                } else {
+                    &display_input
+                },
+                Style::default().fg(if app.input.is_empty() {
+                    DIM
+                } else {
+                    Color::White
+                }),
             ),
-        ]),
-    ]);
+        ])],
+    );
     // The cursor follows the user input rather than showing a static cursor glyph.
-    let cursor_x = left.saturating_add(2).saturating_add(app.input.chars().count() as u16)
+    let cursor_x = left
+        .saturating_add(2)
+        .saturating_add(app.input.chars().count() as u16)
         .min(x + width.saturating_sub(2));
     frame.set_cursor_position((cursor_x, composer_y + 1));
 
@@ -707,12 +851,17 @@ fn draw(frame: &mut Frame, app: &App) {
     } else {
         &app.notice
     };
-    paragraph_at(frame, Rect::new(x, area.bottom().saturating_sub(1), width, 1), vec![
-        Line::from(vec![
+    paragraph_at(
+        frame,
+        Rect::new(x, area.bottom().saturating_sub(1), width, 1),
+        vec![Line::from(vec![
             Span::styled(format!("◆  {footer}"), Style::default().fg(DIM)),
-            Span::styled("    / Commands · Ctrl+T Shell · Ctrl+R Fit", Style::default().fg(DIM)),
-        ]),
-    ]);
+            Span::styled(
+                "    / Commands · Ctrl+T Shell · Ctrl+R Fit",
+                Style::default().fg(DIM),
+            ),
+        ])],
+    );
 }
 
 fn interactive_shell() -> io::Result<()> {
@@ -779,8 +928,16 @@ pub fn run() -> io::Result<ExitCode> {
                     if previous != app.terminal_output.len() && app.view == View::Terminal {
                         app.content.clone_from(&app.terminal_output);
                         if app.follow_tail {
-                            let height = crossterm::terminal::size().map(|(_, h)| h.saturating_sub(14)).unwrap_or(10);
-                            app.scroll = app.content.lines().count().saturating_sub(usize::from(height)).min(usize::from(u16::MAX)) as u16;
+                            let height = crossterm::terminal::size()
+                                .map(|(_, h)| h.saturating_sub(14))
+                                .unwrap_or(10);
+                            app.scroll = app
+                                .content
+                                .lines()
+                                .count()
+                                .saturating_sub(usize::from(height))
+                                .min(usize::from(u16::MAX))
+                                as u16;
                         }
                         dirty = true;
                     }
@@ -799,7 +956,8 @@ pub fn run() -> io::Result<ExitCode> {
                                 app.notice = if geometry::negotiate()? {
                                     "Terminal geometry refreshed".into()
                                 } else {
-                                    "Terminal does not support size reporting; use stty rows/cols".into()
+                                    "Terminal does not support size reporting; use stty rows/cols"
+                                        .into()
                                 };
                                 terminal.autoresize()?;
                                 dirty = true;
@@ -855,7 +1013,10 @@ mod tests {
                 .iter()
                 .map(|cell| cell.symbol().to_owned())
                 .collect();
-            assert!(screen.contains("LINOS") || screen.contains("Linos 13"));
+            assert!(
+                screen.contains("Linos"),
+                "Missing Linos identity at {width}x{height}"
+            );
             assert!(screen.contains("Type / for commands") || width < 36 || height < 14);
         }
     }
@@ -879,7 +1040,7 @@ mod tests {
         let mut app = App::new();
         app.key(press(KeyCode::Char('/'))).unwrap();
         app.key(press(KeyCode::Char('s'))).unwrap();
-        assert_eq!(app.suggestions().len(), 5); // status, services, settings, shell, shutdown
+        assert_eq!(app.suggestions().len(), 6); // status, services, settings, store, shell, shutdown
         app.key(press(KeyCode::Char('t'))).unwrap();
         app.key(press(KeyCode::Enter)).unwrap();
         assert_eq!(app.view, View::Status);
