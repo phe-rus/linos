@@ -220,6 +220,12 @@ fn home() -> io::Result<ExitCode> {
 
 fn run(args: &[String]) -> io::Result<ExitCode> {
     match args {
+        [] if env::var_os("LINOS_EMBEDDED_PTY").is_some() => {
+            // An embedded shell is not allowed to recursively start another
+            // fullscreen Linos UI inside the parent Ratatui output panel.
+            println!("Linos Home is already running. Use /home in the Home composer.");
+            Ok(ExitCode::SUCCESS)
+        }
         [] if interactive_terminal() => home(),
         [] => {
             help();
