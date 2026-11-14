@@ -226,12 +226,31 @@ This ensures real shell built-ins, command pipelines, `sudo`, `cd`,
 `ls`, editors and SSH work according to the shell's own semantics.
 Running `linos` from a conventional shell also opens Home directly.
 
-The Home composer currently accepts Linos slash commands, not arbitrary shell
-syntax. Native execution of arbitrary commands within the Home workspace
-requires proper PTY-backed shell integration with process-group handling,
-terminal resize propagation, exit statuses, signals and interactive programs.
-Do not approximate it using `sh -c` with captured output or pretend that
-partial built-in emulation is a replacement for a shell.
+The Home composer now accepts both Linos slash commands and ordinary Linux
+commands. A persistent Linux pseudo-terminal hosts an interactive shell, so
+`cd`, environment changes, pipelines, `ls`, `git`, and other command
+invocations share state. PTY output is rendered as a **plain-text preview**,
+not as a complete ANSI emulator. Password input respects PTY echo state.
+Ctrl+C sends an interrupt to that command session.
+
+For full-screen terminal programs (Vim, tmux, interactive SSH sessions,
+complex terminal cursor movements), Ctrl+T switches to the real native Bash
+terminal instead. At the Bash prompt, Ctrl+T returns to the existing Linos
+Home session. `exit` and Ctrl+D also return. Shell mode preserves the real
+terminal semantics, but it is a separate child shell from the embedded PTY,
+so their working directories are not currently synchronized.
+
+Linos asks the host terminal for xterm window dimensions using CSI 18t.
+On supported QEMU serial terminals, this supplies real initial dimensions.
+While idle, serial geometry is rechecked periodically; Ctrl+R triggers
+manual recalibration. Standard TTY resize events also resize the embedded
+PTY. Terminals that do not support size reporting retain their kernel TTY
+dimensions until resized by other means.
+
+The interactive QEMU launcher uses KVM only if available to the Debian
+container. Otherwise QEMU software emulation remains the safe fallback.
+Normal boot minimizes successful service progress text without disabling
+critical error messages or system journal records.
 
 Login banners must not remain in the Home workspace after authentication.
 The interactive session clears the console immediately before starting Home.
