@@ -50,7 +50,7 @@ for entry in \
     usr/lib/systemd/system/getty@tty1.service.d/linos-login.conf; do
     verify_package_entry "$entry"
 done
-if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - ./usr/bin/linos | grep -aF 'Your server is ready' >/dev/null; then
+if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -xOf - ./usr/bin/linos | grep -aF 'Type / for commands or enter a Linux command' >/dev/null; then
     echo "Linos package contains an outdated server TUI binary" >&2
     exit 1
 fi
@@ -141,7 +141,7 @@ for entry in \
     verify_rootfs_entry "$entry"
 done
 
-if ! tar -xOf "$ROOTFS" ./usr/bin/linos | grep -aF 'Your server is ready' >/dev/null; then
+if ! tar -xOf "$ROOTFS" ./usr/bin/linos | grep -aF 'Type / for commands or enter a Linux command' >/dev/null; then
     echo "Incomplete rootfs: Linos TUI is not the expected build" >&2
     exit 1
 fi
