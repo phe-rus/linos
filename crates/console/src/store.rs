@@ -19,7 +19,7 @@ pub fn valid_package(name: &str) -> bool {
 
 fn inventory() -> Vec<(u64, String, String)> {
     let result = run("/usr/bin/dpkg-query",
-        &["-W", "-f=\${db:Status-Abbrev}\t\${Installed-Size}\t\${binary:Package}\t\${Version}\n"]);
+        &["-W", "-f=${db:Status-Abbrev}\t${Installed-Size}\t${binary:Package}\t${Version}\n"]);
     let mut packages: Vec<_> = result.lines().filter_map(|line| {
         let mut columns = line.split('\t');
         let status = columns.next()?;
@@ -67,7 +67,7 @@ pub fn search(query: &str) -> String {
 pub fn details(package: &str) -> String {
     if !valid_package(package) { return "Invalid package identifier.".into(); }
     let installed = run("/usr/bin/dpkg-query",
-        &["-W", "-f=Installed-size: \${Installed-Size} KiB\nVersion: \${Version}\n", package]);
+        &["-W", "-f=Installed-size: ${Installed-Size} KiB\nVersion: ${Version}\n", package]);
     let available = run("/usr/bin/apt-cache", &["show", package]);
     format!("Linus store / {package}\n\nINSTALLED\n{installed}\n\nREPOSITORY\n{}\n\nRead-only details.", available.lines().take(30).collect::<Vec<_>>().join("\n"))
 }
