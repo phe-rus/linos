@@ -7,6 +7,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod geometry;
 mod pty;
 mod tui;
 
@@ -204,6 +205,9 @@ fn set_default_mode(mode: &str) -> io::Result<ExitCode> {
 }
 
 fn home() -> io::Result<ExitCode> {
+    // Serial consoles often lack window geometry. Ask the terminal emulator
+    // before Ratatui takes over, falling back to the kernel TTY size.
+    let _ = geometry::negotiate();
     tui::run()
 }
 
