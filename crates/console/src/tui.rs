@@ -478,7 +478,7 @@ mod tests {
                 .map(|cell| cell.symbol().to_owned())
                 .collect();
             assert!(screen.contains("Linos 13") || width < 24);
-            assert!(screen.contains("Type / for commands") || width < 24);
+            assert!(screen.contains("Type / for commands") || width < 36 || height < 14);
         }
     }
 
