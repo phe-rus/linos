@@ -430,6 +430,13 @@ fn read_mem_field(key: &str) -> Option<u64> {
         .ok()
 }
 
+fn usage_bar(used: u64, total: u64, width: usize) -> String {
+    if total == 0 { return "Not configured".into(); }
+    let filled = ((used.min(total) as u128 * width as u128) / total as u128) as usize;
+    let percentage = ((used.min(total) as u128 * 100) / total as u128) as u64;
+    format!("[{}{}] {percentage:>3}%", "█".repeat(filled), "░".repeat(width - filled))
+}
+
 fn resources() -> String {
     let total = read_mem_field("MemTotal:").unwrap_or(0) / 1024;
     let available = read_mem_field("MemAvailable:").unwrap_or(0) / 1024;
@@ -441,14 +448,33 @@ fn resources() -> String {
         .unwrap_or(0);
     let load = fs::read_to_string("/proc/loadavg")
         .ok()
-        .map(|s| s.split_whitespace().take(3).collect::<Vec<_>>().join(" "))
+        .map(|s| s.split_whitespace().take(3).collect::<Vec<_>>().join("  "))
         .unwrap_or_else(|| "Unavailable".into());
-    let disk = system_output("/usr/bin/df", &["-h", "-P", "/"]);
-    format!(
-        "PROCESSOR\nLogical CPUs           {cpu}\nLoad average           {load}\n\nMEMORY\nUsed                   {} MiB\nAvailable              {available} MiB\nInstalled              {total} MiB\n\nSWAP\nUsed                   {} MiB\nTotal                  {swap_total} MiB\n\nSTORAGE\n{disk}\n\nTip: /status for device identity.",
-        total.saturating_sub(available),
-        swap_total.saturating_sub(swap_free),
-    )
+    let memory_used = total.saturating_sub(available);
+    let swap_used = swap_total.saturating_sub(swap_free);
+    let storage = system_output("/usr/bin/df", &["-k", "-P", "/"]);
+    let disk = storage.lines().nth(1)
+        .and_then(|line| {
+            let values: Vec<_> = line.split_whitespace().collect();
+            let capacity = values.get(1)?.parse::<u64>().ok()? / 1024;
+            let used = values.get(2)?.parse::<u64>().ok()? / 1024;
+            Some((used, capacity))
+        });
+    let mut output = format!(
+        "SYSTEM RESOURCES\n\nCPU  ·  {cpu} logical processors\nLoad average (1 / 5 / 15 min)\n{load}\n\nMEMORY\n{}\n{memory_used} / {total} MiB used    {available} MiB available\n\nSWAP\n{}\n{swap_used} / {swap_total} MiB used\n\n",
+        usage_bar(memory_used, total, 28),
+        usage_bar(swap_used, swap_total, 28)
+    );
+    if let Some((used, capacity)) = disk {
+        output.push_str(&format!(
+            "STORAGE  ·  Root filesystem\n{}\n{used} / {capacity} MiB used\n",
+            usage_bar(used, capacity, 28),
+        ));
+    } else {
+        output.push_str("STORAGE\nUsage unavailable\n");
+    }
+    output.push_str("\nLive memory and disk usage refresh every two seconds. CPU load is not CPU utilization.");
+    output
 }
 
 fn assets() -> String {
@@ -853,6 +879,13 @@ mod tests {
         assert_eq!(app.view, View::Home);
         let shortcut = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
         assert_eq!(app.key(shortcut).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn resource_bars_handle_zero_and_percentages() {
+        assert!(usage_bar(0, 0, 12).contains("Not configured"));
+        assert!(usage_bar(5, 10, 10).contains("50%"));
+        assert!(usage_bar(15, 10, 10).contains("100%"));
     }
 
     #[test]
