@@ -1,6 +1,6 @@
 # Linos architecture
 
-Linos is its own Linux-based operating system, designed as a coherent system rather than a desktop environment or a renamed Debian installation. Debian 13 repositories and packages are an initial bootstrap dependency. Long term, Linos owns its system architecture, integration, identity, policies, services, release model and distribution choices. Linux application compatibility is an intentional boundary, not a commitment to adopt Debian's product design. The first engineering milestone is a stable, headless server image; graphical software is out of scope for the present phase.
+Linos is an independent Linux-based operating-system product, **not a Debian spin by design**. Debian 13 repositories currently supply bootstrap packages, but Linos does not intend to inherit Debian's product logic, application integration contracts, kernel policy, user experience or release structure. In the broad technical sense, Linos distributes Linux software; its project identity is a consumer-oriented rethink of how the operating system functions as a coherent experience. The first engineering milestone is a dependable Server edition; desktop and other editions are future platforms, not the current booted image.
 
 ## Product philosophy and distribution boundary
 
@@ -9,6 +9,43 @@ Linos is its own Linux-based operating system, designed as a coherent system rat
 - Start from Debian packages and `apt` as implementation inputs, not a permanent identity. Record which base components Linos adopts, changes or eventually replaces.
 - Maintain compatibility deliberately: changing packaging or system internals requires migration plans and measurable tests.
 - Keep the server core independent of any future desktop shell.
+
+## Product ownership versus upstream dependencies
+
+| Layer | Initial implementation | Linos ownership target |
+| --- | --- | --- |
+| Software supply | Debian 13 packages and APT | Curated upstream inputs, Linos packaging policies, native apps and Linus store |
+| Kernel | Debian-packaged kernel in QEMU | Reproducible Linos kernel builds/configuration profiles, tested for each supported target |
+| Boot/service management | Linux initramfs and systemd | Linos lifecycle, defaults, capability management, recovery/upgrade contracts and UX |
+| Login/permissions | PAM, standard Linux identities | Linos authentication experience and fine-grained authorization, retaining secure Linux boundaries |
+| App experience | Ordinary Linux binaries; early Rust console tools | Linos SDK, native UI framework, integration contracts, permission model and edition-aware app lifecycle |
+| Filesystem interaction | Linux filesystem and read-only Assets browser | Assets as a full native file manager with safe operations, previews and platform integration |
+| Release engineering | Development packages and QEMU smoke tests | Signed, reproducible releases that enforce compatible kernel and platform contracts |
+
+**Dependence does not imply product inheritance.** Conversely, the currently booted system cannot be called independent of Debian's kernel and service defaults until the relevant Linos-owned implementation and validation exist.
+
+## Kernel and performance contract
+
+The target isn't a collection of fashionable optimization flags. Linos needs a source-controlled, reproducible performance and kernel policy that is consistent across supported hardware and releases.
+
+1. Pin the upstream kernel source/version and document patches, config fragments and firmware/module provenance.
+2. Build configuration from a common Linos baseline plus explicit hardware-capability profiles, failing on unsupported config drift during upgrades.
+3. Define user-facing budgets for interactive latency, boot, power, memory pressure, storage I/O and responsiveness under background activity.
+4. Test compositor/input/display pipelines together with CPU scheduling, graphics drivers and userspace. Display fluidity and animation physics are predominantly whole-platform properties, not kernel-only switches.
+5. Preserve kernel security, ABI/driver compatibility, recovery paths and support windows; require benchmarks and regression tests before switching policy.
+6. Record per-edition and per-device validation. A server, laptop, television and handheld can share platform principles without sharing an identical configuration.
+
+The **current** build installs a Debian kernel. These kernel profiles and upgrade enforcement are planned, not implemented. The goal of consistent responsiveness is an acceptance target, not a measured current result.
+
+## Native application model and development experience
+
+Rust is the preferred language for Linos-owned systems software and the intended native app platform. The architecture should provide Linos UI primitives, app manifests, permissions, accessibility APIs, application lifecycle, launch/install contracts, and tooling so third-party developers can build applications that actually feel native.
+
+A convenient single-file Rust runner is a target developer workflow: a small source file should be compilable and runnable with one obvious Linos command, hiding temporary build artifacts and offering sensible caching and diagnostics. This requires explicit security and dependency rules. It does not make Rust an interpreted language, and must not execute untrusted source silently.
+
+Applications can have different integration levels: fully native Linos apps, Linux-compatible apps with managed integration, and legacy/isolated apps. The OS cannot guarantee arbitrary third-party apps look or behave identically without cooperation or compatibility technology.
+
+The long-term Linus store acts as a discovery, permissions, distribution, update and review platform across Linos editions. Its current implementation is only a read-only dpkg/APT browser and transaction simulator. Assets is currently a read-only TUI browser, not yet the graphical native file manager.
 
 ## Layers and boundaries
 
