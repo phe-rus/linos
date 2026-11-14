@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::{Action, action_for, geometry, host, memory, ownership, pty, uptime, version};
+use super::{Action, action_for, assets::Browser, geometry, host, memory, ownership, pty, uptime, version};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
@@ -90,6 +90,8 @@ struct App {
     session: Option<pty::Session>,
     terminal_output: String,
     follow_tail: bool,
+    assets: Browser,
+    cwd: std::path::PathBuf,
 }
 
 impl App {
@@ -106,6 +108,8 @@ impl App {
             session: None,
             terminal_output: String::new(),
             follow_tail: true,
+            assets: Browser::new(),
+            cwd: env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/")),
         }
     }
 
@@ -136,7 +140,7 @@ impl App {
                 ownership(),
             ),
             View::Resources => resources(),
-            View::Assets => assets(),
+            View::Assets => self.assets.display(),
             View::Settings => settings(),
             View::Updates => updates(),
             View::Terminal => self.terminal_output.clone(),
@@ -207,7 +211,10 @@ impl App {
             Action::Home => self.navigate(View::Home),
             Action::Status => self.navigate(View::Status),
             Action::Resources => self.navigate(View::Resources),
-            Action::Assets => self.navigate(View::Assets),
+            Action::Assets => {
+                self.assets.refresh().ok();
+                self.navigate(View::Assets);
+            },
             Action::Settings => self.navigate(View::Settings),
             Action::Updates => self.navigate(View::Updates),
             Action::Network => self.navigate(View::Network),
@@ -293,6 +300,37 @@ impl App {
                 return Ok(None);
             }
         }
+        if self.view == View::Assets && self.input.is_empty() {
+            match key.code {
+                KeyCode::Up => {
+                    self.assets.select_previous();
+                    self.content = self.assets.display();
+                    return Ok(None);
+                }
+                KeyCode::Down => {
+                    self.assets.select_next();
+                    self.content = self.assets.display();
+                    return Ok(None);
+                }
+                KeyCode::Enter => {
+                    match self.assets.activate() {
+                        Ok(Some(path)) => self.notice = format!("File selected: {}", path.display()),
+                        Ok(None) => self.notice = "Folder opened".into(),
+                        Err(error) => self.notice = format!("Cannot open: {error}"),
+                    }
+                    self.content = self.assets.display();
+                    return Ok(None);
+                }
+                KeyCode::Backspace => {
+                    if let Err(error) = self.assets.parent() {
+                        self.notice = format!("Cannot navigate: {error}");
+                    }
+                    self.content = self.assets.display();
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
         match key.code {
             KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if self.input.chars().count() < 100 {
@@ -328,6 +366,19 @@ impl App {
                     .get(self.highlighted)
                     .map(|item| item.0)
                     .or_else(|| action_for(&self.input)) };
+                if let Some(path) = self.input.strip_prefix("/assets/") {
+                    let path = std::path::PathBuf::from(format!("/{path}"));
+                    let result = self.assets.open(&path);
+                    self.input.clear();
+                    match result {
+                        Ok(()) => {
+                            self.navigate(View::Assets);
+                            self.notice = format!("Assets · {}", self.assets.path.display());
+                        }
+                        Err(error) => self.notice = format!("Cannot open Assets path: {error}"),
+                    }
+                    return Ok(None);
+                }
                 if let Some(action) = action {
                     return Ok(self.apply(action));
                 }
@@ -570,6 +621,15 @@ fn draw(frame: &mut Frame, app: &App) {
         ]);
     }
 
+    paragraph_at(
+        frame,
+        Rect::new(left, composer_y.saturating_sub(1), inner_width, 1),
+        vec![Line::styled(
+            format!("  {}  {}", if app.view == View::Assets { "ASSETS" } else { "DIRECTORY" },
+                if app.view == View::Assets { app.assets.path.display().to_string() } else { app.cwd.display().to_string() }),
+            Style::default().fg(DIM),
+        )],
+    );
     frame.render_widget(
         Block::default().title("  COMMAND  ")
             .borders(Borders::ALL)
@@ -660,6 +720,12 @@ pub fn run() -> io::Result<ExitCode> {
                     dirty = true;
                 }
                 if let Some(shell) = &mut app.session {
+                    if let Some(cwd) = shell.current_dir() {
+                        if app.cwd != cwd {
+                            app.cwd = cwd;
+                            dirty = true;
+                        }
+                    }
                     let previous = app.terminal_output.len();
                     shell.drain(&mut app.terminal_output);
                     if previous != app.terminal_output.len() && app.view == View::Terminal {
