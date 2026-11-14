@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use super::{Action, action_for, assets::Browser, geometry, host, memory, ownership, pty, uptime, version};
+use super::{Action, action_for, assets::Browser, geometry, hardware, host, memory, ownership, pty, store, uptime, version};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::Gray;
@@ -30,6 +30,8 @@ const COMMANDS: &[(Action, &str, &str)] = &[
     (Action::Assets, "/assets", "Browse your home directory"),
     (Action::Settings, "/settings", "System settings and About"),
     (Action::Updates, "/updates", "Update policy and package status"),
+    (Action::Hardware, "/hardware", "Inspect detected hardware and capabilities"),
+    (Action::Store, "/store", "Browse the Linus store package inventory"),
     (
         Action::Network,
         "/network",
@@ -69,6 +71,8 @@ enum View {
     Settings,
     Updates,
     Terminal,
+    Hardware,
+    Store,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,6 +149,8 @@ impl App {
             View::Assets => self.assets.display(),
             View::Settings => settings(),
             View::Updates => updates(),
+            View::Hardware => hardware::report(),
+            View::Store => store::overview(),
             View::Terminal => self.terminal_output.clone(),
             View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
             View::Services => system_output(
@@ -171,6 +177,8 @@ impl App {
                 "/assets       Browse your home directory (read-only)",
                 "/settings     Device settings and About",
                 "/updates      Update policy and installed package status",
+                "/hardware     Detected hardware and CPU details",
+                "/store        Linus store package inventory and previews",
                 "/network      Network interfaces",
                 "/services     Running services",
                 "/logs         Recent system events",
@@ -202,6 +210,8 @@ impl App {
             View::Assets => "Assets · home directory".into(),
             View::Settings => "System settings".into(),
             View::Updates => "Update information".into(),
+            View::Hardware => "Hardware details".into(),
+            View::Store => "Linus store".into(),
             View::Terminal => "Linux command session · PTY".into(),
         };
     }
@@ -219,6 +229,8 @@ impl App {
             },
             Action::Settings => self.navigate(View::Settings),
             Action::Updates => self.navigate(View::Updates),
+            Action::Hardware => self.navigate(View::Hardware),
+            Action::Store => self.navigate(View::Store),
             Action::Network => self.navigate(View::Network),
             Action::Services => self.navigate(View::Services),
             Action::Logs => self.navigate(View::Logs),
@@ -382,6 +394,21 @@ impl App {
                     .get(self.highlighted)
                     .map(|item| item.0)
                     .or_else(|| action_for(&self.input)) };
+                if let Some(rest) = self.input.strip_prefix("/store ") {
+                    let parts: Vec<_> = rest.split_whitespace().collect();
+                    let output = match parts.as_slice() {
+                        ["installed"] => store::installed(),
+                        ["search", words @ ..] if !words.is_empty() => store::search(&words.join(" ")),
+                        ["info", package] => store::details(package),
+                        ["install", package] => store::preview("install", package),
+                        ["remove", package] => store::preview("remove", package),
+                        _ => "Usage: /store installed | search QUERY | info PACKAGE | install PACKAGE | remove PACKAGE".into(),
+                    };
+                    self.input.clear();
+                    self.navigate(View::Store);
+                    self.content = output;
+                    return Ok(None);
+                }
                 if let Some(path) = self.input.strip_prefix("/assets/") {
                     let path = std::path::PathBuf::from(format!("/{path}"));
                     let result = self.assets.open(&path);
@@ -600,6 +627,8 @@ fn draw(frame: &mut Frame, app: &App) {
             View::Assets => "Assets",
             View::Settings => "Settings",
             View::Updates => "Updates",
+            View::Hardware => "Hardware",
+            View::Store => "Linus store",
             View::Terminal => "Terminal",
         };
         paragraph_at(frame, Rect::new(left, top + 3, inner_width, 1), vec![
