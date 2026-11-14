@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+# Install only the optional username-hint hook, never replace PAM login rules.
+HOOK='session optional pam_exec.so quiet /usr/lib/linos/linos-login --record-session'
+case "${1:-}" in
+    configure)
+        if [ -f /etc/pam.d/login ] && ! grep -Fqx "$HOOK" /etc/pam.d/login; then
+            printf '\n# Linos: remember the last successful local console username only.\n%s\n' "$HOOK" >> /etc/pam.d/login
+        fi
+        ;;
+esac
+exit 0
