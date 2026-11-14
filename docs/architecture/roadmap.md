@@ -120,6 +120,21 @@ is deliberately disabled.
 
 **Acceptance:** demonstrate reproducible improvements without data loss or starvation.
 
+## Consumer platform independence (planned, not validated)
+
+The differentiation target is not a reskinned Debian environment. Stable upstream repositories are an initial **software source** while Linos defines its own kernel policies, lifecycle, application integration, accessibility, design language, update/recovery guarantees and developer experience.
+
+- [ ] Design an app manifest, installation policy, permission prompts and application lifecycle contract independent of Debian UI conventions.
+- [ ] Specify native Rust UI primitives, input/animation timing, accessibility and platform SDK boundaries with an implementable sample app.
+- [ ] Prototype a single-file Rust run command with compilation cache, diagnostics, dependency policy and explicit trust boundary.
+- [ ] Expand Assets from read-only navigation into a safe, searchable file manager with previews and confirmed mutation operations.
+- [ ] Expand Linus store from dpkg/APT previews into managed transactions, recovery, versioning and developer publishing.
+- [ ] Define transparent integration levels for native Linos apps, compatible Linux apps and isolated/legacy apps.
+- [ ] Establish measurable user-experience criteria: latency, consistency, comprehension, task completion, accessibility and error recovery.
+- [ ] Establish shared product contracts across Server, Desktop, mobile, television and other supported targets while preserving edition-specific behaviour.
+
+**Milestone acceptance:** demonstrate a nontrivial native Linos application and a compatible upstream application both following the same documented lifecycle and permissions framework, with user testing and reproducible performance results. Packaging familiarity alone does not count as completion.
+
 ## Release gates
 
 | Release stage | Current evidence | Gate |
@@ -134,7 +149,7 @@ A green unit test suite is not proof of a successful QEMU boot. Screenshots repr
 
 ## Product independence
 
-Debian repositories, `apt` and the Debian kernel are first-stage build inputs, not the identity of Linos. Incrementally define Linos-owned package policies, core services, system behavior and release infrastructure. Preserve deliberate Linux compatibility and avoid a breaking "rewrite everything" transition.
+Linos is **not intended as a Debian spin**. Debian's stable repositories are an initial software supply, not a commitment to Debian's product experience, package presentation, kernel configuration, runtime contracts or OS design. The immediate technical reality is still that development images boot Debian's kernel and use Debian-managed packages. Owning and validating replacements or integration layers is an explicit roadmap requirement. Preserve deliberate Linux compatibility and avoid a breaking rewrite of everything at once.
 
 ## Later: user experience
 
