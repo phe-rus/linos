@@ -1,4 +1,26 @@
-# Linos Server console (first iteration)
+# Linos 13 Server console
+
+> **Current implementation, 14 November 2026:** Linos Home is a full-screen native Ratatui terminal application, not the early numbered menu described in the historical notes below. The validated visual experience includes adaptive Home, Assets, Settings, Resources, and Cliclack enrollment/sign-in. The embedded PTY still has a reported false-password-state bug, so it is not release-ready. Hardware and Linus store views have been introduced in source but have not yet been validated in a rebuilt guest.
+
+## Current interaction contract
+
+- Interactive local sign-in uses the system authentication stack, remembers the last username, and launches Home automatically.
+- Home supports native slash routes, including `/home`, `/assets`, `/resources`, `/settings`, `/hardware` and `/store`. The last two are still pending QEMU validation.
+- Ordinary commands use a persistent Linux PTY; the view displays the current directory above the command composer. Child full-screen applications should currently run in native Shell mode using Ctrl+T.
+- A separate native Bash session remains accessible with Ctrl+T. Ctrl+D or `exit` returns to Home; Ctrl+T at an interactive Bash prompt is supported when the Linos Bash configuration is installed.
+- `/assets` supports keyboard file browsing without mutating the filesystem. `/resources` displays CPU load and memory, swap and root storage readings, including proportional bars.
+- The serial-console terminal size is recalibrated with Ctrl+R and on compatible terminal size changes. Screenshots demonstrate the large-terminal layout; small terminals and real serial/SSH terminal variations require additional testing.
+- Settings currently displays device values only. Hardware identification is conservative and read-only. Linus store presently uses dpkg/APT for read-only inventory and simulation; actual package transactions require a future confirmation and authorization flow.
+- The Linos development VM boots a Debian packaged kernel. Linos-specific kernel configuration and update preservation are not yet implemented.
+- Ordinary commands must **not** demand repeated administrator login passwords. Privileged operations using `sudo` retain the normal Linux authorization boundary. The false `Password (hidden)` state is an active blocker.
+
+For milestones, evidence and release gates, see [current status](current-status.md) and [roadmap](roadmap.md).
+
+## Historical implementation notes
+
+The following records trace earlier development decisions. Where they conflict with the current interaction contract above, the current contract is authoritative.
+
+
 
 The `linos` command is a native Rust system-administration entry point.
 It is an **application**, not a login-shell replacement, terminal emulator,
