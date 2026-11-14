@@ -92,6 +92,9 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     send -- "$username\r"
     await {Password:}
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
+    # Interactive sign-in enters the Linos Server home first.
+    await {Linos 13 / Server}
+    send -- "/shell\r"
     await {[$] }
     send -- "stty -echo\r"
     await {[$] }
@@ -100,6 +103,10 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     # No shell startup file or prompt customization is required.
     send -- "linos status | grep -q 'Linos 13  /  Server' && echo LINOS_CONSOLE_OK\r"
     await {LINOS_CONSOLE_OK}
+    send -- "test \"\$(hostname)\" = '$username-server' && echo LINOS_HOSTNAME_OK\r"
+    await {LINOS_HOSTNAME_OK}
+    send -- "grep -q 'Linos 13 Server' /etc/motd && echo LINOS_MOTD_OK\r"
+    await {LINOS_MOTD_OK}
 
     # The guest gets test-only networking; Linos's image defaults stay unchanged.
     send -- "sudo -S -p 'LINOS_SUDO:' sh -c 'dev=\$(ls /sys/class/net | grep -v lo | head -1); ip link set \"\$dev\" up; ip addr add 10.0.2.15/24 dev \"\$dev\"'; echo LINOS_NETWORK_READY\r"
