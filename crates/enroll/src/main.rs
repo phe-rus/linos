@@ -293,6 +293,10 @@ fn enroll() -> io::Result<()> {
         &format!("username={username}\ndevice-id={device_id}"),
     )?;
     commit_provisioned_state()?;
+    // This marker contains no owner identifiers, only the public fact
+    // that first-run setup completed. Private owner data stays root-only.
+    fs::create_dir_all("/etc/linos")?;
+    fs::write("/etc/linos/setup-complete", b"ready\n")?;
     fs::remove_file(pending)?;
     ui::completed(&username)?;
     // First-time setup needs a clean boot so hostname, locale and network are active.

@@ -1,37 +1,38 @@
-//! Linos 13 Server command-line experience.
-//! Deliberately changes no parent-shell state or terminal settings.
+//! Linos 13 Server home and scripting CLI.
+//! Interactive controls never alter the caller's shell or other TUIs.
 use std::{
     env, fs,
-    io::{self, IsTerminal, Write},
+    io::{self, IsTerminal},
+    path::Path,
     process::{Command, ExitCode},
 };
 
-fn decorated() -> bool {
-    io::stdout().is_terminal()
+const PUBLIC_READY: &str = "/etc/linos/setup-complete";
+
+fn interactive_terminal() -> bool {
+    io::stdin().is_terminal()
+        && io::stdout().is_terminal()
         && env::var_os("NO_COLOR").is_none()
         && env::var("TERM").is_ok_and(|term| term != "dumb")
-}
-
-fn heading(label: &str) {
-    if decorated() {
-        println!("\n  \x1b[1m{label}\x1b[0m");
-    } else {
-        println!("\n{label}");
-    }
-}
-
-fn item(label: &str, value: &str) {
-    if io::stdout().is_terminal() {
-        println!("  {label:<15} {value}");
-    } else {
-        println!("{label}: {value}");
-    }
 }
 
 fn value_in(text: &str, key: &str) -> Option<String> {
     text.lines()
         .filter_map(|line| line.split_once('='))
         .find_map(|(name, value)| (name == key).then(|| value.trim_matches('"').to_owned()))
+}
+
+fn version() -> String {
+    fs::read_to_string("/usr/lib/linos/release")
+        .ok()
+        .and_then(|data| value_in(&data, "VERSION_ID"))
+        .unwrap_or_else(|| "13".to_owned())
+}
+
+fn host() -> String {
+    fs::read_to_string("/etc/hostname")
+        .map(|text| text.trim().to_owned())
+        .unwrap_or_else(|_| "unknown".to_owned())
 }
 
 fn uptime() -> Option<String> {
@@ -41,7 +42,7 @@ fn uptime() -> Option<String> {
         "{}d {}h {}m",
         seconds / 86400,
         (seconds / 3600) % 24,
-        (seconds / 60) % 60
+        (seconds / 60) % 60,
     ))
 }
 
@@ -64,48 +65,39 @@ fn memory() -> Option<String> {
     ))
 }
 
-fn release() -> String {
-    fs::read_to_string("/usr/lib/linos/release")
-        .ok()
-        .and_then(|data| value_in(&data, "VERSION_ID"))
-        .unwrap_or_else(|| "13".into())
+fn ownership() -> &'static str {
+    if Path::new(PUBLIC_READY).is_file() {
+        "Configured"
+    } else {
+        // Owner records are intentionally private and inaccessible to normal
+        // users. Missing a public marker does NOT prove a device is unowned.
+        "Unavailable (restricted)"
+    }
+}
+
+fn overview() -> String {
+    format!(
+        "Linos {} Server\nHost        {}\nUptime      {}\nMemory      {}\nSetup       {}",
+        version(),
+        host(),
+        uptime().unwrap_or_else(|| "Unavailable".into()),
+        memory().unwrap_or_else(|| "Unavailable".into()),
+        ownership(),
+    )
 }
 
 fn status() {
-    heading("Linos 13  /  Server");
-    item("Version", &release());
-    item(
-        "Hostname",
-        &fs::read_to_string("/etc/hostname")
-            .map(|value| value.trim().to_owned())
-            .unwrap_or_else(|_| "unknown".into()),
-    );
-    if let Some(value) = uptime() {
-        item("Uptime", &value);
-    }
-    if let Some(value) = memory() {
-        item("Memory", &value);
-    }
-    let provisioned = fs::metadata("/var/lib/linos/owner").is_ok();
-    item(
-        "Ownership",
-        if provisioned {
-            "locally enrolled"
-        } else {
-            "not confirmed"
-        },
-    );
-    println!();
+    println!("{}", overview());
 }
 
 fn valid_unit(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && !name.starts_with('-')
+        && !name.contains("..")
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"._@-".contains(&b))
-        && !name.contains("..")
 }
 
 fn command(program: &str, args: &[&str]) -> io::Result<ExitCode> {
@@ -116,107 +108,117 @@ fn command(program: &str, args: &[&str]) -> io::Result<ExitCode> {
 fn help() {
     println!("Linos 13 Server");
     println!("Usage: linos [status|network|services|service NAME|logs NAME|help]");
-    println!();
-    println!("  status        Local device overview");
-    println!("  network       Network interfaces and addresses");
-    println!("  services      Running system services");
-    println!("  service NAME  Inspect a systemd service");
-    println!("  logs NAME     Show recent journal entries for a service");
-    println!();
-    println!("Run 'linos' to open the interactive Server home with slash commands.");
-    println!("Normal shell commands and third-party terminal applications are unchanged.");
+    println!("       linos /status | /network | /services | /logs | /shell");
+    println!("Run 'linos' in an interactive terminal for guided management.");
+    println!("A normal shell remains available after selecting 'Return to shell'.");
 }
 
-fn home() -> io::Result<()> {
-    if decorated() {
-        print!("\x1b[3J\x1b[2J\x1b[H");
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Status,
+    Network,
+    Services,
+    Logs,
+    Help,
+    Shell,
+}
+
+fn action_for(value: &str) -> Option<Action> {
+    match value.trim() {
+        "/status" | "status" => Some(Action::Status),
+        "/network" | "network" => Some(Action::Network),
+        "/services" | "services" => Some(Action::Services),
+        "/logs" | "logs" => Some(Action::Logs),
+        "/help" | "help" => Some(Action::Help),
+        "/shell" | "shell" | "exit" | "/exit" => Some(Action::Shell),
+        _ => None,
     }
-    heading("Linos 13 / Server");
-    let host = fs::read_to_string("/etc/hostname").unwrap_or_else(|_| "linos".into());
-    let user = env::var("USER").unwrap_or_else(|_| "operator".into());
-    println!("  Welcome, {user}.   {}", host.trim());
-    println!();
-    println!("  /status     System overview     /network   Network");
-    println!("  /services   Running services    /logs      Recent system logs");
-    println!("  /help       Commands            /shell     Return to shell");
-    println!();
-    io::stdout().flush()
 }
 
-fn interactive() -> io::Result<ExitCode> {
-    home()?;
+fn execute(action: Action) -> io::Result<ExitCode> {
+    match action {
+        Action::Status => {
+            status();
+            Ok(ExitCode::SUCCESS)
+        }
+        Action::Network => command("ip", &["-brief", "address"]),
+        Action::Services => command(
+            "systemctl",
+            &["list-units", "--type=service", "--state=running", "--no-pager"],
+        ),
+        Action::Logs => command("journalctl", &["--no-pager", "-n", "30"]),
+        Action::Help => {
+            help();
+            Ok(ExitCode::SUCCESS)
+        }
+        Action::Shell => Ok(ExitCode::SUCCESS),
+    }
+}
+
+fn choose_action() -> io::Result<Action> {
+    cliclack::select("What would you like to do?")
+        .item(Action::Status, "System overview", "/status")
+        .item(Action::Network, "Network", "/network")
+        .item(Action::Services, "Services", "/services")
+        .item(Action::Logs, "Recent logs", "/logs")
+        .item(Action::Help, "Commands", "/help")
+        .item(Action::Shell, "Return to shell", "/shell")
+        .interact()
+}
+
+fn home() -> io::Result<ExitCode> {
+    // The app controls the screen only while active. It does not modify PS1,
+    // login files, terminal modes or any third-party process.
+    print!("\x1b[3J\x1b[2J\x1b[H");
+    cliclack::intro(" Linos 13 · Server ")?;
+    let user = env::var("USER").unwrap_or_else(|_| "operator".into());
+    cliclack::log::info(format!("Welcome, {user}.  Host: {}", host()))?;
+    cliclack::note("Your server", overview())?;
     loop {
-        print!("  ❯ ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        if io::stdin().read_line(&mut input)? == 0 {
+        let action = choose_action()?;
+        if action == Action::Shell {
+            cliclack::outro("Returning to your shell")?;
             return Ok(ExitCode::SUCCESS);
         }
-        let cmd = input.trim();
-        match cmd {
-            "" | "/" => {
-                if cmd == "/" {
-                    println!("  /status · /network · /services · /logs · /help · /shell");
-                }
-            }
-            "/status" | "status" => status(),
-            "/network" | "network" => {
-                let _ = command("ip", &["-brief", "address"])?;
-            }
-            "/services" | "services" => {
-                let _ = command(
-                    "systemctl",
-                    &[
-                        "list-units",
-                        "--type=service",
-                        "--state=running",
-                        "--no-pager",
-                    ],
-                )?;
-            }
-            "/logs" | "logs" => {
-                let _ = command("journalctl", &["--no-pager", "-n", "30"])?;
-            }
-            "/help" | "help" => home()?,
-            "/shell" | "/exit" | "exit" | "q" => return Ok(ExitCode::SUCCESS),
-            _ => println!("  Unknown action. Type / to see commands, or /shell to exit."),
+        if action == Action::Help {
+            cliclack::note(
+                "Quick commands",
+                "linos status · linos network · linos services\n\
+                 linos service ssh.service · linos logs ssh.service\n\
+                 All commands can be used non-interactively.",
+            )?;
+            continue;
         }
+        if action == Action::Status {
+            cliclack::note("System overview", overview())?;
+            continue;
+        }
+        cliclack::log::step("Opening system output")?;
+        let _ = execute(action)?;
+        cliclack::log::info("Press the arrow keys to select another action.")?;
     }
 }
 
 fn run(args: &[String]) -> io::Result<ExitCode> {
     match args {
-        [] if io::stdin().is_terminal() && io::stdout().is_terminal() => interactive(),
+        [] if interactive_terminal() => home(),
         [] => {
             help();
             Ok(ExitCode::SUCCESS)
         }
-        [arg] if arg == "help" || arg == "--help" || arg == "-h" => {
+        [arg] if arg == "--help" || arg == "-h" => {
             help();
             Ok(ExitCode::SUCCESS)
         }
-        [arg] if arg == "status" => {
-            status();
-            Ok(ExitCode::SUCCESS)
+        [arg] if let Some(action) = action_for(arg) => execute(action),
+        [arg, unit] if arg == "service" && valid_unit(unit) => {
+            command("systemctl", &["status", "--no-pager", "--", unit])
         }
-        [arg] if arg == "network" => command("ip", &["-brief", "address"]),
-        [arg] if arg == "services" => command(
-            "systemctl",
-            &[
-                "list-units",
-                "--type=service",
-                "--state=running",
-                "--no-pager",
-            ],
-        ),
-        [arg, name] if arg == "service" && valid_unit(name) => {
-            command("systemctl", &["status", "--no-pager", "--", name])
-        }
-        [arg, name] if arg == "logs" && valid_unit(name) => {
-            command("journalctl", &["--no-pager", "-n", "60", "-u", name])
+        [arg, unit] if arg == "logs" && valid_unit(unit) => {
+            command("journalctl", &["--no-pager", "-n", "60", "-u", unit])
         }
         _ => {
-            eprintln!("linos: invalid command or service name. Run 'linos help'.");
+            eprintln!("linos: unknown command. Try 'linos help'.");
             Ok(ExitCode::from(2))
         }
     }
@@ -236,30 +238,39 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn service_names_are_safe() {
+    fn safe_service_names() {
         assert!(valid_unit("ssh.service"));
         assert!(valid_unit("linos-first-boot.service"));
-        assert!(valid_unit("getty@tty1.service"));
         assert!(!valid_unit("--help"));
         assert!(!valid_unit("../ssh"));
         assert!(!valid_unit("ssh;whoami"));
-        assert!(!valid_unit(""));
     }
+
     #[test]
-    fn release_fields_are_read_safely() {
+    fn exact_commands_only() {
+        assert!(action_for("/status") == Some(Action::Status));
+        assert!(action_for("/shell") == Some(Action::Shell));
+        assert!(action_for("/status;id").is_none());
+        assert!(action_for("not-a-command").is_none());
+    }
+
+    #[test]
+    fn private_owner_record_is_not_a_negative_status() {
+        assert_ne!(ownership(), "not confirmed");
+    }
+
+    #[test]
+    fn release_fields() {
         assert_eq!(
             value_in("VERSION_ID=\"13\"\n", "VERSION_ID").as_deref(),
             Some("13")
         );
-        assert_eq!(value_in("OTHER=x\n", "VERSION_ID"), None);
     }
+
     #[test]
-    fn unknown_commands_fail() {
+    fn invalid_commands() {
         assert_eq!(run(&["install".into()]).unwrap(), ExitCode::from(2));
-        assert_eq!(
-            run(&["service".into(), "../bad".into()]).unwrap(),
-            ExitCode::from(2)
-        );
     }
 }

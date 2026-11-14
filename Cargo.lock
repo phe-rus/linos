@@ -37,6 +37,9 @@ dependencies = [
 [[package]]
 name = "linos-console"
 version = "0.1.0"
+dependencies = [
+ "cliclack",
+]
 
 [[package]]
 name = "console"
