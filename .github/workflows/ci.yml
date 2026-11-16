@@ -45,7 +45,7 @@ jobs:
 
       - name: Validate shell scripts
         run: |
-          for file in build/*.sh; do bash -n "$file"; done
+          for file in build/*.sh kernel/*.sh; do bash -n "$file"; done
 
       - name: Install image-building dependencies
         run: |
