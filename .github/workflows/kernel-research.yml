@@ -207,6 +207,26 @@ jobs:
           bash build/media.sh amd64
           bash tests/boot.sh uefi
 
+      - name: Package tested Linos kernel candidate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          archive="$RUNNER_TEMP/linos-kernel-${LINOS_KERNEL_VERSION}-${{ matrix.arch }}.tar.gz"
+          tar -C "$RUNNER_TEMP/kernel-out" -czf "$archive" linos-kernel
+          sha256sum "$archive" > "$archive.sha256"
+          echo "Kernel candidate: $archive"
+
+      - name: Upload test-passed experimental kernel
+        uses: actions/upload-artifact@v7
+        with:
+          name: linos-kernel-${{ matrix.arch }}-experimental
+          path: |
+            ${{ runner.temp }}/linos-kernel-*.tar.gz
+            ${{ runner.temp }}/linos-kernel-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload evidence (not full kernel outputs)
         if: always()
         uses: actions/upload-artifact@v7
