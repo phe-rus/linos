@@ -16,7 +16,7 @@ WORK="$(mktemp -d /tmp/linos-recovery.XXXXXXXX)"
 trap 'rm -r -- "$WORK"' EXIT
 chmod 755 "$WORK"
 
-cargo build --release -p recovery
+cargo build --release -p infs --bin recovery
 install -m 755 target/release/recovery "$WORK/linos-recovery"
 install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.service"
 install -m 644 packages/release/usr/lib/linos/release "$WORK/release"

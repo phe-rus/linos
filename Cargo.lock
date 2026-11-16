@@ -327,10 +327,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "detect"
-version = "0.1.0"
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,14 +367,6 @@ name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
-
-[[package]]
-name = "enroll"
-version = "0.1.0"
-dependencies = [
- "cliclack",
- "rustix",
-]
 
 [[package]]
 name = "equivalent"
@@ -653,6 +641,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "infs"
+version = "0.1.0"
+dependencies = [
+ "cliclack",
+ "crossterm",
+ "libc",
+ "ratatui",
+ "rustix",
+]
+
+[[package]]
 name = "init"
 version = "0.1.0"
 dependencies = [
@@ -740,22 +739,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e752191d037c44ad111a8caa762921926658402f01cc1253f7bef2020ece4f5e"
 dependencies = [
  "bitflags 2.13.2",
-]
-
-[[package]]
-name = "linos-console"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "libc",
- "ratatui",
-]
-
-[[package]]
-name = "linos-login"
-version = "0.1.0"
-dependencies = [
- "cliclack",
 ]
 
 [[package]]
@@ -1288,10 +1271,6 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
 ]
-
-[[package]]
-name = "recovery"
-version = "0.1.0"
 
 [[package]]
 name = "redox_syscall"

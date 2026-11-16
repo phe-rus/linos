@@ -139,8 +139,8 @@ jobs:
       - name: Check recovery crate
         run: |
           cargo +stable fmt --all -- --check
-          cargo +stable clippy -p recovery --all-targets --locked -- -D warnings
-          cargo +stable test -p recovery --locked
+          cargo +stable clippy -p infs --all-targets --locked -- -D warnings
+          cargo +stable test -p infs --locked
 
       - name: Install recovery-build dependencies
         run: |
