@@ -25,6 +25,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: linos-kernel-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   kernel-qemu:
     name: ${{ matrix.arch }} · signed source, Linos kernel, QEMU boot
