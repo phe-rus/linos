@@ -118,7 +118,7 @@ jobs:
             --output "$keydir/security.asc"
           (
             cd "$keydir"
-            printf '%s\\n' \
+            printf '%s\n' \
               '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
               '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
               | sha256sum --check
@@ -134,7 +134,7 @@ jobs:
           set -Eeuo pipefail
           bash build/package.sh
           bash build/image.sh
-          build_id="$(sed -n 's/^BUILD_ID="\\([^"]*\\)"$/\\1/p' packages/release/usr/lib/linos/release)"
+          build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' packages/release/usr/lib/linos/release)"
           echo "LINOS_ROOTFS=$GITHUB_WORKSPACE/images/server/builds/amd64/$build_id/rootfs.tar" >> "$GITHUB_ENV"
 
       - name: Assemble disposable Server with research kernel
