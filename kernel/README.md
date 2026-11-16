@@ -1,103 +1,59 @@
-# Kernel
+# Linos kernel
 
-Linos 13 is a Linux operating system, built as a coherent Linos product. Its first research kernel uses verified upstream Linux source, while Linos owns hardware qualification, the boot contract, releases, interface policies and ultimately independently engineered improvements. It is **not** a newly written kernel and is **not** a production kernel yet.
+**Linos** is the kernel. **Linos 13** is the operating-system release that uses Linos. Server, Desktop and future device families are OS editions and device qualifications, not separate kernels with unrelated source histories.
 
-## Minimal source structure
+## Implementation and boundaries
 
-- `build.sh` — research kernel build. No host installation or device writes.
-- `README.md` — kernel contract and first engineering milestones.
+The current Linos kernel is derived from verified upstream Linux, not a clean-room kernel and not yet a production release. It reuses Linux's scheduling, memory, filesystem, networking, virtualization, security and driver implementations. We build, configure, package, test and eventually modify this Linux-derived kernel under the Linos identity, retaining Linux license and attribution requirements.
 
-Add directories such as `patches/`, `config/` or `tests/` **only when real patches, configuration policies or tests exist**. Hardware support is described in `hardware/` as reusable device profiles and driver/firmware dependencies. Existing Rust console, authentication and recovery code stays where it is until a tested migration exists.
-
-## Initial Linux baselines (16 November 2026)
-
-- Research: upstream stable tag `v7.3.4`.
-- Qualification comparison: upstream LTS tag `v6.18.63`.
-- Existing working Server fallback: the Debian-built 6.12 kernel installed by `build/image.sh`.
-
-Those are distinct tracks. The latest source is not automatically faster, more compatible or safe for every device. Versions must be advanced deliberately and benchmarked.
-
-## Reproducible research build (not a release)
-
-Bring an upstream Linux git checkout of the exact release tag and configure GnuPG with a **verified trusted upstream maintainer signing key**. The builder refuses tags without a valid trusted signature and refuses a mismatched checkout. Do not fetch and automatically trust whatever key the download server returns.
-
-```sh
-# In a separate upstream Linux checkout already at v7.3.4:
-./build/kernel.sh build amd64 /path/to/linux /tmp/linos-kernel-amd64
-
-# Optional LTS comparison, with source checkout at v6.18.63:
-LINOS_KERNEL_RELEASE=6.18.63 ./build/kernel.sh build amd64 /path/to/linux-lts /tmp/linos-kernel-lts
-```
-
-The build produces a kernel image, modules build output, resolved `.config`, and `provenance.txt`. Output is isolated outside the upstream source and the Linos repository. ARM64 requires a suitable native or cross-compilation toolchain; the first script assumes native compilers and does not yet configure cross-compilation. It does **not** install modules in the root filesystem, produce an initramfs, make an EFI image, sign a release, or pass boot tests.
-
-### Kernel acceptance gate
-
-1. Verify source signatures, source revision, complete resolved configuration, toolchain and module compatibility.
-2. Boot the kernel with an assembled Linos initramfs and matching modules on disposable QEMU amd64/arm64 disks.
-3. Compare networking, storage, logging, local sign-in, recovery and resource behavior against the existing Server image.
-4. Measure correctness, latency distributions, CPU, I/O, memory and regression under repeatable workloads.
-5. Only then allow the image builder to opt into the Linos-compiled kernel. Preserve the Debian-kernel route until the new path passes.
-6. Record verified release artifacts with a signed manifest and rollback-compatible boot assets.
-
-## Disposable Server kernel integration
-
-The kernel research CI now includes a second, more meaningful test:
-
-1. Build the research kernel and stage its matching modules using `build/kernel.sh build`.
-2. Build the existing Linos Server Debian-based root filesystem using `build/package.sh` and `build/image.sh`.
-3. Use `build/kernel.sh server-image` to inject the Linos-built kernel and modules into a **temporary copy** of that rootfs and generate a matching initramfs in an isolated chroot.
-4. Use `tests/kernel.sh` to boot the resulting temporary ext4 disk in QEMU with `-snapshot`, and check sign-in, device identity and the kernel release string.
-
-This adds an **automated acceptance test in source**. It does not demonstrate a passing test until the corresponding GitHub Actions run completes successfully. The installed Server/UEFI builder and existing Debian-kernel fallback remain unchanged. On failure, review the uploaded serial/QEMU logs and make the smallest necessary correction before promoting anything.
-
-A successful test proves kernel-to-Server compatibility for this single virtual configuration; it does **not** qualify hardware, updates, graphics or physical installation.
-
-## Boot media contract for PCs
-
-The user-facing USB shall have **two folders at the root**, as requested:
+The kernel's `uname -r` release uses a `-linos` suffix independent of the Linos OS generation number. The userspace's Linos 13 identity, editions, interfaces and applications remain in `system/`.
 
 ```text
-FAT32 USB root/
-  EFI/
-    BOOT/
-      BOOTX64.EFI
-    Linos/
-      ... signed UEFI boot configuration and image ...
-  linos.pherus.org/
-    ... signed installation/recovery payload ...
+kernel/
+  source.conf              # verified upstream release candidates
+  config/
+    common.config          # minimum common kernel policy
+    amd64.config           # amd64 QEMU boot prerequisites
+    arm64.config           # arm64 QEMU boot prerequisites
+  README.md
+
+build/kernel.sh             # kernel build and temporary Server image assembly
+tests/kernel.sh             # real Linos Server QEMU boot verification
+.github/workflows/kernel-research.yml
 ```
 
-The contents above are a **design target**, not the current output of `build/media.sh`. This repo currently uses a systemd-boot QEMU UEFI image with a kernel/initramfs stored under `/linos` on the ESP. Avoid claiming the two-root-folder copy-to-USB experience already works.
+We do not copy the entire Linux source tree into the OS repo. The selected signed upstream release is fetched into an isolated build workspace. Only reviewed original Linos patches should be added under `kernel/patches/` when they exist.
 
-For x86-64 PCs, FAT32 copying can be supported once the EFI entry is tested with UEFI firmware and the payload fits the filesystem's individual-file limit (< 4 GiB); otherwise split payload files or use a second partition without changing the two-folder user-facing entry. ExFAT is not a generic UEFI boot guarantee.
+## Kernel build and release-candidate contract
 
-A Unified Kernel Image (UKI) can embed the signed kernel, initramfs and boot metadata; signed boot assets must not accept arbitrary replacement kernel modules or unsanctioned configuration in supported builds. Developer Mode changes diagnostic access, not secure-boot authority.
+```sh
+# Source tree must be the exact checked-out signed upstream release tag;
+# trusted maintainer keys must already be installed and fingerprint-verified.
+bash build/kernel.sh build amd64 /path/to/upstream/linux /tmp/linos-amd64
+# Native ARM64 builder with an ARM64 upstream checkout:
+bash build/kernel.sh build arm64 /path/to/upstream/linux /tmp/linos-arm64
+```
 
-### Installed layout
+The build:
+1. Selects an allowlisted upstream source tag from `source.conf`, checks the exact source commit, rejects tracked modifications and verifies its signature.
+2. Applies `common.config` and the architecture-specific policy fragment, resolves Kconfig dependencies, and **fails** if required options were silently dropped.
+3. Builds the Linux kernel and matching modules under the **Linos** release suffix.
+4. Stages a `linos-kernel/` artifact with kernel image, final configuration, System.map, modules, provenance and SHA256SUMS.
+5. Leaves the existing bootable Linos Server images and installed physical devices untouched.
 
-The existing planned installed disk contains EFI, Recovery, System A, System B and Data. The **system** is protected and omitted from normal file-manager views; power-user and developer modes expose inspectable paths through authorization, without making protected system data writable by default. No user data is stored in a system slot. Boot checks and rollback must be validated before physical installations are enabled.
+This is a *release candidate*, not an authenticated or device-qualified production kernel. SHA-256 integrity checks do not replace signed release metadata or Secure Boot.
 
-### Boot experience
+## Evidence and acceptance
 
-Cold boot -> firmware -> verified bootloader/UKI -> kernel/initramfs -> system and devices -> Linos sign-in/Home. Present a Linos logo using the repository's licensed/approved branding assets during firmware/early-boot where supported, then transition without flickering into edition-specific sign-in. Quiet boot is a presentation policy: logs remain available via developer/recovery diagnostics and never hide fatal boot errors. Server retains serial and console visibility when needed. No borrowed Apple art is used.
+The isolated kernel research workflow is configured for native amd64 and arm64 builders. Each should verify the source signature, build and stage modules, check the package hashes and boot a minimal QEMU initramfs. Each should then create a **disposable** Server image with the built Linos kernel and regenerated matching initramfs, and verify that the actual Linos Server sign-in is reached under that running kernel.
 
-## Mobile, TV, car
+An earlier **amd64-only** kernel CI run passed source verification, kernel compilation, minimal QEMU boot and actual Linos Server boot. The new two-architecture tests must pass separately; adding them to CI is not proof of success.
 
-- **TV:** per-device boot chain, remotes, codecs and power qualification; may not implement UEFI.
-- **Mobile:** supported device-specific bootloader and verified-boot requirements; device recognition can use USB modes, hardware reports and signed board profiles. An on-device or host-assisted wizard offers network-based driver discovery **only when compatible boot/firmware and trusted drivers exist**. No unknown-address probing, bypass of locked bootloaders, firmware guessing or writes to unqualified devices. No honest engineering team can guarantee *zero* bricking risk on every smartphone, especially across vendors. Until proven, mobile mode is read-only detection, capability planning and diagnostics.
-- **Car:** non-safety-critical infotainment only; no powertrain/steering/braking actuation. Vehicle support requires separate qualification and OEM integration.
+Before Linos can become the default **Linos 13** kernel we still require:
+- Both native architectures passing the full test, including storage/network and login compatibility.
+- The regular image/UEFI builder selecting a validated Linos kernel as one versioned unit with modules, initramfs and firmware dependencies.
+- Signed release manifests, UEFI boot integrity, independent recovery and rollback, and physical-device support qualification.
+- Repeatable correctness, reliability, latency, throughput and power baselines against a conventional kernel.
+- Actual reviewed Linos kernel changes, when measurements justify them. No scheduler/memory superiority is claimed yet.
 
-Hardware download must validate signed device profile, exact board/revision, driver/kernel interfaces, dependencies, authorized signing keys and recovery path. An internet connection does not guarantee a suitable driver exists. Devices can remain safely unsupported.
-
-## App model
-
-Debian packages initially bootstrap the OS and compatibility with existing applications. Users interact with Linos Home, Assets, Settings and Linus store, not raw APT. Developers should be able to compile portable Rust, Kotlin/Compose and React/TypeScript projects for the Linos application contract through their familiar toolchains, with adapters for platform-dependent APIs. Language alone cannot ensure an Android APK will run without Android-specific framework support.
-
-## Future implementation
-
-- **Source/CI implemented, run unverified:** `.github/workflows/kernel-research.yml` verifies a pinned upstream signing-key fingerprint, builds and stages matching modules, and boots a minimal BusyBox initramfs in isolated amd64 QEMU on kernel changes. This does not boot Linos Server, certify a kernel or publish images. The workflow must pass before any such claim.
-- Introduce the two-root-folder copy-to-USB builder and UEFI QEMU boot acceptance.
-- Make hardware-profile resolution an explicit safe step; track verified vs absent capabilities.
-- Build the Linos graphical Desktop and preserve the existing Server boot path.
-- Validate signed A/B updates and real-device support after the QEMU prototype is sound.
+**No percentage of kernel completion is meaningful without these independently verifiable gates.** The build-and-QEMU foundation is implemented; integrated release and hardware qualification are unfinished. Completion of this kernel foundation is a prerequisite to developing broader hardware intelligence or UI resource policies.
