@@ -26,8 +26,24 @@ case "$PROFILE" in
     recovery) BUILD_DIR="images/recovery/builds/$ARCH/$BUILD_ID" ;;
     *) echo "Unsupported UEFI profile: $PROFILE" >&2; exit 2 ;;
 esac
-KERNEL="$BUILD_DIR/boot/kernel"
-INITRAMFS="$BUILD_DIR/boot/initramfs"
+# Explicit research override: consume a disposable kernel+Server image, never
+# overwrite a normal Linos 13 image. This mode is not a signed release path.
+if [[ -n "${LINOS_KERNEL_TEST_IMAGE_DIR:-}" ]]; then
+    [[ "$PROFILE" == server ]] || { echo "Research kernel requires server profile" >&2; exit 2; }
+    BUILD_DIR="$(realpath -- "$LINOS_KERNEL_TEST_IMAGE_DIR")"
+    [[ -s "$BUILD_DIR/kernel-release" && -s "$BUILD_DIR/architecture" ]] || {
+        echo "Missing independently assembled Linos kernel provenance" >&2; exit 2;
+    }
+    [[ "$(cat "$BUILD_DIR/architecture")" == "$ARCH" &&
+       "$(cat "$BUILD_DIR/kernel-release")" == *-linos ]] || {
+        echo "Unqualified or wrong-architecture research kernel" >&2; exit 2;
+    }
+    KERNEL="$BUILD_DIR/kernel"
+    INITRAMFS="$BUILD_DIR/initramfs"
+else
+    KERNEL="$BUILD_DIR/boot/kernel"
+    INITRAMFS="$BUILD_DIR/boot/initramfs"
+fi
 ROOTFS="$BUILD_DIR/disk.ext4"
 OUTPUT="$BUILD_DIR/disk-uefi.raw"
 
