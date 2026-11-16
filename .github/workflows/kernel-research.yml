@@ -2,32 +2,11 @@ name: Kernel research (isolated)
 
 # Runs on kernel changes and can be dispatched manually. Research only: no device writes, release publication, or upgrades.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'kernel/**'
-      - 'build/**'
-      - 'system/src/**'
-      - 'system/release/**'
-      - 'tests/kernel.sh'
-      - '.github/workflows/kernel-research.yml'
-  workflow_dispatch:
-    inputs:
-      release:
-        description: Pinned upstream release to research
-        type: choice
-        options:
-          - '7.3.4'
-          - '6.18.63'
-        required: true
-        default: '7.3.4'
+  # Only the main CI workflow may start expensive kernel compilation.
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: linos-kernel-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   kernel-qemu:
@@ -36,6 +15,7 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - arch: amd64
@@ -77,7 +57,7 @@ jobs:
       - name: Fetch pinned upstream source with signed tag
         shell: bash
         env:
-          RELEASE: ${{ inputs.release || '7.3.4' }}
+          RELEASE: '7.3.4'
         run: |
           set -Eeuo pipefail
           git clone --depth 1 --branch "v$RELEASE" \
@@ -90,7 +70,7 @@ jobs:
       - name: Build kernel and matching modules
         shell: bash
         env:
-          RELEASE: ${{ inputs.release || '7.3.4' }}
+          RELEASE: '7.3.4'
         run: |
           set -Eeuo pipefail
           LINOS_KERNEL_RELEASE="$RELEASE" LINOS_KERNEL_JOBS=4 \
