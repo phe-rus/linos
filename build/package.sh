@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-CONTROL="packages/release/DEBIAN/control"
-RELEASE="packages/release/usr/lib/linos/release"
+CONTROL="system/release/DEBIAN/control"
+RELEASE="system/release/usr/lib/linos/release"
 
 PACKAGE_VERSION="$(awk '/^Version:/ { print $2 }' "$CONTROL")"
 PRODUCT_VERSION="$(sed -n 's/^VERSION_ID="\([^"]*\)"$/\1/p' "$RELEASE")"
@@ -23,7 +23,7 @@ if [[ ! "$PRODUCT_VERSION" =~ ^[0-9]+$ ]] ||
     exit 2
 fi
 
-OUTPUT="packages/dist/linos${PRODUCT_VERSION}_${CHANNEL}_v${PACKAGE_VERSION}.deb"
+OUTPUT="system/dist/linos${PRODUCT_VERSION}_${CHANNEL}_v${PACKAGE_VERSION}.deb"
 
 if [[ "${1:-}" == "--print-path" ]]; then
     printf '%s\n' "$OUTPUT"
@@ -31,7 +31,7 @@ if [[ "${1:-}" == "--print-path" ]]; then
 fi
 
 if [[ $# -ne 0 ]]; then
-    echo "Usage: ./build/system/package.sh [--print-path]" >&2
+    echo "Usage: ./build/package.sh [--print-path]" >&2
     exit 2
 fi
 
@@ -49,12 +49,12 @@ if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
     exit 2
 fi
 
-cargo build --release -p init -p infs --bins
+cargo build --release --bins
 
 STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
 mkdir -p "$STAGING_DIR/package"
-cp -a packages/release/. "$STAGING_DIR/package/"
+cp -a system/release/. "$STAGING_DIR/package/"
 # GitHub-created maintainer scripts may not retain executable mode.
 chmod 755 "$STAGING_DIR/package/DEBIAN/postinst" "$STAGING_DIR/package/DEBIAN/postrm"
 
@@ -65,8 +65,8 @@ install -m 755 target/release/linos-login "$STAGING_DIR/package/usr/lib/linos/li
 mkdir -p "$STAGING_DIR/package/usr/bin"
 install -m 755 target/release/linos "$STAGING_DIR/package/usr/bin/linos"
 mkdir -p "$STAGING_DIR/package/etc/profile.d"
-install -m 644 system/base/identity/linos-welcome.sh "$STAGING_DIR/package/etc/profile.d/linos-welcome.sh"
-install -m 644 system/base/identity/linos-shell.bashrc "$STAGING_DIR/package/usr/lib/linos/linos-shell.bashrc"
+install -m 644 system/identity/linos-welcome.sh "$STAGING_DIR/package/etc/profile.d/linos-welcome.sh"
+install -m 644 system/identity/linos-shell.bashrc "$STAGING_DIR/package/usr/lib/linos/linos-shell.bashrc"
 
 UNIT_DIR="$STAGING_DIR/package/usr/lib/systemd/system"
 WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
@@ -93,5 +93,5 @@ for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.s
 done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 
-mkdir -p packages/dist
+mkdir -p system/dist
 dpkg-deb --root-owner-group --build "$STAGING_DIR/package" "$OUTPUT"

@@ -45,7 +45,7 @@ jobs:
 
       - name: Validate shell scripts
         run: |
-          for file in build/*/*.sh; do bash -n "$file"; done
+          for file in build/*.sh tests/*.sh; do bash -n "$file"; done
 
       - name: Install image-building dependencies
         run: |
@@ -78,17 +78,17 @@ jobs:
 
       - name: Build Linos package and server image
         run: |
-          ./build/system/package.sh
-          ./build/system/image.sh
+          ./build/package.sh
+          ./build/image.sh
 
       - name: Boot smoke test
-        run: ./build/system/smoke.sh ${{ matrix.arch }}
+        run: ./tests/server.sh smoke ${{ matrix.arch }}
 
       - name: Verify device identity across two persistent boots
-        run: ./build/system/persistence.sh ${{ matrix.arch }}
+        run: ./tests/server.sh persistence ${{ matrix.arch }}
 
       - name: Exercise interrupted and completed console enrollment
-        run: ./build/system/enrollment.sh ${{ matrix.arch }}
+        run: ./tests/enrollment.sh ${{ matrix.arch }}
 
       - name: Install AMD64 UEFI build and firmware dependencies
         if: matrix.arch == 'amd64'
@@ -97,16 +97,16 @@ jobs:
       - name: Build and firmware-boot AMD64 GPT image
         if: matrix.arch == 'amd64'
         run: |
-          ./build/hardware/uefi.sh amd64
-          ./build/hardware/uefi-smoke.sh
+          ./build/media.sh amd64
+          ./tests/boot.sh uefi
 
       - name: Build offline Server installation payload
         if: matrix.arch == 'amd64'
-        run: ./build/hardware/payload.sh amd64
+        run: ./build/recovery.sh payload amd64
 
       - name: Simulate installation and firmware boot on disposable GPT disk
         if: matrix.arch == 'amd64'
-        run: ./build/hardware/install-simulation.sh
+        run: ./tests/installation.sh simulation
 
       - name: Upload boot diagnostics on failure
         if: failure()
@@ -139,8 +139,8 @@ jobs:
       - name: Check recovery crate
         run: |
           cargo +stable fmt --all -- --check
-          cargo +stable clippy -p infs --all-targets --locked -- -D warnings
-          cargo +stable test -p infs --locked
+          cargo +stable clippy -p linos --bin recovery --locked -- -D warnings
+          cargo +stable test -p linos --bin recovery --locked
 
       - name: Install recovery-build dependencies
         run: |
@@ -150,7 +150,7 @@ jobs:
             gdisk dosfstools mtools systemd-boot-efi ovmf qemu-system-x86
 
       - name: Validate disposable GPT Server layout
-        run: ./build/hardware/layout-test.sh
+        run: ./tests/installation.sh layout
 
       - name: Install verified Debian 13 archive keys
         run: |
@@ -175,10 +175,10 @@ jobs:
           echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
       - name: Build independent recovery image
-        run: ./build/hardware/recovery-image.sh amd64
+        run: ./build/recovery.sh image amd64
 
       - name: Boot Recovery through OVMF
-        run: ./build/hardware/recovery-smoke.sh
+        run: ./tests/boot.sh recovery
 
       - name: Upload recovery diagnostics on failure
         if: failure()
@@ -205,7 +205,7 @@ jobs:
           cargo +stable fmt --all -- --check
           cargo +stable clippy --workspace --all-targets --locked -- -D warnings
           cargo +stable test --workspace --locked
-          for file in build/*/*.sh; do bash -n "$file"; done
+          for file in build/*.sh tests/*.sh; do bash -n "$file"; done
 
       - name: Install build, GPT, and firmware dependencies
         run: |
@@ -238,19 +238,19 @@ jobs:
 
       - name: Build offline Server payload
         run: |
-          ./build/system/package.sh
-          ./build/system/image.sh
-          ./build/hardware/payload.sh amd64
+          ./build/package.sh
+          ./build/image.sh
+          ./build/recovery.sh payload amd64
 
       - name: Sign payload with disposable CI-only Ed25519 key
         run: |
           openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/linos-ci-test-private.pem"
           openssl pkey -in "$RUNNER_TEMP/linos-ci-test-private.pem" -pubout \
             -out "$RUNNER_TEMP/linos-ci-test-public.pem"
-          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           payload="images/install/payloads/amd64/$build_id"
           LINOS_PAYLOAD_SIGNING_KEY="$RUNNER_TEMP/linos-ci-test-private.pem" \
-            ./build/hardware/sign-payload.sh "$payload"
+            ./build/recovery.sh sign "$payload"
           openssl pkeyutl -verify -rawin -pubin -inkey "$RUNNER_TEMP/linos-ci-test-public.pem" \
             -in "$payload/SHA256SUMS" -sigfile "$payload/SHA256SUMS.sig"
           # A one-byte mutation must be rejected without touching the original payload.
@@ -265,8 +265,8 @@ jobs:
 
       - name: Embed offline payload into independent Recovery
         run: |
-          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
-          LINOS_INSTALL_PAYLOAD_DIR="images/install/payloads/amd64/$build_id" ./build/hardware/recovery-image.sh amd64
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          LINOS_INSTALL_PAYLOAD_DIR="images/install/payloads/amd64/$build_id" ./build/recovery.sh image amd64
           disk="images/recovery/builds/amd64/$build_id/disk.ext4"
           debugfs -R 'cat /usr/share/linos/install/manifest' "$disk" 2>/dev/null \
             | grep -qx 'edition=server'
@@ -276,7 +276,7 @@ jobs:
             | grep -q 'BEGIN PUBLIC KEY'
 
       - name: Boot recovery media with offline payload
-        run: ./build/hardware/recovery-smoke.sh
+        run: ./tests/boot.sh recovery
 
       - name: Upload installer-media diagnostics on failure
         if: failure()

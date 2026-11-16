@@ -29,14 +29,14 @@ Captured on 14 November 2026 from `main` at `8cce91d`, with pre-existing local c
 
 Product authorities: [PRODUCT.md](PRODUCT.md), [vision](docs/vision.md), [architecture](docs/architecture/overview.md) and [master development plan](docs/plans/linos13-master-plan.md). [Engineering status](docs/architecture/current-status.md) reports earlier VM demonstrations; those screenshots are not committed here and were not independently inspected in this pass. Historical evidence is not proof of the current combined source.
 
-Implementation authorities: [Home and interaction](crates/console/src/tui.rs), [CLI entry](crates/console/src/main.rs), [terminal geometry](crates/console/src/geometry.rs), [Assets](crates/console/src/assets.rs), [setup](crates/enroll/src/ui.rs), [sign-in](crates/login/src/main.rs), [PTY](crates/console/src/pty.rs), [Hardware](crates/console/src/hardware.rs), [Linus store](crates/console/src/store.rs) and [Recovery](crates/recovery/src/main.rs). The lockfile resolves Ratatui 0.30.2, Crossterm 0.29.0 and Cliclack 0.5.7; setup and login do not supply a custom Cliclack theme.
+Implementation authorities: [Home and interaction](system/src/console/tui.rs), [CLI entry](system/src/console/main.rs), [terminal geometry](system/src/console/geometry.rs), [Assets](system/src/console/assets.rs), [setup](system/src/setup/ui.rs), [sign-in](system/src/login.rs), [PTY](system/src/console/pty.rs), [Hardware](system/src/console/hardware.rs), [Linus store](system/src/console/store.rs) and [Recovery](system/src/recovery/main.rs). The lockfile resolves Ratatui 0.30.2, Crossterm 0.29.0 and Cliclack 0.5.7; setup and login do not supply a custom Cliclack theme.
 
 | Evidence level | What it establishes |
 | --- | --- |
 | Source observed | Layout arithmetic, styling, event handlers, prompt configuration and read-only operations described below. |
 | Previously reported VM evidence | Setup, sign-in, Home, Assets, Resources, Settings and resizing, as recorded in engineering status. |
 | Source only / unverified here | Hardware, Linus store, newer PTY password handling and the merged working tree. |
-| Current validation blocker | `cargo test --workspace --locked` fails at `crates/console/src/pty.rs:147` with an unterminated character literal. The incomplete expression also exists in pulled `main`; no current render, successful test run or rebuilt guest is claimed. |
+| Current validation blocker | `cargo test --workspace --locked` fails at `system/src/console/pty.rs:147` with an unterminated character literal. The incomplete expression also exists in pulled `main`; no current render, successful test run or rebuilt guest is claimed. |
 
 The frontmatter intentionally has no CSS color, font-size, radius or spacing scales. This native implementation uses ANSI color roles and terminal cells; inventing hex colors or pixel tokens would create a false source of truth. The sidecar records native measurements and clearly labeled browser illustrations, not a new runtime theme.
 

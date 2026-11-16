@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # This is the UEFI boot foundation, not yet the Linos Recovery installer.
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-amd64}"
@@ -14,7 +14,7 @@ if [[ "$ARCH" != amd64 ]]; then
     exit 2
 fi
 
-BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
 if [[ ! "$BUILD_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "Invalid release build identifier" >&2
     exit 2
@@ -39,7 +39,7 @@ for utility in sgdisk mkfs.vfat mmd mcopy dd; do
 done
 for path in "$KERNEL" "$INITRAMFS" "$ROOTFS"; do
     if [[ ! -s "$path" ]]; then
-        echo "Missing boot artifact: $path; first run ./build/system/image.sh" >&2
+        echo "Missing boot artifact: $path; first run ./build/image.sh" >&2
         exit 2
     fi
 done

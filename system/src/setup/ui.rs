@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::setup::{Language, Network, Settings};
+use crate::configuration::{Language, Network, Settings};
 
 fn interactive() -> bool {
     io::stdin().is_terminal()
@@ -78,7 +78,7 @@ pub fn password(username: &str) -> io::Result<()> {
 pub fn configure(username: &str, _current_hostname: &str) -> io::Result<Settings> {
     if !interactive() {
         println!("Using system defaults for region and networking.");
-        return Ok(Settings::defaults(&crate::setup::hostname_from_username(
+        return Ok(Settings::defaults(&crate::configuration::hostname_from_username(
             username,
         )));
     }
@@ -108,9 +108,9 @@ pub fn configure(username: &str, _current_hostname: &str) -> io::Result<Settings
         .interact()?;
 
     let hostname: String = cliclack::input("Server hostname")
-        .default_input(&crate::setup::hostname_from_username(username))
+        .default_input(&crate::configuration::hostname_from_username(username))
         .validate(|value: &String| {
-            if crate::setup::valid_hostname(value) {
+            if crate::configuration::valid_hostname(value) {
                 Ok(())
             } else {
                 Err("Use 1-63 lowercase letters, digits or hyphens.")

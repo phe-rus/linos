@@ -6,9 +6,10 @@ on:
     branches: [main]
     paths:
       - 'kernel/**'
-      - 'build/kernel/**'
-      - 'build/system/**'
-      - 'build/hardware/**'
+      - 'build/**'
+      - 'system/src/**'
+      - 'system/release/**'
+      - 'tests/kernel.sh'
       - '.github/workflows/kernel-research.yml'
   workflow_dispatch:
     inputs:
@@ -72,7 +73,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           LINOS_KERNEL_RELEASE="$RELEASE" LINOS_KERNEL_JOBS=4 \
-            bash build/kernel/build.sh amd64 "$RUNNER_TEMP/linux" "$RUNNER_TEMP/kernel-out"
+            bash build/kernel.sh build amd64 "$RUNNER_TEMP/linux" "$RUNNER_TEMP/kernel-out"
 
       - name: Boot minimal initramfs under QEMU
         shell: bash
@@ -137,20 +138,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          bash build/system/package.sh
-          bash build/system/image.sh
-          build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' packages/release/usr/lib/linos/release)"
+          bash build/package.sh
+          bash build/image.sh
+          build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' system/release/usr/lib/linos/release)"
           echo "LINOS_ROOTFS=$GITHUB_WORKSPACE/images/server/builds/amd64/$build_id/rootfs.tar" >> "$GITHUB_ENV"
 
       - name: Assemble disposable Server with research kernel
         shell: bash
         run: |
           set -Eeuo pipefail
-          bash build/kernel/server-image.sh "$LINOS_ROOTFS" "$RUNNER_TEMP/kernel-out" "$RUNNER_TEMP/server-kernel-test"
+          bash build/kernel.sh server-image "$LINOS_ROOTFS" "$RUNNER_TEMP/kernel-out" "$RUNNER_TEMP/server-kernel-test"
 
       - name: Boot real Linos Server under research kernel
         shell: bash
-        run: bash build/kernel/server-smoke.sh "$RUNNER_TEMP/server-kernel-test"
+        run: bash tests/kernel.sh "$RUNNER_TEMP/server-kernel-test"
 
       - name: Upload evidence (not full kernel outputs)
         if: always()

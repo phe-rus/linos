@@ -40,7 +40,7 @@ reversal option if feasible, and user confirmation.
 5. Install a matching edition, then restart into Linos Setup.
 6. Offer independent repair and recovery without cloud accounts.
 
-The current `crates/recovery` program is a **read-only Server CLI prototype**.
+The current `system/src/recovery` program is a **read-only Server CLI prototype**.
 It offers status and disk inspection. It cannot install, repair, mount or format.
 
 ## Security and independence

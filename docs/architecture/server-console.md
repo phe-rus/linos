@@ -72,7 +72,7 @@ After enrollment, log in with the credentials just created.
 
 ## Leaving the local VM
 
-In `./build/console.sh amd64`, the guest is connected through QEMU
+In `./tests/server.sh console amd64`, the guest is connected through QEMU
 `-nographic`. A Linux login prompt will not accept `clear`, Ctrl+C or
 Ctrl+Z as a VM exit. To return to ChromeOS Debian, press **Ctrl+A**,
 release the keys, then press **X**. This is QEMU's escape sequence, not
@@ -302,6 +302,6 @@ seconds.
 The built image is immutable for development validation. Source changes do not
 retroactively change existing `images/server/builds/*/*/disk.ext4` images or
 existing `console.qcow2` overlays. Make a new build ID using
-`bash build/next-build.sh amd64`, then rebuild package and image and launch
-`./build/console.sh amd64`. The image builder rejects packages that lack the
+`bash build/image.sh next amd64`, then rebuild package and image and launch
+`./tests/server.sh console amd64`. The image builder rejects packages that lack the
 new command-capable Home binary marker.

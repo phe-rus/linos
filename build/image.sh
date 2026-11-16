@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Build system and image operations share one entry point.
+assemble_image() (
+set -Eeuo pipefail
+
 # Debian admin utilities may be absent from an unprivileged user PATH.
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 ARCH="${LINOS_ARCH:-$(dpkg --print-architecture)}"
 SUITE="${LINOS_SUITE:-trixie}"
 
-RELEASE_FILE="packages/release/usr/lib/linos/release"
-PACKAGE="$(./build/system/package.sh --print-path)"
+RELEASE_FILE="system/release/usr/lib/linos/release"
+PACKAGE="$(./build/package.sh --print-path)"
 
 BUILD_ID="$(
     sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE_FILE"
@@ -29,7 +33,7 @@ fi
 
 PACKAGE_VERSION="$(dpkg-deb -f "$PACKAGE" Version)"
 
-if [[ "$PACKAGE_VERSION" != "$(awk '/^Version:/ { print $2 }' packages/release/DEBIAN/control)" ]]; then
+if [[ "$PACKAGE_VERSION" != "$(awk '/^Version:/ { print $2 }' system/release/DEBIAN/control)" ]]; then
     echo "Release package version does not match control metadata: $PACKAGE_VERSION"
     exit 1
 fi
@@ -39,7 +43,7 @@ fi
 verify_package_entry() {
     local name="$1"
     if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -tf - | grep -Fx "./$name" >/dev/null; then
-        printf 'Linos package is missing %s; rebuild with ./build/system/package.sh\n' "$name" >&2
+        printf 'Linos package is missing %s; rebuild with ./build/package.sh\n' "$name" >&2
         exit 1
     fi
 }
@@ -85,9 +89,9 @@ STAGED_OS_RELEASE="$STAGING_DIR/os-release"
 trap 'rm -r -- "$STAGING_DIR"' EXIT
 chmod 755 "$STAGING_DIR"
 install -m 644 "$PACKAGE" "$STAGED_PACKAGE"
-install -m 644 system/base/identity/issue "$STAGED_ISSUE"
-install -m 644 system/base/identity/motd "$STAGED_MOTD"
-install -m 644 system/base/identity/os-release "$STAGED_OS_RELEASE"
+install -m 644 system/identity/issue "$STAGED_ISSUE"
+install -m 644 system/identity/motd "$STAGED_MOTD"
+install -m 644 system/identity/os-release "$STAGED_OS_RELEASE"
 
 mkdir -p "$BOOT_DIR"
 
@@ -217,3 +221,104 @@ sha256sum \
     "$BOOT_DIR/kernel" \
     "$BOOT_DIR/initramfs" \
     "$DISK"
+)
+
+minimal_rootfs() (
+set -Eeuo pipefail
+
+PROJECT_ROOT="$(
+    cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
+    pwd
+)"
+
+ARCH="${LINOS_ARCH:-$(dpkg --print-architecture)}"
+SUITE="${LINOS_SUITE:-trixie}"
+
+OUTPUT_DIR="$PROJECT_ROOT/images/minimal"
+OUTPUT="$OUTPUT_DIR/linos-rootfs-${ARCH}.tar"
+
+PACKAGES=(
+    systemd-sysv
+    dbus
+    iproute2
+    procps
+    ca-certificates
+    openssh-server
+)
+
+if [[ -e "$OUTPUT" ]]; then
+    printf 'Existing image: %s\n' "$OUTPUT"
+    printf 'Move it aside before rebuilding.\n'
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+PACKAGE_LIST="$(
+    IFS=,
+    printf '%s' "${PACKAGES[*]}"
+)"
+
+printf 'Linos Linux Build\n'
+printf 'Architecture: %s\n' "$ARCH"
+printf 'Debian suite: %s\n' "$SUITE"
+printf 'Output: %s\n' "$OUTPUT"
+
+mmdebstrap \
+    --variant=minbase \
+    --architectures="$ARCH" \
+    --include="$PACKAGE_LIST" \
+    "$SUITE" \
+    "$OUTPUT"
+
+printf '\nBuild completed successfully.\n'
+sha256sum "$OUTPUT"
+)
+
+next_build() (
+set -Eeuo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+ARCH="${1:-${LINOS_ARCH:-$(dpkg --print-architecture)}}"
+case "$ARCH" in
+    amd64|arm64) ;;
+    *) printf 'Unsupported Linos architecture: %s\n' "$ARCH" >&2; exit 2 ;;
+esac
+
+RELEASE="system/release/usr/lib/linos/release"
+[[ -f "$RELEASE" ]] || { echo "Missing release metadata: $RELEASE" >&2; exit 1; }
+
+DATE="$(date +%Y%m%d)"
+[[ "$DATE" =~ ^[0-9]{8}$ ]] || { echo "Invalid system date" >&2; exit 1; }
+
+# Preserve old builds. An ID must be unused for both architectures to avoid
+# collisions with CI or cross-device development.
+number=1
+while :; do
+    BUILD_ID="$DATE.$number"
+    if [[ ! -e "images/server/builds/amd64/$BUILD_ID" &&
+          ! -e "images/server/builds/arm64/$BUILD_ID" &&
+          ! -e "images/recovery/builds/amd64/$BUILD_ID" &&
+          ! -e "images/recovery/builds/arm64/$BUILD_ID" ]]; then
+        break
+    fi
+    ((number += 1))
+done
+
+current="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE")"
+[[ -n "$current" ]] || { echo "Missing BUILD_ID in $RELEASE" >&2; exit 1; }
+
+# GNU sed and date are already part of the Debian development environment.
+sed -i "s/^BUILD_ID=\"[^\"]*\"$/BUILD_ID=\"$BUILD_ID\"/" "$RELEASE"
+printf 'Linos 13 %s build: %s\n' "$ARCH" "$BUILD_ID"
+printf 'Next: ./build/package.sh && ./build/image.sh && ./tests/server.sh smoke %s\n' "$ARCH"
+)
+
+case "${1:-}" in
+  rootfs) shift; minimal_rootfs "$@" ;;
+  next) shift; next_build "$@" ;;
+  image) shift; assemble_image "$@" ;;
+  *) assemble_image "$@" ;;
+esac

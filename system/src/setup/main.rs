@@ -1,4 +1,4 @@
-mod setup;
+mod configuration;
 mod ui;
 
 use std::{

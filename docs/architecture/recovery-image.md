@@ -25,9 +25,9 @@ and mounting are not.
 
 ## Recovery UEFI boot
 
-`build/recovery-image.sh` creates a separate minimal userspace and packages
-it into a GPT image with FAT32 EFI and systemd-boot using `build/uefi.sh`'s
-recovery profile. `build/recovery-smoke.sh` verifies firmware boot and the
+`build/recovery.sh image` creates a separate minimal userspace and packages
+it into a GPT image with FAT32 EFI and systemd-boot using `build/media.sh`'s
+recovery profile. `tests/boot.sh recovery` verifies firmware boot and the
 interactive Rust console using QEMU + OVMF.
 
 Only the AMD64 UEFI recovery image is supported at this stage. Physical ARM

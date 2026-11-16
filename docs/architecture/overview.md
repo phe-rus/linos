@@ -76,7 +76,7 @@ This does **not** establish an installation method for real Orange Pi hardware o
 
 ## Current initialization contract
 
-`crates/init` is a standalone Rust command accepting `--root <directory>`. It canonicalizes the destination, refuses the live root (`/`), then:
+`system/src/init.rs` is a standalone Rust command accepting `--root <directory>`. It canonicalizes the destination, refuses the live root (`/`), then:
 
 - Reads and preserves a nonempty existing `etc/hostname`, or generates a `linos-` hostname.
 - Reads and preserves a valid UUID in `var/lib/linos/device-id`, or creates one if absent.

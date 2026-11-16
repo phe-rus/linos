@@ -7,10 +7,10 @@ packages, not the architecture or product identity of Linos.
 
 - `build/image.sh` produces a tested ext4 root filesystem and extracted kernel/initramfs
   for AMD64 and ARM64 QEMU direct-kernel boots.
-- `build/uefi.sh` wraps the **AMD64 server prototype** in a GPT disk with a FAT32
+- `build/media.sh` wraps the **AMD64 server prototype** in a GPT disk with a FAT32
   EFI System Partition, systemd-boot, and a root partition. It does **not**
   implement the recovery application or installer.
-- `build/uefi-smoke.sh` boots that disk through OVMF firmware and verifies
+- `tests/boot.sh uefi` boots that disk through OVMF firmware and verifies
   Linos first-boot initialization and a serial login.
 - ARM64 QEMU and board-specific firmware support are separate; ARM64 direct-kernel
   smoke tests remain in place. Do not treat QEMU ARM64 as Orange Pi hardware validation.
@@ -50,8 +50,8 @@ On an AMD64 Linux builder, after a successful `./build/image.sh`:
 
 ```bash
 sudo apt-get install gdisk dosfstools mtools systemd-boot-efi ovmf
-./build/uefi.sh amd64
-./build/uefi-smoke.sh
+./build/media.sh amd64
+./tests/boot.sh uefi
 ```
 
 The scripts only create files within `images/server/builds/` and temporary

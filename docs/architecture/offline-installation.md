@@ -6,7 +6,7 @@ offline, placed on the proposed GPT layout, and booted through UEFI in QEMU.
 
 ## Offline development payload
 
-`build/payload.sh amd64` creates:
+`build/recovery.sh payload amd64` creates:
 
 ```text
 images/install/payloads/amd64/<build>/
@@ -25,7 +25,7 @@ production installer.
 
 ## Disposable installation simulation
 
-`build/install-simulation.sh` takes **no arguments**, creates a temporary
+`tests/installation.sh simulation` takes **no arguments**, creates a temporary
 16 GiB sparse disk, partitions it according to the Linos Server layout,
 extracts the packaged userspace into System A, adds EFI boot files, and
 boots the resulting disk under QEMU/OVMF. The test verifies Linos first-boot

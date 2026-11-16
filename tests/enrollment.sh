@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Test the real console enrollment flow on a private copy of a server image.
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-$(dpkg --print-architecture)}"
@@ -11,7 +11,7 @@ case "$ARCH" in
     *) printf 'Unsupported architecture: %s\n' "$ARCH" >&2; exit 2 ;;
 esac
 
-BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
 if [[ ! "$BUILD_ID" =~ ^[a-zA-Z0-9._-]+$ ]]; then
     echo "Invalid build identifier" >&2
     exit 2
@@ -63,7 +63,7 @@ run_phase() {
     export LINOS_ENROLL_PHASE="$1"
     export LINOS_ENROLL_LOG="$TEST_DIR/boot-$1.log"
     echo "Enrollment phase: $1 ($ARCH)"
-    if ! timeout --signal=TERM --kill-after=5s 130s expect ./build/system/enrollment.exp >"$TEST_DIR/expect-$1.log" 2>&1; then
+    if ! timeout --signal=TERM --kill-after=5s 130s expect ./tests/enrollment.exp >"$TEST_DIR/expect-$1.log" 2>&1; then
         echo "Enrollment interaction failed during phase $1" >&2
         tail -n 75 "$TEST_DIR/expect-$1.log" >&2
         return 1

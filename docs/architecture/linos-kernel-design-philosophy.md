@@ -99,56 +99,24 @@ The primary repository remains `phe-rus/linos`, `main` only. Keep upstream Linux
 
 ```text
 linos/
-  kernel/
-    README.md
-    PHILOSOPHY.md
-    sources.lock.json       # stable+research exact source revisions/digests
-    upstream/               # fetch recipes, license/provenance metadata
-    config/
-      common/               # required security, fs, cgroup, scheduler, isolation
-      arch/{amd64,arm64}/
-      work/{server,interactive,media,infotainment}/
-      board/{qemu-amd64,qemu-arm64,pc-r1,rk3588,...}/
-    linos/                  # Linos-authored kernel-side mechanisms only
-      core/                 # narrow interfaces, versioning, invariants
-      capability/           # exposure of verified capabilities, no magic probing
-      scheduling/           # optional carefully measured scheduler hooks
-      memory/               # optional pressure/priority integration
-      io/                   # latency and block/network policy integration
-      security/             # integrity, authorization hooks
-      power/                # bounded interactions with governors/thermal limits
-      telemetry/            # low-overhead diagnostics
-    patches/                # ordered, provenance-tracked integration patches
-    abi/                    # Linux UAPI expectations and Linos interface contracts
-    profiles/               # supported targets + firmware/DTB/ACPI dependencies
-    scripts/                # source verify, Kconfig compose, build, package
-    tests/
-      unit/                 # KUnit, property tests for small algorithms
-      integration/          # kselftest, kernel/driver tests
-      qemu/                 # amd64/arm64 boot; fault injection
-      devices/              # device profile qualification
-      benchmarks/           # reproducible latency/energy/throughput comparisons
-    research/
-      questions/            # questions, existing prior art, hypotheses
-      models/               # documented mathematical models and assumptions
-      experiments/          # experimental method, baselines, reproducibility
-      decisions/            # adopted/rejected policy with evidence
-  crates/
-    hardware/               # proposed Rust userspace capability graph service
-    policy/                 # proposed Rust workload and resource policy
-    updates/                # proposed verified manifest/update service
-    platform/               # versioned public Linos platform interfaces
+  kernel/              # verified upstream integration, design and patches when needed
+  hardware/profiles/   # board profiles and qualification evidence
   system/
-    profiles/               # edition/device policies, no duplicated kernel source
+    src/              # Rust OS implementation, one root Cargo package
+    identity/         # installed system identity and welcome assets
+    services/         # installed units
+    release/          # bootstrap package contents
+  build/
+    kernel.sh
+    package.sh
+    image.sh
+    recovery.sh
+    media.sh
+  tests/              # QEMU, enrollment, installation and recovery tests
   docs/
-    architecture/
-    kernel/
-      support-matrix.md
-      perf-contract.md
-      interface-contracts.md
 ```
 
-These are **proposed** directories, not new executable components. No abstract layer should be added merely to match a diagram. For kernel patches, isolate actual Linux-specific C/Rust changes, document compatibility with upstream versions and prefer an upstreamable interface. Kernel-side Rust is limited by what the upstream Rust-for-Linux infrastructure and target drivers support; userspace Rust remains the default for Linos services.
+This is the compact ownership layout; add a directory only for implemented code with a distinct responsibility. No abstract layer should be added merely to match a diagram. For kernel patches, isolate actual Linux-specific C/Rust changes, document compatibility with upstream versions and prefer an upstreamable interface. Kernel-side Rust is limited by what the upstream Rust-for-Linux infrastructure and target drivers support; userspace Rust remains the default for Linos services.
 
 **Build variants**: `research` follows a recent stable Linux kernel and experiments behind explicit flags, while `qualified` stays on a maintained longterm branch until a full device/edition test matrix passes. Each build records source revision, complete resolved .config, toolchain, patch inventory, modules, firmware, test evidence and trust metadata. Neither branch name nor version alone grants supported status.
 

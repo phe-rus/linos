@@ -13,7 +13,7 @@ Add directories such as `patches/`, `config/` or `tests/` **only when real patch
 
 - Research: upstream stable tag `v7.3.4`.
 - Qualification comparison: upstream LTS tag `v6.18.63`.
-- Existing working Server fallback: the Debian-built 6.12 kernel installed by `build/system/image.sh`.
+- Existing working Server fallback: the Debian-built 6.12 kernel installed by `build/image.sh`.
 
 Those are distinct tracks. The latest source is not automatically faster, more compatible or safe for every device. Versions must be advanced deliberately and benchmarked.
 
@@ -23,10 +23,10 @@ Bring an upstream Linux git checkout of the exact release tag and configure GnuP
 
 ```sh
 # In a separate upstream Linux checkout already at v7.3.4:
-./build/kernel/build.sh amd64 /path/to/linux /tmp/linos-kernel-amd64
+./build/kernel.sh build amd64 /path/to/linux /tmp/linos-kernel-amd64
 
 # Optional LTS comparison, with source checkout at v6.18.63:
-LINOS_KERNEL_RELEASE=6.18.63 ./build/kernel/build.sh amd64 /path/to/linux-lts /tmp/linos-kernel-lts
+LINOS_KERNEL_RELEASE=6.18.63 ./build/kernel.sh build amd64 /path/to/linux-lts /tmp/linos-kernel-lts
 ```
 
 The build produces a kernel image, modules build output, resolved `.config`, and `provenance.txt`. Output is isolated outside the upstream source and the Linos repository. ARM64 requires a suitable native or cross-compilation toolchain; the first script assumes native compilers and does not yet configure cross-compilation. It does **not** install modules in the root filesystem, produce an initramfs, make an EFI image, sign a release, or pass boot tests.
@@ -44,10 +44,10 @@ The build produces a kernel image, modules build output, resolved `.config`, and
 
 The kernel research CI now includes a second, more meaningful test:
 
-1. Build the research kernel and stage its matching modules using `build/kernel/build.sh`.
-2. Build the existing Linos Server Debian-based root filesystem using `build/system/package.sh` and `build/system/image.sh`.
-3. Use `build/kernel/server-image.sh` to inject the Linos-built kernel and modules into a **temporary copy** of that rootfs and generate a matching initramfs in an isolated chroot.
-4. Use `build/kernel/server-smoke.sh` to boot the resulting temporary ext4 disk in QEMU with `-snapshot`, and check sign-in, device identity and the kernel release string.
+1. Build the research kernel and stage its matching modules using `build/kernel.sh build`.
+2. Build the existing Linos Server Debian-based root filesystem using `build/package.sh` and `build/image.sh`.
+3. Use `build/kernel.sh server-image` to inject the Linos-built kernel and modules into a **temporary copy** of that rootfs and generate a matching initramfs in an isolated chroot.
+4. Use `tests/kernel.sh` to boot the resulting temporary ext4 disk in QEMU with `-snapshot`, and check sign-in, device identity and the kernel release string.
 
 This adds an **automated acceptance test in source**. It does not demonstrate a passing test until the corresponding GitHub Actions run completes successfully. The installed Server/UEFI builder and existing Debian-kernel fallback remain unchanged. On failure, review the uploaded serial/QEMU logs and make the smallest necessary correction before promoting anything.
 
@@ -68,7 +68,7 @@ FAT32 USB root/
     ... signed installation/recovery payload ...
 ```
 
-The contents above are a **design target**, not the current output of `build/hardware/uefi.sh`. This repo currently uses a systemd-boot QEMU UEFI image with a kernel/initramfs stored under `/linos` on the ESP. Avoid claiming the two-root-folder copy-to-USB experience already works.
+The contents above are a **design target**, not the current output of `build/media.sh`. This repo currently uses a systemd-boot QEMU UEFI image with a kernel/initramfs stored under `/linos` on the ESP. Avoid claiming the two-root-folder copy-to-USB experience already works.
 
 For x86-64 PCs, FAT32 copying can be supported once the EFI entry is tested with UEFI firmware and the payload fits the filesystem's individual-file limit (< 4 GiB); otherwise split payload files or use a second partition without changing the two-folder user-facing entry. ExFAT is not a generic UEFI boot guarantee.
 

@@ -15,11 +15,11 @@ The development minimum is 16 GiB, leaving a margin for alignment and GPT
 metadata. Sizes are not yet final. Filesystems, disk encryption, shared data
 mounts, kernel activation and A/B rollback semantics require further design.
 
-`crates/recovery/src/layout.rs` calculates a **proposal only**. The recovery
+`system/src/recovery/layout.rs` calculates a **proposal only**. The recovery
 CLI can print it for a target that passes preliminary inspection, but always
 prints **Installation status: DISABLED**.
 
-`build/layout-test.sh` creates a disposable sparse file under `/tmp`, lays
+`tests/installation.sh layout` creates a disposable sparse file under `/tmp`, lays
 out GPT partitions, validates the table and then removes the file. It accepts
 no device names or output-path arguments. Its sole purpose is validating
 geometry and types without accessing physical block devices.

@@ -6,7 +6,7 @@ Two bootable-product responsibilities remain separate:
 - Linos Server Recovery provides the CLI recovery environment and may embed
   that payload to support installation without a network connection.
 
-`build/recovery-image.sh` now accepts `LINOS_INSTALL_PAYLOAD_DIR` only as an
+`build/recovery.sh image` now accepts `LINOS_INSTALL_PAYLOAD_DIR` only as an
 **opt-in build-time input**. It verifies the payload SHA-256 list, checks
 edition and architecture, and copies the files into:
 
@@ -46,7 +46,7 @@ are optional, with exact capitalization and identifiers preserved.
 Development payloads have SHA-256 corruption detection but no authenticity guarantee.
 For a signed payload, generate and protect an Ed25519 private key *outside* the repository,
 then set `LINOS_PAYLOAD_SIGNING_KEY=/secure/key.pem` when running
-`./build/sign-payload.sh <payload-directory>`. Export its public key separately
+`./build/recovery.sh sign <payload-directory>`. Export its public key separately
 with `openssl pkey -in /secure/key.pem -pubout -out /secure/public.pem`.
 
 Supply the public key through `LINOS_TRUSTED_PAYLOAD_KEY=/secure/public.pem` when

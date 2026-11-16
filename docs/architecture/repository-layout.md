@@ -1,27 +1,45 @@
-# Source layout
+# Linos repository architecture
 
-Linos 13 is one operating-system project, not a separate project for every executable.
+Linos is one operating-system codebase, with one Rust Cargo package and a few defined entry points. The source tree is **not** the USB filesystem tree or the installed root filesystem.
 
 ```text
 linos/
-  crates/
-    infs/           # one package with console, detect, enroll, login, recovery bins
-    init/           # separate early device provisioning component
-  kernel/           # design, policy and source documentation
-  hardware/         # device profiles, firmware expectations
-  system/           # installed defaults and OS services
-  packages/         # OS package inputs
-  build/
-    kernel/         # research kernel builds and QEMU integration
-    hardware/       # boot media, UEFI, Recovery, installer and payloads
-    system/         # package/rootfs/image builders, console and Server tests
-  assets/
-  docs/
   .github/workflows/
+  assets/brand/
+  kernel/                 # Linux source integration policy and verified modifications
+  hardware/profiles/      # device qualification information
+  system/
+    src/
+      console/
+      hardware.rs
+      setup/
+      recovery/
+      init.rs
+      login.rs
+    identity/             # filesystem identity and welcome defaults
+    services/             # installed systemd and OS integration units
+    release/              # Debian-compatible bootstrap package contents
+  build/
+    kernel.sh             # kernel research and isolated image assembly
+    package.sh            # Linos executable/system packaging
+    image.sh              # base system image and rootfs
+    recovery.sh           # recovery environment, offline payload and signatures
+    media.sh              # UEFI image and bootable media
+  tests/
+    kernel.sh             # kernel QEMU Server smoke
+    boot.sh               # UEFI and independent recovery tests
+    server.sh             # Server, persistence and console tests
+    enrollment.sh         # interrupted/complete enrollment
+    enrollment.exp        # Expect test fixture
+    installation.sh       # layout and disposable install simulation
+  docs/
+  Cargo.toml
+  Cargo.lock
+  README.md
 ```
 
-The `infs` package produces distinct executables with their existing names and install paths. They are one Rust package, not five separately versioned packages. `init` stays separate because of early provisioning and privilege boundaries.
+We do not create empty directories for hypothetical features. A directory represents a stable responsibility, not a Rust package or separate product. The one root Cargo manifest builds six executable targets: `linos`, `detect`, `enroll`, `linos-login`, `recovery`, and `init`. Explicit binary entry points preserve installation paths and privilege separation; source files are organized by related functionality.
 
-Developer build scripts are grouped by purpose. This **source layout** is different from the proposed USB boot layout, which has the root folders `EFI/` and `linos.pherus.org/`. Moving a shell script must never change the installed image without a test.
+The existing `system/release/` directory is **packaging input**, not the directory installed as the OS root. `build/*.sh` scripts produce artifacts in ignored output locations. The proposed removable PC installation media has `EFI/` and `linos.pherus.org/` at its root, distinct from this repository; the copy-to-USB experience is not production-ready.
 
-Required checks: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, Bash syntax checks, Server amd64/arm64 QEMU, Recovery QEMU and kernel research QEMU. Do not assert any CI success until observed.
+CI must validate Rust formatting, lint, tests, shell scripts, QEMU Server, Recovery, offline installation and isolated research kernel boot. Source-code simplification does not imply successful validation until runs pass. Never write to a physical disk in tests.

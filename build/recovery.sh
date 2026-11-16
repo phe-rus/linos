@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+
+recovery_image() (
+set -Eeuo pipefail
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 ARCH="${1:-amd64}"
 [[ "$ARCH" == amd64 ]] || { echo "Recovery UEFI prototype currently supports amd64 only" >&2; exit 2; }
-BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
+BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
 [[ "$BUILD_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid build identifier" >&2; exit 2; }
 OUT="images/recovery/builds/$ARCH/$BUILD_ID"
 [[ ! -e "$OUT" ]] || { echo "Recovery build exists: $OUT" >&2; exit 1; }
@@ -16,12 +19,12 @@ WORK="$(mktemp -d /tmp/linos-recovery.XXXXXXXX)"
 trap 'rm -r -- "$WORK"' EXIT
 chmod 755 "$WORK"
 
-cargo build --release -p infs --bin recovery
+cargo build --release --bin recovery
 install -m 755 target/release/recovery "$WORK/linos-recovery"
 install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.service"
-install -m 644 packages/release/usr/lib/linos/release "$WORK/release"
+install -m 644 system/release/usr/lib/linos/release "$WORK/release"
 install -m 644 hardware/profiles/amd64-uefi-server.conf "$WORK/hardware-profile"
-install -m 644 system/base/identity/os-release "$WORK/os-release"
+install -m 644 system/identity/os-release "$WORK/os-release"
 
 KEYRING_ARGS=()
 if [[ -n "${LINOS_KEYRING:-}" ]]; then
@@ -110,4 +113,72 @@ truncate -s 3G "$OUT/disk.ext4"
 fakeroot -i "$FAKE_STATE" -- mkfs.ext4 -F -q -L linos-recovery -d "$STAGE" "$OUT/disk.ext4"
 echo "Recovery root filesystem: $OUT/disk.ext4"
 
-LINOS_UEFI_PROFILE=recovery ./build/hardware/uefi.sh "$ARCH"
+LINOS_UEFI_PROFILE=recovery ./build/media.sh "$ARCH"
+)
+
+recovery_payload() (
+set -Eeuo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+ARCH="${1:-$(dpkg --print-architecture)}"
+case "$ARCH" in amd64|arm64) ;; *) echo "Unsupported payload architecture" >&2; exit 2 ;; esac
+BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+[[ "$BUILD_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid build ID" >&2; exit 2; }
+BUILD_DIR="images/server/builds/$ARCH/$BUILD_ID"
+OUTPUT="images/install/payloads/$ARCH/$BUILD_ID"
+
+for file in "$BUILD_DIR/rootfs.tar" "$BUILD_DIR/boot/kernel" "$BUILD_DIR/boot/initramfs"; do
+    [[ -s "$file" ]] || { echo "Missing server image artifact: $file" >&2; exit 2; }
+done
+[[ ! -e "$OUTPUT" ]] || { echo "Payload already exists: $OUTPUT" >&2; exit 1; }
+mkdir -p "$OUTPUT"
+
+gzip -n -1 -c "$BUILD_DIR/rootfs.tar" > "$OUTPUT/rootfs.tar.gz"
+install -m 644 "$BUILD_DIR/boot/kernel" "$OUTPUT/kernel"
+install -m 644 "$BUILD_DIR/boot/initramfs" "$OUTPUT/initramfs"
+printf '%s\n' \
+    'format=1' \
+    'edition=server' \
+    "architecture=$ARCH" \
+    "build=$BUILD_ID" \
+    'base=debian-trixie' \
+    > "$OUTPUT/manifest"
+
+(
+    cd "$OUTPUT"
+    sha256sum rootfs.tar.gz kernel initramfs manifest > SHA256SUMS
+    sha256sum -c SHA256SUMS
+)
+echo "Offline development payload built: $OUTPUT"
+echo "This checksum manifest does not provide cryptographic authenticity."
+)
+
+recovery_sign() (
+set -Eeuo pipefail
+
+PAYLOAD_DIR="${1:?Usage: LINOS_PAYLOAD_SIGNING_KEY=/path/to/private.pem ./build/recovery.sh sign /path/to/payload}"
+KEY="${LINOS_PAYLOAD_SIGNING_KEY:?Set LINOS_PAYLOAD_SIGNING_KEY to an Ed25519 private key path}"
+[[ -f "$KEY" && -r "$KEY" ]] || { echo "Private signing key is not readable" >&2; exit 2; }
+[[ -s "$PAYLOAD_DIR/SHA256SUMS" ]] || { echo "Missing SHA256SUMS" >&2; exit 2; }
+[[ ! -e "$PAYLOAD_DIR/SHA256SUMS.sig" ]] || { echo "Signature already exists" >&2; exit 2; }
+command -v openssl >/dev/null || { echo "openssl is required" >&2; exit 2; }
+
+(
+    cd "$PAYLOAD_DIR"
+    sha256sum --check SHA256SUMS
+)
+# Ed25519 signs the exact SHA256SUMS bytes, which cover manifest, kernel, initramfs and rootfs.
+openssl pkeyutl -sign -rawin -inkey "$KEY" -in "$PAYLOAD_DIR/SHA256SUMS" \
+    -out "$PAYLOAD_DIR/SHA256SUMS.sig"
+chmod 644 "$PAYLOAD_DIR/SHA256SUMS.sig"
+echo "Signed offline payload: $PAYLOAD_DIR"
+echo "Keep the private signing key outside the repository and installation media."
+)
+
+case "${1:-image}" in
+ image) shift || true; recovery_image "$@" ;;
+ payload) shift; recovery_payload "$@" ;;
+ sign) shift; recovery_sign "$@" ;;
+ *) recovery_image "$@" ;;
+esac

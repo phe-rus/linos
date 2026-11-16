@@ -162,7 +162,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 bash -n build/image.sh
-bash -n build/rootfs.sh
+bash -n build/image.sh rootfs
 git status --short
 ```
 

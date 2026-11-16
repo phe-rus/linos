@@ -5,7 +5,7 @@
 /images/
 
 # Built Debian packages
-/packages/dist/
+/system/dist/
 
 # Local test roots created by init
 /tests/*-fixture/

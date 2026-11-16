@@ -68,9 +68,9 @@ Our target UEFI installation layout separates **EFI**, **Recovery**, **System A*
 Run from a suitable Debian-based build environment with the required dependencies installed:
 
 ```bash
-./build/system/package.sh
-./build/system/image.sh
-./build/system/smoke.sh amd64
+./build/package.sh
+./build/image.sh
+./tests/server.sh smoke amd64
 ```
 
 For Rust checks:
@@ -81,7 +81,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-See the build scripts and GitHub Actions workflow for full prerequisites and architecture-specific tests. For a new development image use `bash build/system/next-build.sh amd64` before building. Images already assembled do not change when source code changes. Never run installer experiments against disks containing data; the present integration tests use disposable virtual disks.
+See the build scripts and GitHub Actions workflow for full prerequisites and architecture-specific tests. For a new development image use `bash build/image.sh next amd64` before building. Images already assembled do not change when source code changes. Never run installer experiments against disks containing data; the present integration tests use disposable virtual disks.
 
 ### From the vision to a working operating system.
 

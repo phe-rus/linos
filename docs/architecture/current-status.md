@@ -31,7 +31,7 @@ Linos aims to be a consumer operating-system product, **not a Debian spin with a
 
 **What exists:** Linux-based QEMU images, Debian-provided kernel packages, systemd/PAM/APT foundations, Rust-owned setup and console features, a read-only Assets browser, and preliminary source for Hardware and Linus store.
 
-**What does not yet exist:** a Linos kernel build/configuration pipeline with enforced upgrade policy; production-grade latency/rendering/input budgets; a native Linos Rust UI/application SDK; an integrated multi-edition app manifest, sandbox and lifecycle; a fully featured Assets file manager; a developer-facing Linus store; and the complete independently validated release architecture.
+**What does not yet exist:** a fully qualified Linos-owned kernel release pipeline with enforced upgrade policy; production-grade latency/rendering/input budgets; a native Linos Rust UI/application SDK; an integrated multi-edition app manifest, sandbox and lifecycle; a fully featured Assets file manager; a developer-facing Linus store; and the complete independently validated release architecture.
 
 The difference is important. No currently demonstrated Linos image proves the intended deep operating-system independence. A source tree expressing those intentions is a plan, not validation.
 
