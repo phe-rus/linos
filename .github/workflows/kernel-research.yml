@@ -77,6 +77,8 @@ jobs:
           set -Eeuo pipefail
           root="$RUNNER_TEMP/miniroot"
           mkdir -p "$root"/{bin,dev,proc,sys}
+          sudo mknod -m 600 "$root/dev/console" c 5 1
+          sudo mknod -m 666 "$root/dev/null" c 1 3
           cp /bin/busybox "$root/bin/busybox"
           ln -s busybox "$root/bin/sh"
           cat > "$root/init" <<'INIT'
