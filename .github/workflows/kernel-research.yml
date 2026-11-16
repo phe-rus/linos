@@ -187,6 +187,22 @@ jobs:
         shell: bash
         run: bash tests/kernel.sh "$RUNNER_TEMP/server-kernel-test"
 
+      - name: Install AMD64 UEFI firmware and media tooling
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            gdisk dosfstools mtools systemd-boot-efi ovmf
+
+      - name: Firmware-boot Linos research kernel into actual Server
+        if: matrix.arch == 'amd64'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export LINOS_KERNEL_TEST_IMAGE_DIR="$RUNNER_TEMP/server-kernel-test"
+          bash build/media.sh amd64
+          bash tests/boot.sh uefi
+
       - name: Upload evidence (not full kernel outputs)
         if: always()
         uses: actions/upload-artifact@v7
@@ -200,5 +216,7 @@ jobs:
             ${{ runner.temp }}/server-kernel-test/architecture
             ${{ runner.temp }}/server-kernel-test/server-smoke.log
             ${{ runner.temp }}/server-kernel-test/server-qemu.log
+            ${{ runner.temp }}/server-kernel-test/uefi-smoke.log
+            ${{ runner.temp }}/server-kernel-test/uefi-qemu.log
           if-no-files-found: ignore
           retention-days: 7
