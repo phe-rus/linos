@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 jobs:
-  qemu-amd64:
+  kernel-qemu:
     name: ${{ matrix.arch }} · signed source, Linos kernel, QEMU boot
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
@@ -58,8 +58,15 @@ jobs:
           set -Eeuo pipefail
           # Pinned fingerprint from https://www.kernel.org/signature.html.
           expected=647F28654894E3BD457199BE38DBBDC86092693E
-          gpg --batch --locate-keys gregkh@kernel.org || \
-            gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$expected"
+          # WKD and public keyservers can fail independently. Never relax the
+          # pinned fingerprint or signature check when a provider is unavailable.
+          if ! gpg --batch --list-keys "$expected" >/dev/null 2>&1; then
+            gpg --batch --keyserver hkps://keyserver.ubuntu.com \
+              --keyserver-options timeout=15 --recv-keys "$expected" ||
+            gpg --batch --locate-keys gregkh@kernel.org ||
+            gpg --batch --keyserver hkps://keys.openpgp.org \
+              --keyserver-options timeout=15 --recv-keys "$expected"
+          fi
           gpg --batch --with-colons --fingerprint "$expected" |
             grep -Fxq "fpr:::::::::$expected:"
 
