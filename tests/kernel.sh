@@ -12,7 +12,7 @@ command -v qemu-system-x86_64 >/dev/null || { echo "QEMU amd64 missing" >&2; exi
 command -v dumpe2fs >/dev/null || { echo "dumpe2fs missing" >&2; exit 2; }
 dumpe2fs -h "$DEST/disk.ext4" >/dev/null 2>&1 || { echo "Invalid ext4 image" >&2; exit 2; }
 RELEASE="$(cat "$DEST/kernel-release")"
-[[ "$RELEASE" =~ ^[A-Za-z0-9._+-]+$ && "$RELEASE" == *-linos13* ]] || exit 2
+[[ "$RELEASE" =~ ^[A-Za-z0-9._+-]+$ && "$RELEASE" == *-linos ]] || exit 2
 
 LOG="$DEST/server-smoke.log"
 QLOG="$DEST/server-qemu.log"
