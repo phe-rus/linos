@@ -83,7 +83,7 @@ Debian packages initially bootstrap the OS and compatibility with existing appli
 
 ## Future implementation
 
-- Add an actual verified kernel build to CI, with trusted upstream signing keys pinned by fingerprint, resolved config checking and a complete module/initramfs packager.
+- **Source/CI implemented, run unverified:** `.github/workflows/kernel-research.yml` verifies a pinned upstream signing-key fingerprint, builds and stages matching modules, and boots a minimal BusyBox initramfs in isolated amd64 QEMU on kernel changes. This does not boot Linos Server, certify a kernel or publish images. The workflow must pass before any such claim.
 - Introduce the two-root-folder copy-to-USB builder and UEFI QEMU boot acceptance.
 - Make hardware-profile resolution an explicit safe step; track verified vs absent capabilities.
 - Build the Linos graphical Desktop and preserve the existing Server boot path.
