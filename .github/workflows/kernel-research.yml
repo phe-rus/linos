@@ -25,7 +25,7 @@ jobs:
   qemu-amd64:
     name: amd64 · signed source, kernel build, QEMU boot
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout Linos
         uses: actions/checkout@v7
@@ -35,7 +35,8 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             bc bison flex libssl-dev libelf-dev dwarves cpio busybox-static \
-            qemu-system-x86 gnupg git make gcc
+            qemu-system-x86 gnupg git make gcc kmod e2fsprogs \
+            mmdebstrap dpkg-dev fakeroot ca-certificates curl expect
 
       - name: Import and verify pinned kernel.org signer
         shell: bash
@@ -100,6 +101,52 @@ jobs:
           }
           echo 'PASS: Linos research kernel booted minimal QEMU initramfs'
 
+      - name: Set up Rust for Linos Server package
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install verified Debian 13 archive keys
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          keydir="$RUNNER_TEMP/linos-debian-keys"
+          mkdir -p "$keydir"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13.asc \
+            --output "$keydir/archive.asc"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13-security.asc \
+            --output "$keydir/security.asc"
+          (
+            cd "$keydir"
+            printf '%s\\n' \
+              '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
+              '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
+              | sha256sum --check
+          )
+          gpg --batch --dearmor --output "$keydir/archive.gpg" "$keydir/archive.asc"
+          gpg --batch --dearmor --output "$keydir/security.gpg" "$keydir/security.asc"
+          cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
+          echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
+
+      - name: Build existing Linos Server rootfs without modifying release outputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash build/package.sh
+          bash build/image.sh
+          build_id="$(sed -n 's/^BUILD_ID="\\([^"]*\\)"$/\\1/p' packages/release/usr/lib/linos/release)"
+          echo "LINOS_ROOTFS=$GITHUB_WORKSPACE/images/server/builds/amd64/$build_id/rootfs.tar" >> "$GITHUB_ENV"
+
+      - name: Assemble disposable Server with research kernel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash kernel/server-image.sh "$LINOS_ROOTFS" "$RUNNER_TEMP/kernel-out" "$RUNNER_TEMP/server-kernel-test"
+
+      - name: Boot real Linos Server under research kernel
+        shell: bash
+        run: bash kernel/server-smoke.sh "$RUNNER_TEMP/server-kernel-test"
+
       - name: Upload evidence (not full kernel outputs)
         if: always()
         uses: actions/upload-artifact@v7
@@ -108,5 +155,8 @@ jobs:
           path: |
             ${{ runner.temp }}/kernel-out/provenance.txt
             ${{ runner.temp }}/kernel-qemu.log
+            ${{ runner.temp }}/server-kernel-test/kernel-release
+            ${{ runner.temp }}/server-kernel-test/server-smoke.log
+            ${{ runner.temp }}/server-kernel-test/server-qemu.log
           if-no-files-found: ignore
           retention-days: 7
