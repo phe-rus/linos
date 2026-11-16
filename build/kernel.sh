@@ -138,8 +138,8 @@ set -Eeuo pipefail
 ROOTFS="$(realpath -- "$1")"
 BUILD="$(realpath -- "$2")"
 DEST="$(realpath -m -- "$3")"
-[[ -s "$ROOTFS" && -s "$BUILD/provenance.txt" && -s "$BUILD/arch/x86/boot/bzImage" ]] || {
-  echo "Missing rootfs.tar or completed amd64 research kernel" >&2; exit 2;
+[[ -s "$ROOTFS" && -s "$BUILD/provenance.txt" ]] || {
+  echo "Missing rootfs.tar or kernel provenance" >&2; exit 2;
 }
 [[ "$DEST" != "$BUILD" && "$DEST" != "$BUILD/"* && "$DEST" != "$ROOTFS" ]] || {
   echo "Output must be independent of the inputs" >&2; exit 2;
@@ -153,9 +153,15 @@ done
 sudo -n true || { echo "Non-interactive sudo required for isolated rootfs assembly" >&2; exit 2; }
 REL="$(sed -n 's/^kernel_release=//p' "$BUILD/provenance.txt")"
 ARCH="$(sed -n 's/^architecture=//p' "$BUILD/provenance.txt")"
-[[ "$ARCH" == amd64 && "$REL" =~ ^[A-Za-z0-9._+-]+$ && "$REL" == *-linos ]] || {
-  echo "Kernel provenance is not a matching Linos amd64 build" >&2; exit 1;
+[[ "$REL" =~ ^[A-Za-z0-9._+-]+$ && "$REL" == *-linos ]] || {
+  echo "Kernel provenance has invalid Linos release" >&2; exit 1;
 }
+case "$ARCH" in
+  amd64) IMAGE="$BUILD/arch/x86/boot/bzImage" ;;
+  arm64) IMAGE="$BUILD/arch/arm64/boot/Image" ;;
+  *) echo "Unsupported Server test architecture: $ARCH" >&2; exit 2 ;;
+esac
+[[ -s "$IMAGE" ]] || { echo "Kernel image not built: $IMAGE" >&2; exit 1; }
 MODULE_SOURCE="$BUILD/staged/lib/modules/$REL"
 [[ -d "$MODULE_SOURCE" ]] || { echo "Kernel module directory missing: $MODULE_SOURCE" >&2; exit 1; }
 
@@ -181,7 +187,7 @@ trap cleanup EXIT
 sudo tar --numeric-owner --same-owner -xf "$ROOTFS" -C "$STAGE"
 sudo mkdir -p "$STAGE/usr/lib/modules" "$STAGE/boot" "$STAGE/proc" "$STAGE/sys" "$STAGE/dev"
 sudo cp -a -- "$MODULE_SOURCE" "$STAGE/usr/lib/modules/$REL"
-sudo install -m 644 "$BUILD/arch/x86/boot/bzImage" "$STAGE/boot/vmlinuz-$REL"
+sudo install -m 644 "$IMAGE" "$STAGE/boot/vmlinuz-$REL"
 sudo install -m 644 "$BUILD/.config" "$STAGE/boot/config-$REL"
 sudo install -m 644 "$BUILD/System.map" "$STAGE/boot/System.map-$REL"
 # A new kernel's modules must be resolved in the target filesystem, not the host.
@@ -195,11 +201,12 @@ sudo chroot "$STAGE" /usr/sbin/mkinitramfs -o "/boot/initrd.img-$REL" "$REL"
 for ((i=${#MOUNTED[@]}-1; i>=0; i--)); do sudo umount "${MOUNTED[i]}"; done
 MOUNTED=()
 
-install -m 644 "$BUILD/arch/x86/boot/bzImage" "$DEST/kernel"
+install -m 644 "$IMAGE" "$DEST/kernel"
 sudo install -m 644 "$STAGE/boot/initrd.img-$REL" "$DEST/initramfs"
 truncate -s 3G "$DEST/disk.ext4"
 sudo mkfs.ext4 -F -q -L linos-root -d "$STAGE" "$DEST/disk.ext4"
 printf '%s\n' "$REL" > "$DEST/kernel-release"
+printf '%s\n' "$ARCH" > "$DEST/architecture"
 sha256sum "$DEST/kernel" "$DEST/initramfs" "$DEST/disk.ext4" > "$DEST/SHA256SUMS"
 echo "Disposable Server kernel image assembled: $DEST"
 )
