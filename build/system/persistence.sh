@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Exercise actual disk writes across two QEMU boots without touching the
 # original image or any host storage device.
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-$(dpkg --print-architecture)}"
@@ -52,7 +52,7 @@ for iteration in 1 2; do
     LINOS_SMOKE_DISK="$TEST_DISK" \
         LINOS_SMOKE_LOG_PREFIX="$TEST_DIR/boot-$iteration" \
         LINOS_SMOKE_WRITE_DISK=1 \
-        ./build/smoke.sh "$ARCH"
+        ./build/system/smoke.sh "$ARCH"
     # QEMU is stopped like a sudden power loss. Replay the ext4 journal
     # before inspecting the filesystem without mounting it.
     fsck_status=0

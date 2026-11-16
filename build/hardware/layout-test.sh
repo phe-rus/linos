@@ -6,7 +6,7 @@ set -Eeuo pipefail
 export PATH="/usr/sbin:/sbin:$PATH"
 
 if [[ $# -ne 0 ]]; then
-    echo "Usage: ./build/layout-test.sh (no arguments accepted)" >&2
+    echo "Usage: ./build/hardware/layout-test.sh (no arguments accepted)" >&2
     exit 2
 fi
 

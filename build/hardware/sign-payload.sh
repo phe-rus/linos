@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PAYLOAD_DIR="${1:?Usage: LINOS_PAYLOAD_SIGNING_KEY=/path/to/private.pem ./build/sign-payload.sh /path/to/payload}"
+PAYLOAD_DIR="${1:?Usage: LINOS_PAYLOAD_SIGNING_KEY=/path/to/private.pem ./build/hardware/sign-payload.sh /path/to/payload}"
 KEY="${LINOS_PAYLOAD_SIGNING_KEY:?Set LINOS_PAYLOAD_SIGNING_KEY to an Ed25519 private key path}"
 [[ -f "$KEY" && -r "$KEY" ]] || { echo "Private signing key is not readable" >&2; exit 2; }
 [[ -s "$PAYLOAD_DIR/SHA256SUMS" ]] || { echo "Missing SHA256SUMS" >&2; exit 2; }

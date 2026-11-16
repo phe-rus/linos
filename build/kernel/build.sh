@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Research build only. Never changes host OS, storage devices, or Server images.
-# ./kernel/build.sh <amd64|arm64> <verified-upstream-git-checkout> <empty-output-dir>
+# ./build/kernel/build.sh <amd64|arm64> <verified-upstream-git-checkout> <empty-output-dir>
 if [[ $# -ne 3 ]]; then
   echo "Usage: $0 <amd64|arm64> <verified-upstream-git-checkout> <empty-output-dir>" >&2
   exit 2

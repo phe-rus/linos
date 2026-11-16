@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Boot a disposable Linos Server image with a research kernel. No host-device writes.
-# Usage: bash kernel/server-smoke.sh <assembled-image-directory>
+# Usage: bash build/kernel/server-smoke.sh <assembled-image-directory>
 [[ $# -eq 1 ]] || { echo "Usage: $0 <assembled-image-directory>" >&2; exit 2; }
 DEST="$(realpath -- "$1")"
 for file in kernel initramfs disk.ext4 kernel-release; do

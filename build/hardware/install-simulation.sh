@@ -4,8 +4,8 @@ set -Eeuo pipefail
 # Test-only installation simulator. Accepts no disk path, block device or
 # arbitrary output directory. All writes are to freshly-created /tmp files.
 export PATH="/usr/sbin:/sbin:$PATH"
-[[ $# -eq 0 ]] || { echo "Usage: ./build/install-simulation.sh" >&2; exit 2; }
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ $# -eq 0 ]] || { echo "Usage: ./build/hardware/install-simulation.sh" >&2; exit 2; }
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
 PAYLOAD="images/install/payloads/amd64/$BUILD_ID"

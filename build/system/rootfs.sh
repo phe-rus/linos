@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 PROJECT_ROOT="$(
-    cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
+    cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." &&
     pwd
 )"
 

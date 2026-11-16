@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Test the real console enrollment flow on a private copy of a server image.
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-$(dpkg --print-architecture)}"
@@ -63,7 +63,7 @@ run_phase() {
     export LINOS_ENROLL_PHASE="$1"
     export LINOS_ENROLL_LOG="$TEST_DIR/boot-$1.log"
     echo "Enrollment phase: $1 ($ARCH)"
-    if ! timeout --signal=TERM --kill-after=5s 130s expect ./build/enrollment.exp >"$TEST_DIR/expect-$1.log" 2>&1; then
+    if ! timeout --signal=TERM --kill-after=5s 130s expect ./build/system/enrollment.exp >"$TEST_DIR/expect-$1.log" 2>&1; then
         echo "Enrollment interaction failed during phase $1" >&2
         tail -n 75 "$TEST_DIR/expect-$1.log" >&2
         return 1

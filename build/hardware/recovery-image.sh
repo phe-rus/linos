@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 ARCH="${1:-amd64}"
 [[ "$ARCH" == amd64 ]] || { echo "Recovery UEFI prototype currently supports amd64 only" >&2; exit 2; }
@@ -110,4 +110,4 @@ truncate -s 3G "$OUT/disk.ext4"
 fakeroot -i "$FAKE_STATE" -- mkfs.ext4 -F -q -L linos-recovery -d "$STAGE" "$OUT/disk.ext4"
 echo "Recovery root filesystem: $OUT/disk.ext4"
 
-LINOS_UEFI_PROFILE=recovery ./build/uefi.sh "$ARCH"
+LINOS_UEFI_PROFILE=recovery ./build/hardware/uefi.sh "$ARCH"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-${LINOS_ARCH:-$(dpkg --print-architecture)}}"
@@ -36,4 +36,4 @@ current="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE")"
 # GNU sed and date are already part of the Debian development environment.
 sed -i "s/^BUILD_ID=\"[^\"]*\"$/BUILD_ID=\"$BUILD_ID\"/" "$RELEASE"
 printf 'Linos 13 %s build: %s\n' "$ARCH" "$BUILD_ID"
-printf 'Next: ./build/package.sh && ./build/image.sh && ./build/smoke.sh %s\n' "$ARCH"
+printf 'Next: ./build/system/package.sh && ./build/system/image.sh && ./build/system/smoke.sh %s\n' "$ARCH"

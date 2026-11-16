@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 CONTROL="packages/release/DEBIAN/control"
@@ -31,7 +31,7 @@ if [[ "${1:-}" == "--print-path" ]]; then
 fi
 
 if [[ $# -ne 0 ]]; then
-    echo "Usage: ./build/package.sh [--print-path]" >&2
+    echo "Usage: ./build/system/package.sh [--print-path]" >&2
     exit 2
 fi
 

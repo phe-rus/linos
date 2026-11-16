@@ -2,14 +2,14 @@
 set -Eeuo pipefail
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' packages/release/usr/lib/linos/release)"
 BUILD_DIR="images/server/builds/amd64/$BUILD_ID"
 DISK="$BUILD_DIR/disk-uefi.raw"
 LOG="$BUILD_DIR/uefi-smoke.log"
 QEMU_LOG="$BUILD_DIR/uefi-qemu.log"
-[[ -s "$DISK" ]] || { echo "Missing UEFI disk; run ./build/uefi.sh" >&2; exit 2; }
+[[ -s "$DISK" ]] || { echo "Missing UEFI disk; run ./build/hardware/uefi.sh" >&2; exit 2; }
 
 CODE=""
 VARS=""

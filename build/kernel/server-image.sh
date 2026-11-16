@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Assemble a disposable Linos Server QEMU disk with a separately built kernel.
 # The existing Debian-based rootfs is an INPUT; no physical device is ever touched.
-# Usage: bash kernel/server-image.sh <rootfs.tar> <kernel-build-dir> <empty-output-dir>
+# Usage: bash build/kernel/server-image.sh <rootfs.tar> <kernel-build-dir> <empty-output-dir>
 [[ $# -eq 3 ]] || { echo "Usage: $0 <rootfs.tar> <kernel-build-dir> <empty-output-dir>" >&2; exit 2; }
 ROOTFS="$(realpath -- "$1")"
 BUILD="$(realpath -- "$2")"

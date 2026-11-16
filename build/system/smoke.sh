@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ARCH="${1:-$(dpkg --print-architecture)}"
@@ -40,7 +40,7 @@ done
 
 if ! dumpe2fs -h "$DISK" >/dev/null 2>&1; then
     echo "Disk image is not a formatted ext filesystem: $DISK" >&2
-    echo "Complete ./build/image.sh before running the smoke test." >&2
+    echo "Complete ./build/system/image.sh before running the smoke test." >&2
     exit 2
 fi
 

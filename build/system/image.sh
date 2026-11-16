@@ -4,14 +4,14 @@ set -Eeuo pipefail
 # Debian admin utilities may be absent from an unprivileged user PATH.
 export PATH="/usr/sbin:/sbin:$PATH"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ARCH="${LINOS_ARCH:-$(dpkg --print-architecture)}"
 SUITE="${LINOS_SUITE:-trixie}"
 
 RELEASE_FILE="packages/release/usr/lib/linos/release"
-PACKAGE="$(./build/package.sh --print-path)"
+PACKAGE="$(./build/system/package.sh --print-path)"
 
 BUILD_ID="$(
     sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' "$RELEASE_FILE"
@@ -39,7 +39,7 @@ fi
 verify_package_entry() {
     local name="$1"
     if ! dpkg-deb --fsys-tarfile "$PACKAGE" | tar -tf - | grep -Fx "./$name" >/dev/null; then
-        printf 'Linos package is missing %s; rebuild with ./build/package.sh\n' "$name" >&2
+        printf 'Linos package is missing %s; rebuild with ./build/system/package.sh\n' "$name" >&2
         exit 1
     fi
 }
