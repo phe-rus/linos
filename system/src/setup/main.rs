@@ -104,6 +104,31 @@ fn create_state(name: &str, value: &str) -> io::Result<()> {
     fs::File::open(STATE_DIR)?.sync_all()
 }
 
+/// Publish a non-sensitive setup file durably before reporting success.
+/// The temporary file is created exclusively; rename replaces any old file
+/// without following a symbolic link at the destination.
+fn persist_public_file(name: &str, value: &str) -> io::Result<()> {
+    let directory = Path::new("/etc/linos");
+    fs::create_dir_all(directory)?;
+    let temporary = directory.join(format!(".{name}.{}.tmp", std::process::id()));
+    let destination = directory.join(name);
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o644)
+            .open(&temporary)?;
+        writeln!(file, "{value}")?;
+        file.sync_all()?;
+        fs::rename(&temporary, &destination)?;
+        fs::File::open(directory)?.sync_all()
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
 fn commit_provisioned_state() -> io::Result<()> {
     let path = Path::new(STATE_DIR).join("provisioning-state");
     let state = read_state("provisioning-state")?;
@@ -233,10 +258,9 @@ fn enroll() -> io::Result<()> {
         let _username = parse_owner_record(&owner, &device_id)?;
         commit_provisioned_state()?;
         // Upgrade previously enrolled systems to the non-sensitive marker.
-        fs::create_dir_all("/etc/linos")?;
-        fs::write("/etc/linos/setup-complete", b"ready\n")?;
         // The local login screen remembers only the username, never credentials.
-        fs::write("/etc/linos/login-user", format!("{_username}\n"))?;
+        persist_public_file("login-user", _username)?;
+        persist_public_file("setup-complete", "ready")?;
         let pending = Path::new(STATE_DIR).join("pending-owner");
         if pending.exists() {
             fs::remove_file(pending)?;
@@ -300,9 +324,8 @@ fn enroll() -> io::Result<()> {
     commit_provisioned_state()?;
     // This marker contains no owner identifiers, only the public fact
     // that first-run setup completed. Private owner data stays root-only.
-    fs::create_dir_all("/etc/linos")?;
-    fs::write("/etc/linos/setup-complete", b"ready\n")?;
-    fs::write("/etc/linos/login-user", format!("{username}\n"))?;
+    persist_public_file("login-user", &username)?;
+    persist_public_file("setup-complete", "ready")?;
     fs::remove_file(pending)?;
     ui::completed(&username)?;
     // First-time setup needs a clean boot so hostname, locale and network are active.
