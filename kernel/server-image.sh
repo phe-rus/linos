@@ -35,9 +35,15 @@ STAGE="$WORK/root"
 mkdir -p "$STAGE"
 MOUNTED=()
 cleanup() {
-  local index
-  for ((index=${#MOUNTED[@]}-1; index>=0; index--)); do sudo umount "${MOUNTED[index]}" || true; done
-  sudo rm -rf -- "$WORK"
+  local index failed=0
+  for ((index=${#MOUNTED[@]}-1; index>=0; index--)); do
+    if ! sudo umount "${MOUNTED[index]}"; then failed=1; fi
+  done
+  if (( failed == 0 )); then
+    sudo rm -rf -- "$WORK"
+  else
+    echo "WARNING: temporary mounts remain active; preserving $WORK to prevent deleting bound host filesystems" >&2
+  fi
 }
 trap cleanup EXIT
 
