@@ -106,6 +106,7 @@ make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
 }
 {
   printf 'name=linos\n'
+  printf 'linos_kernel_version=%s\n' "$LINOS_KERNEL_VERSION"
   printf 'source_tag=%s\n' "$TAG"
   printf 'source_commit=%s\n' "$(git -C "$SOURCE" rev-parse HEAD)"
   printf 'architecture=%s\n' "$ARCH_NAME"
