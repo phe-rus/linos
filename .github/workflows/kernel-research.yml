@@ -1,6 +1,6 @@
 name: Kernel research (isolated)
 
-# Manual until validated. Never publishes boot media or upgrades devices.
+# Runs on kernel changes and can be dispatched manually. Research only: no device writes, release publication, or upgrades.
 on:
   push:
     branches: [main]
