@@ -29,8 +29,14 @@ if [[ -e "$OUTPUT" && -n "$(ls -A "$OUTPUT")" ]]; then
   echo "Output directory is not empty: $OUTPUT" >&2; exit 2
 fi
 
-RELEASE="${LINOS_KERNEL_RELEASE:-7.3.4}"
-case "$RELEASE" in 7.3.4|6.18.63) ;; *) echo "Unapproved research release: $RELEASE" >&2; exit 2 ;; esac
+# Version policy belongs to the Linos kernel, independently of Linos 13.
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$REPO/kernel/source.conf"
+RELEASE="${LINOS_KERNEL_RELEASE:-$LINOS_KERNEL_STABLE}"
+case "$RELEASE" in
+ "$LINOS_KERNEL_STABLE"|"$LINOS_KERNEL_LTS") ;;
+ *) echo "Unapproved upstream Linux release: $RELEASE" >&2; exit 2 ;;
+esac
 TAG="v$RELEASE"
 if [[ -n "$(git -C "$SOURCE" status --porcelain --untracked-files=no)" ]]; then
   echo "Upstream source has tracked changes" >&2; exit 1
@@ -52,33 +58,45 @@ export KBUILD_BUILD_TIMESTAMP="${SOURCE_DATE_EPOCH:-@0}"
 export KBUILD_BUILD_VERSION=1
 
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" defconfig
-"$SOURCE/scripts/config" --file "$OUTPUT/.config" \
-  --set-str LOCALVERSION '-linos13' \
-  --enable MODULES \
-  --enable BLK_DEV_INITRD \
-  --enable DEVTMPFS \
-  --enable DEVTMPFS_MOUNT \
-  --enable SERIAL_8250 \
-  --enable SERIAL_8250_CONSOLE \
-  --enable PCI \
-  --enable VIRTIO \
-  --enable VIRTIO_PCI \
-  --enable VIRTIO_BLK \
-  --enable EXT4_FS \
-  --enable PROC_FS \
-  --enable SYSFS \
-  --enable TMPFS
+
+# Apply and verify versioned, architecture-specific Linos kernel policy.
+for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_NAME.config"; do
+  [[ -r "$fragment" ]] || { echo "Missing config: $fragment" >&2; exit 2; }
+  while IFS= read -r entry || [[ -n "$entry" ]]; do
+    [[ -z "$entry" || "$entry" == \#* ]] && continue
+    [[ "$entry" =~ ^(CONFIG_[A-Z0-9_]+)=(y|m|n)$ ]] || {
+      echo "Invalid kernel config entry: $entry" >&2; exit 1;
+    }
+    symbol="${BASH_REMATCH[1]#CONFIG_}"
+    case "${BASH_REMATCH[2]}" in
+      y) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --enable "$symbol" ;;
+      m) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --module "$symbol" ;;
+      n) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --disable "$symbol" ;;
+    esac
+  done < "$fragment"
+done
+"$SOURCE/scripts/config" --file "$OUTPUT/.config" --set-str LOCALVERSION '-linos'
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" olddefconfig
-for required in CONFIG_MODULES=y CONFIG_BLK_DEV_INITRD=y CONFIG_DEVTMPFS=y CONFIG_DEVTMPFS_MOUNT=y CONFIG_SERIAL_8250_CONSOLE=y CONFIG_PCI=y CONFIG_VIRTIO=y CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_EXT4_FS=y CONFIG_PROC_FS=y CONFIG_SYSFS=y CONFIG_TMPFS=y; do
-  if ! grep -Fxq "$required" "$OUTPUT/.config"; then
-    echo "Kernel config failed required policy: $required" >&2
-    exit 1
-  fi
+for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_NAME.config"; do
+  while IFS= read -r entry || [[ -n "$entry" ]]; do
+    [[ -z "$entry" || "$entry" == \#* ]] && continue
+    if [[ "$entry" == *=n ]]; then
+      symbol="${entry%%=*}"
+      grep -Fxq "# $symbol is not set" "$OUTPUT/.config" || {
+        echo "Kernel policy missing disabled option: $entry" >&2; exit 1;
+      }
+    else
+      grep -Fxq "$entry" "$OUTPUT/.config" || {
+        echo "Kernel policy not satisfied: $entry" >&2; exit 1;
+      }
+    fi
+  done < "$fragment"
 done
 JOBS="${LINOS_KERNEL_JOBS:-2}"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "LINOS_KERNEL_JOBS must be positive" >&2; exit 2; }
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" -j "$JOBS" "${IMAGE##*/}" modules
 KERNEL_RELEASE="$(make -s -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" kernelrelease)"
+[[ "$KERNEL_RELEASE" == *-linos ]] || { echo "Kernel identity mismatch" >&2; exit 1; }
 MODULES_DEST="$OUTPUT/staged"
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
   INSTALL_MOD_PATH="$MODULES_DEST" DEPMOD=true modules_install
@@ -87,7 +105,7 @@ make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
   echo "Kernel modules staging directory missing" >&2; exit 1;
 }
 {
-  printf 'product=Linos 13\n'
+  printf 'name=linos\n'
   printf 'source_tag=%s\n' "$TAG"
   printf 'source_commit=%s\n' "$(git -C "$SOURCE" rev-parse HEAD)"
   printf 'architecture=%s\n' "$ARCH_NAME"
@@ -95,6 +113,16 @@ make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
   printf 'config_sha256=%s\n' "$(sha256sum "$OUTPUT/.config" | cut -d ' ' -f1)"
   printf 'image_sha256=%s\n' "$(sha256sum "$OUTPUT/$IMAGE" | cut -d ' ' -f1)"
 } >"$OUTPUT/provenance.txt"
+# Package kernel, configuration, modules and checksums as one release candidate.
+ARTIFACT="$OUTPUT/linos-kernel"
+mkdir -p "$ARTIFACT/boot" "$ARTIFACT/lib/modules"
+install -m 644 "$OUTPUT/$IMAGE" "$ARTIFACT/boot/kernel"
+install -m 644 "$OUTPUT/.config" "$ARTIFACT/boot/config-$KERNEL_RELEASE"
+install -m 644 "$OUTPUT/System.map" "$ARTIFACT/boot/System.map-$KERNEL_RELEASE"
+cp -a "$MODULES_DEST/lib/modules/$KERNEL_RELEASE" "$ARTIFACT/lib/modules/$KERNEL_RELEASE"
+install -m 644 "$OUTPUT/provenance.txt" "$ARTIFACT/provenance.txt"
+(cd "$ARTIFACT" && find boot lib -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+echo "Linos kernel release candidate: $ARTIFACT"
 echo "Research kernel: $OUTPUT/$IMAGE"
 echo "Modules: $MODULES_DEST"
 echo "This build has not been qualified as a Linos release."
@@ -125,7 +153,7 @@ done
 sudo -n true || { echo "Non-interactive sudo required for isolated rootfs assembly" >&2; exit 2; }
 REL="$(sed -n 's/^kernel_release=//p' "$BUILD/provenance.txt")"
 ARCH="$(sed -n 's/^architecture=//p' "$BUILD/provenance.txt")"
-[[ "$ARCH" == amd64 && "$REL" =~ ^[A-Za-z0-9._+-]+$ && "$REL" == *-linos13* ]] || {
+[[ "$ARCH" == amd64 && "$REL" =~ ^[A-Za-z0-9._+-]+$ && "$REL" == *-linos ]] || {
   echo "Kernel provenance is not a matching Linos amd64 build" >&2; exit 1;
 }
 MODULE_SOURCE="$BUILD/staged/lib/modules/$REL"
