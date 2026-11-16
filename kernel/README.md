@@ -40,6 +40,19 @@ The build produces a kernel image, modules build output, resolved `.config`, and
 5. Only then allow the image builder to opt into the Linos-compiled kernel. Preserve the Debian-kernel route until the new path passes.
 6. Record verified release artifacts with a signed manifest and rollback-compatible boot assets.
 
+## Disposable Server kernel integration
+
+The kernel research CI now includes a second, more meaningful test:
+
+1. Build the research kernel and stage its matching modules using `kernel/build.sh`.
+2. Build the existing Linos Server Debian-based root filesystem using `build/package.sh` and `build/image.sh`.
+3. Use `kernel/server-image.sh` to inject the Linos-built kernel and modules into a **temporary copy** of that rootfs and generate a matching initramfs in an isolated chroot.
+4. Use `kernel/server-smoke.sh` to boot the resulting temporary ext4 disk in QEMU with `-snapshot`, and check sign-in, device identity and the kernel release string.
+
+This adds an **automated acceptance test in source**. It does not demonstrate a passing test until the corresponding GitHub Actions run completes successfully. The installed Server/UEFI builder and existing Debian-kernel fallback remain unchanged. On failure, review the uploaded serial/QEMU logs and make the smallest necessary correction before promoting anything.
+
+A successful test proves kernel-to-Server compatibility for this single virtual configuration; it does **not** qualify hardware, updates, graphics or physical installation.
+
 ## Boot media contract for PCs
 
 The user-facing USB shall have **two folders at the root**, as requested:
