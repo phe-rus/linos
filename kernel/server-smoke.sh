@@ -24,7 +24,7 @@ timeout --signal=TERM --kill-after=5s 240s \
   -kernel "$DEST/kernel" -initrd "$DEST/initramfs" \
   -drive "file=$DEST/disk.ext4,if=none,format=raw,id=rootfs" \
   -device virtio-blk-pci,drive=rootfs \
-  -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=4 systemd.show_status=yes rd.systemd.show_status=yes systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
+  -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 loglevel=7 systemd.show_status=yes rd.systemd.show_status=yes systemd.mask=linos-enroll.service systemd.unit=multi-user.target" \
   >"$QLOG" 2>&1 &
 PID=$!
 while kill -0 "$PID" 2>/dev/null; do
