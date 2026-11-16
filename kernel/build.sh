@@ -56,9 +56,17 @@ make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" defconfig
   --enable DEVTMPFS \
   --enable DEVTMPFS_MOUNT \
   --enable SERIAL_8250 \
-  --enable SERIAL_8250_CONSOLE
+  --enable SERIAL_8250_CONSOLE \
+  --enable PCI \
+  --enable VIRTIO \
+  --enable VIRTIO_PCI \
+  --enable VIRTIO_BLK \
+  --enable EXT4_FS \
+  --enable PROC_FS \
+  --enable SYSFS \
+  --enable TMPFS
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" olddefconfig
-for required in CONFIG_MODULES=y CONFIG_BLK_DEV_INITRD=y CONFIG_DEVTMPFS=y CONFIG_DEVTMPFS_MOUNT=y CONFIG_SERIAL_8250_CONSOLE=y; do
+for required in CONFIG_MODULES=y CONFIG_BLK_DEV_INITRD=y CONFIG_DEVTMPFS=y CONFIG_DEVTMPFS_MOUNT=y CONFIG_SERIAL_8250_CONSOLE=y CONFIG_PCI=y CONFIG_VIRTIO=y CONFIG_VIRTIO_PCI=y CONFIG_VIRTIO_BLK=y CONFIG_EXT4_FS=y CONFIG_PROC_FS=y CONFIG_SYSFS=y CONFIG_TMPFS=y; do
   if ! grep -Fxq "$required" "$OUTPUT/.config"; then
     echo "Kernel config failed required policy: $required" >&2
     exit 1
