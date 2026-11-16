@@ -2,6 +2,11 @@ name: Kernel research (isolated)
 
 # Manual until validated. Never publishes boot media or upgrades devices.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'kernel/**'
+      - '.github/workflows/kernel-research.yml'
   workflow_dispatch:
     inputs:
       release:
@@ -46,7 +51,7 @@ jobs:
       - name: Fetch pinned upstream source with signed tag
         shell: bash
         env:
-          RELEASE: ${{ inputs.release }}
+          RELEASE: ${{ inputs.release || '7.3.4' }}
         run: |
           set -Eeuo pipefail
           git clone --depth 1 --branch "v$RELEASE" \
@@ -59,7 +64,7 @@ jobs:
       - name: Build kernel and matching modules
         shell: bash
         env:
-          RELEASE: ${{ inputs.release }}
+          RELEASE: ${{ inputs.release || '7.3.4' }}
         run: |
           set -Eeuo pipefail
           LINOS_KERNEL_RELEASE="$RELEASE" LINOS_KERNEL_JOBS=4 \
