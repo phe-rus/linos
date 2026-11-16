@@ -9,6 +9,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
 BUILD_DIR="images/server/builds/amd64/$BUILD_ID"
+if [[ -n "${LINOS_KERNEL_TEST_IMAGE_DIR:-}" ]]; then
+    BUILD_DIR="$(realpath -- "$LINOS_KERNEL_TEST_IMAGE_DIR")"
+    [[ "$(cat "$BUILD_DIR/architecture")" == amd64 &&
+       "$(cat "$BUILD_DIR/kernel-release")" == *-linos ]] || {
+        echo "UEFI kernel test image is missing Linos amd64 provenance" >&2; exit 2;
+    }
+fi
 DISK="$BUILD_DIR/disk-uefi.raw"
 LOG="$BUILD_DIR/uefi-smoke.log"
 QEMU_LOG="$BUILD_DIR/uefi-qemu.log"
@@ -28,6 +35,11 @@ WORK="$(mktemp -d /tmp/linos-uefi-test.XXXXXXXX)"
 trap 'rm -r -- "$WORK"' EXIT
 cp "$VARS" "$WORK/vars.fd"
 : > "$LOG"
+# Legacy fallback getty and the new Cliclack sign-in are both valid boot UIs.
+has_sign_in() {
+    grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" ||
+    grep -Fq 'Linos 13 · Sign in' "$LOG"
+}
 echo "UEFI boot-testing Linos 13 Server (amd64)"
 timeout --signal=TERM --kill-after=5s 180s \
     qemu-system-x86_64 \
@@ -41,7 +53,7 @@ timeout --signal=TERM --kill-after=5s 180s \
     >"$QEMU_LOG" 2>&1 &
 PID=$!
 while kill -0 "$PID" 2>/dev/null; do
-    if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" &&
+    if has_sign_in &&
        grep -q 'Provisioning state: unclaimed' "$LOG"; then
         kill -TERM "$PID" 2>/dev/null || true
         break
@@ -49,7 +61,7 @@ while kill -0 "$PID" 2>/dev/null; do
     sleep 2
 done
 wait "$PID" || true
-if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" &&
+if has_sign_in &&
    grep -q 'Provisioning state: unclaimed' "$LOG"; then
     echo "PASS: firmware -> EFI bootloader -> kernel -> Linos identity -> login"
 else
