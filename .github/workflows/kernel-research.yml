@@ -27,9 +27,19 @@ permissions:
 
 jobs:
   qemu-amd64:
-    name: amd64 · signed source, kernel build, QEMU boot
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.arch }} · signed source, Linos kernel, QEMU boot
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            qemu_package: qemu-system-x86
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            qemu_package: qemu-system-arm
     steps:
       - name: Checkout Linos
         uses: actions/checkout@v7
@@ -39,7 +49,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             bc bison flex libssl-dev libelf-dev dwarves cpio busybox-static \
-            qemu-system-x86 gnupg git make gcc kmod e2fsprogs \
+            ${{ matrix.qemu_package }} gnupg git make gcc kmod e2fsprogs \
             mmdebstrap dpkg-dev fakeroot ca-certificates curl expect
 
       - name: Import and verify pinned kernel.org signer
@@ -73,7 +83,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           LINOS_KERNEL_RELEASE="$RELEASE" LINOS_KERNEL_JOBS=4 \
-            bash build/kernel.sh build amd64 "$RUNNER_TEMP/linux" "$RUNNER_TEMP/kernel-out"
+            bash build/kernel.sh build "${{ matrix.arch }}" "$RUNNER_TEMP/linux" "$RUNNER_TEMP/kernel-out"
+          (cd "$RUNNER_TEMP/kernel-out/linos-kernel" && sha256sum -c SHA256SUMS)
+          grep -Fq 'name=linos' "$RUNNER_TEMP/kernel-out/provenance.txt"
+          if grep -Fq 'linos13' "$RUNNER_TEMP/kernel-out/provenance.txt"; then
+            echo 'Kernel release must not depend on Linos 13 OS version' >&2
+            exit 1
+          fi
 
       - name: Boot minimal initramfs under QEMU
         shell: bash
@@ -94,12 +110,23 @@ jobs:
           INIT
           chmod +x "$root/init"
           (cd "$root" && find . -print0 | cpio --null -o --format=newc --quiet | gzip -9) > "$RUNNER_TEMP/initramfs.cpio.gz"
+          if [[ "${{ matrix.arch }}" == amd64 ]]; then
+            qemu=(
+              qemu-system-x86_64 -machine q35,accel=tcg -cpu qemu64
+              -kernel "$RUNNER_TEMP/kernel-out/arch/x86/boot/bzImage"
+              -append 'console=ttyS0 rdinit=/init loglevel=4'
+            )
+          else
+            qemu=(
+              qemu-system-aarch64 -machine virt -cpu cortex-a76
+              -kernel "$RUNNER_TEMP/kernel-out/arch/arm64/boot/Image"
+              -append 'console=ttyAMA0 rdinit=/init loglevel=4'
+            )
+          fi
           timeout --signal=TERM --kill-after=5s 120s \
-            qemu-system-x86_64 -machine q35,accel=tcg -cpu qemu64 -smp 2 -m 1024 \
+            "${qemu[@]}" -smp 2 -m 1024 \
             -display none -monitor none -serial stdio -no-reboot -net none \
-            -kernel "$RUNNER_TEMP/kernel-out/arch/x86/boot/bzImage" \
             -initrd "$RUNNER_TEMP/initramfs.cpio.gz" \
-            -append 'console=ttyS0 rdinit=/init loglevel=4' \
             >"$RUNNER_TEMP/kernel-qemu.log" 2>&1 || status=$?
           grep -Fq LINOS_KERNEL_BOOT_OK "$RUNNER_TEMP/kernel-qemu.log" || {
             tail -n 100 "$RUNNER_TEMP/kernel-qemu.log"
@@ -108,9 +135,11 @@ jobs:
           echo 'PASS: Linos research kernel booted minimal QEMU initramfs'
 
       - name: Set up Rust for Linos Server package
+        if: matrix.arch == 'amd64'
         run: rustup toolchain install stable --profile minimal
 
       - name: Install verified Debian 13 archive keys
+        if: matrix.arch == 'amd64'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -135,6 +164,7 @@ jobs:
           echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
       - name: Build existing Linos Server rootfs without modifying release outputs
+        if: matrix.arch == 'amd64'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -144,12 +174,14 @@ jobs:
           echo "LINOS_ROOTFS=$GITHUB_WORKSPACE/images/server/builds/amd64/$build_id/rootfs.tar" >> "$GITHUB_ENV"
 
       - name: Assemble disposable Server with research kernel
+        if: matrix.arch == 'amd64'
         shell: bash
         run: |
           set -Eeuo pipefail
           bash build/kernel.sh server-image "$LINOS_ROOTFS" "$RUNNER_TEMP/kernel-out" "$RUNNER_TEMP/server-kernel-test"
 
       - name: Boot real Linos Server under research kernel
+        if: matrix.arch == 'amd64'
         shell: bash
         run: bash tests/kernel.sh "$RUNNER_TEMP/server-kernel-test"
 
@@ -157,9 +189,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: kernel-research-amd64
+          name: kernel-research-${{ matrix.arch }}
           path: |
             ${{ runner.temp }}/kernel-out/provenance.txt
+            ${{ runner.temp }}/kernel-out/linos-kernel/SHA256SUMS
             ${{ runner.temp }}/kernel-qemu.log
             ${{ runner.temp }}/server-kernel-test/kernel-release
             ${{ runner.temp }}/server-kernel-test/server-smoke.log
