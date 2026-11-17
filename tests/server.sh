@@ -275,7 +275,7 @@ echo "Serial diagnostics: $DIR/console-serial.log"
 echo "Close the QEMU window to stop the guest."
 exec qemu-system-x86_64 \
     -machine "pc,accel=$ACCEL" -cpu "$CPU" -smp 2 -m 2048 \
-    -display "$DISPLAY_BACKEND" -vga std -monitor none -net none \
+    -display "$DISPLAY_BACKEND" -device virtio-vga -monitor none -net none \
     -serial "file:$DIR/console-serial.log" \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
