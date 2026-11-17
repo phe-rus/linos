@@ -16,3 +16,8 @@
 *.swp
 *.swo
 *~
+
+# Local Linos kernel checkout, build products and package staging
+/kernel/source/
+/kernel/build/
+/kernel/dist/
