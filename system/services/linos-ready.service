@@ -1,0 +1,20 @@
+[Unit]
+Description=Acknowledge Linos local boot completion
+Documentation=https://github.com/phe-rus/linos
+Requires=linos-first-boot.service
+After=linos-first-boot.service linos-enroll.service
+Before=multi-user.target
+ConditionPathExists=/sys/kernel/linos/boot_state
+ConditionPathExists=/var/lib/linos/owner
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-ready
+User=root
+Group=root
+NoNewPrivileges=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

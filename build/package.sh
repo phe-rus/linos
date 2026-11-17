@@ -73,6 +73,8 @@ WANTS_DIR="$STAGING_DIR/package/etc/systemd/system/multi-user.target.wants"
 mkdir -p "$UNIT_DIR" "$WANTS_DIR"
 install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
 install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
+install -m 644 system/services/linos-ready.service "$UNIT_DIR/linos-ready.service"
+install -m 755 system/identity/linos-ready.sh "$STAGING_DIR/package/usr/lib/linos/linos-ready"
 
 # SSH remains unavailable until local enrollment creates an owner record.
 for unit in ssh.service ssh.socket; do
@@ -92,6 +94,7 @@ for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.s
     esac
 done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
+ln -s /usr/lib/systemd/system/linos-ready.service "$WANTS_DIR/linos-ready.service"
 
 mkdir -p system/dist
 dpkg-deb --root-owner-group --build "$STAGING_DIR/package" "$OUTPUT"
