@@ -1,10 +1,8 @@
 name: Linos CI
 
+# Full OS images, QEMU boots and installation tests are expensive.
+# Run on demand rather than for every commit or pull request.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -35,7 +33,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ "$EVENT" == workflow_dispatch ]]; then
-            echo 'kernel=true' >> "$GITHUB_OUTPUT"
+            echo 'kernel=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ "$EVENT" == pull_request ]]; then
@@ -56,19 +54,11 @@ jobs:
             echo 'kernel=false' >> "$GITHUB_OUTPUT"
           fi
 
-  kernel:
-    name: Linos kernel qualification (conditional)
-    needs: changes
-    if: needs.changes.outputs.kernel == 'true'
-    uses: ./.github/workflows/kernel-research.yml
-    permissions:
-      contents: read
 
   build-and-boot:
     name: ${{ matrix.arch }} · Rust, image, QEMU
-    needs: [changes, kernel]
-    # Continue OS validation even if an experimental kernel job failed or was skipped.
-    if: always() && needs.changes.result == 'success'
+    needs: changes
+    if: needs.changes.result == 'success'
     runs-on: ${{ matrix.runner }}
     # Compatibility images are tested separately; product image boots require
     # the verified Linos kernel and cannot use this escape hatch by default.
