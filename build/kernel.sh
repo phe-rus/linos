@@ -69,6 +69,10 @@ export KBUILD_BUILD_USER=linos
 export KBUILD_BUILD_HOST=builder
 export KBUILD_BUILD_TIMESTAMP="${SOURCE_DATE_EPOCH:-@0}"
 export KBUILD_BUILD_VERSION=1
+# A Linos source overlay makes the detached worktree dirty to Git. Explicit
+# empty LOCALVERSION prevents Linux setlocalversion from appending '+' while
+# CONFIG_LOCALVERSION=-linos supplies our version suffix.
+export LOCALVERSION=""
 
 make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" defconfig
 
@@ -114,7 +118,10 @@ JOBS="${LINOS_KERNEL_JOBS:-2}"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "LINOS_KERNEL_JOBS must be positive" >&2; exit 2; }
 make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" -j "$JOBS" "${IMAGE##*/}" modules
 KERNEL_RELEASE="$(make -s -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" kernelrelease)"
-[[ "$KERNEL_RELEASE" == *-linos ]] || { echo "Kernel identity mismatch" >&2; exit 1; }
+[[ "$KERNEL_RELEASE" == *-linos ]] || {
+  echo "Kernel identity mismatch: expected *-linos, got '$KERNEL_RELEASE'" >&2
+  exit 1
+}
 MODULES_DEST="$OUTPUT/staged"
 make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" \
   INSTALL_MOD_PATH="$MODULES_DEST" DEPMOD=true modules_install

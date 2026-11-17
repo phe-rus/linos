@@ -118,3 +118,10 @@ set the *measured* size and build-time baseline. Do not fabricate a universal
 size or latency target before observing architecture-specific results.
 The arm64 source-fetch order is tuned for GitHub-hosted ARM runners, while
 the upstream signed-tag and exact-commit verification remains mandatory.
+
+A Linux source overlay changes the detached source Git worktree. Linux's
+`scripts/setlocalversion` can append an extra `+` when `LOCALVERSION`
+is unset even with automatic Git suffixes disabled. The build now explicitly
+sets `LOCALVERSION` empty while `CONFIG_LOCALVERSION=-linos` supplies
+our deterministic suffix. A mismatched release string fails with its
+actual value printed.
