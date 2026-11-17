@@ -48,7 +48,7 @@ jobs:
             exit 0
           fi
           changes="$(git diff --name-only "$base" HEAD)"
-          if grep -Eq '^(kernel/|build/(kernel|image|package|media)\.sh$|tests/kernel\.sh$|system/(src|release)/|\.github/workflows/kernel-research\.yml$)' <<<"$changes"; then
+          if grep -Eq '^(kernel/|build/(kernel|kernel-package|image|package|media)\.sh$|tests/kernel\.sh$|system/(src|release)/|\.github/workflows/kernel-research\.yml$)' <<<"$changes"; then
             echo 'kernel=true' >> "$GITHUB_OUTPUT"
           else
             echo 'kernel=false' >> "$GITHUB_OUTPUT"
@@ -130,7 +130,7 @@ jobs:
       - name: Build Linos package and server image
         run: |
           ./build/package.sh
-          ./build/image.sh
+          LINOS_KERNEL_MODE=compat ./build/image.sh
 
       - name: Boot smoke test
         run: ./tests/server.sh smoke ${{ matrix.arch }}
@@ -295,7 +295,7 @@ jobs:
       - name: Build offline Server payload
         run: |
           ./build/package.sh
-          ./build/image.sh
+          LINOS_KERNEL_MODE=compat ./build/image.sh
           ./build/recovery.sh payload amd64
 
       - name: Sign payload with disposable CI-only Ed25519 key

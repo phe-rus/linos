@@ -170,60 +170,48 @@ jobs:
           cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
           echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
-      - name: Build Linos 13 Server and integrate isolated Linos kernel candidate
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          bash build/package.sh
-          LINOS_KERNEL_BUILD_DIR="$RUNNER_TEMP/kernel-out" LINOS_KERNEL_PRIMARY=1 bash build/image.sh
-          build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' system/release/usr/lib/linos/release)"
-          candidate="$GITHUB_WORKSPACE/images/server/builds/${{ matrix.arch }}/$build_id/linos-kernel"
-          test -s "$candidate/kernel"
-          test -s "$candidate/disk.ext4"
-          test -s "$candidate/rootfs.tar"
-          default="$GITHUB_WORKSPACE/images/server/builds/${{ matrix.arch }}/$build_id"
-          test "$(readlink -f "$default/boot/kernel")" = "$(readlink -f "$candidate/kernel")"
-          test "$(readlink -f "$default/disk.ext4")" = "$(readlink -f "$candidate/disk.ext4")"
-          test "$(readlink -f "$default/rootfs.tar")" = "$(readlink -f "$candidate/rootfs.tar")"
-          test -s "$default/fallback/boot/kernel"
-          test -s "$default/fallback/disk.ext4"
-          echo "LINOS_SERVER_KERNEL_DIR=$candidate" >> "$GITHUB_ENV"
-
-      - name: Boot Linos as the normal Server kernel
-        shell: bash
-        run: |
-          bash tests/kernel.sh "$LINOS_SERVER_KERNEL_DIR"
-          bash tests/server.sh smoke "${{ matrix.arch }}"
-
-      - name: Install AMD64 UEFI firmware and media tooling
-        if: matrix.arch == 'amd64'
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            gdisk dosfstools mtools systemd-boot-efi ovmf
-
-      - name: Firmware-boot Linos research kernel into actual Server
-        if: matrix.arch == 'amd64'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          export LINOS_KERNEL_TEST_IMAGE_DIR="$LINOS_SERVER_KERNEL_DIR"
-          bash build/media.sh amd64
-          bash tests/boot.sh uefi
-
-      - name: Build and verify installable Linos kernel package
+      - name: Build installable Linos kernel package
         shell: bash
         run: |
           set -Eeuo pipefail
           bash build/kernel-package.sh "$RUNNER_TEMP/kernel-out/linos-kernel" "$RUNNER_TEMP/linos-deb"
           (cd "$RUNNER_TEMP/linos-deb" && sha256sum -c SHA256SUMS)
-          deb="$(find "$RUNNER_TEMP/linos-deb" -maxdepth 1 -name 'linos-kernel_*.deb' -print -quit)"
+          deb="$(find "$RUNNER_TEMP/linos-deb" -name "linos-kernel_*.deb" -print -quit)"
           test -s "$deb"
-          test "$(dpkg-deb -f "$deb" Package)" = linos-kernel
-          test "$(dpkg-deb -f "$deb" Architecture)" = '${{ matrix.arch }}'
-          release="$(cat "$RUNNER_TEMP/linos-deb/kernel-release")"
-          dpkg-deb --fsys-tarfile "$deb" | tar -tf - | grep -Fx "./boot/vmlinuz-$release"
-          dpkg-deb --fsys-tarfile "$deb" | tar -tf - | grep -Fx "./usr/lib/modules/$release/"
+          test "$(dpkg-deb -f "$deb" Architecture)" = "${{ matrix.arch }}"
+          echo "LINOS_TEST_KERNEL_DEB=$deb" >> "$GITHUB_ENV"
+
+      - name: Install packaged Linos kernel into normal Server image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash build/package.sh
+          LINOS_KERNEL_PACKAGE="$LINOS_TEST_KERNEL_DEB" bash build/image.sh
+          build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' system/release/usr/lib/linos/release)"
+          root="$GITHUB_WORKSPACE/images/server/builds/${{ matrix.arch }}/$build_id"
+          rel="$(cat "$RUNNER_TEMP/linos-deb/kernel-release")"
+          test -s "$root/boot/kernel"
+          test -s "$root/boot/initramfs"
+          test -s "$root/disk.ext4"
+          tar -tf "$root/rootfs.tar" | grep -Fx "./boot/vmlinuz-$rel"
+          tar -tf "$root/rootfs.tar" | grep -Fx "./usr/lib/modules/$rel/"
+          test ! -e "$root/fallback/disk.ext4"
+
+      - name: Boot the normal Linos Server image
+        shell: bash
+        run: bash tests/server.sh smoke "${{ matrix.arch }}"
+
+      - name: Install AMD64 UEFI firmware and media tooling
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y gdisk dosfstools mtools systemd-boot-efi ovmf
+
+      - name: UEFI boot the packaged Linos kernel
+        if: matrix.arch == 'amd64'
+        run: |
+          bash build/media.sh amd64
+          bash tests/boot.sh uefi
 
       - name: Upload installable Linos kernel package
         uses: actions/upload-artifact@v7
@@ -235,7 +223,6 @@ jobs:
             ${{ runner.temp }}/linos-deb/kernel-release
           if-no-files-found: error
           retention-days: 14
-
       - name: Package tested Linos kernel candidate
         shell: bash
         run: |
