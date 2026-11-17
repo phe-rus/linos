@@ -70,6 +70,10 @@ jobs:
     # Continue OS validation even if an experimental kernel job failed or was skipped.
     if: always() && needs.changes.result == 'success'
     runs-on: ${{ matrix.runner }}
+    # Compatibility images are tested separately; product image boots require
+    # the verified Linos kernel and cannot use this escape hatch by default.
+    env:
+      LINOS_ALLOW_COMPAT: '1'
     timeout-minutes: 30
     strategy:
       fail-fast: false
