@@ -32,7 +32,7 @@ fi
 # Version policy belongs to the Linos kernel, independently of Linos 13.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO/kernel/source.conf"
-RELEASE="${LINOS_KERNEL_RELEASE:-$LINOS_KERNEL_STABLE}"
+RELEASE="${LINOS_KERNEL_RELEASE:-$LINOS_KERNEL_LTS}"
 case "$RELEASE" in
  "$LINOS_KERNEL_STABLE"|"$LINOS_KERNEL_LTS") ;;
  *) echo "Unapproved upstream Linux release: $RELEASE" >&2; exit 2 ;;
