@@ -47,6 +47,29 @@ if ! dumpe2fs -h "$DISK" >/dev/null 2>&1; then
     exit 2
 fi
 
+
+# Standard smoke tests must prove kernel identity, not just boot success.
+if [[ -s "$BUILD_DIR/kernel-manifest" ]]; then
+    MODE="$(sed -n 's/^mode=//p' "$BUILD_DIR/kernel-manifest")"
+    RELEASE="$(sed -n 's/^release=//p' "$BUILD_DIR/kernel-manifest")"
+    if [[ "$MODE" != linos || "$RELEASE" != *-linos ]]; then
+        echo "Non-Linos kernel rejected: $MODE $RELEASE" >&2
+        [[ "${LINOS_ALLOW_COMPAT:-0}" == 1 ]] || exit 2
+    fi
+    for item in "kernel:$KERNEL" "initramfs:$INITRAMFS"; do
+        field="${item%%:*}_sha256"
+        source="${item#*:}"
+        expected="$(sed -n "s/^$field=//p" "$BUILD_DIR/kernel-manifest")"
+        [[ -n "$expected" && "$expected" == "$(sha256sum "$source" | cut -d' ' -f1)" ]] || {
+            echo "FAIL: $field mismatch" >&2
+            exit 1
+        }
+    done
+else
+    echo "No kernel manifest: build a fresh Linos image" >&2
+    [[ "${LINOS_ALLOW_COMPAT:-0}" == 1 ]] || exit 2
+fi
+
 if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
         qemu-system-x86_64
