@@ -15,7 +15,9 @@ case "$ARCH" in amd64|arm64) ;; *) echo "Unsupported architecture" >&2; exit 2;;
 [[ -s "$SRC/boot/kernel" && -s "$SRC/boot/config-$REL" &&
    -s "$SRC/boot/System.map-$REL" && -d "$SRC/lib/modules/$REL" ]] || exit 1
 (cd "$SRC" && sha256sum -c SHA256SUMS)
-WORK="$(mktemp -d /tmp/linos-kernel-deb.XXXXXXXX)"
+# All kernel build and package scratch data stays inside the Linos workspace.
+mkdir -p "$(dirname "$OUT")"
+WORK="$(mktemp -d "$(dirname "$OUT")/.linos-kernel-package.XXXXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT
 PKG="$WORK/package"
 mkdir -p "$PKG/DEBIAN" "$PKG/boot" "$PKG/usr/lib/modules/$REL" "$PKG/usr/share/doc/linos-kernel"

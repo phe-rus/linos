@@ -1,0 +1,94 @@
+name: Linos Kernel · Installed OS Boot
+
+# Release-only gate. Reuses compiled kernel .deb; does not compile Linux again.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  installed-boot:
+    name: Linos 13 installed kernel ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            qemu_package: qemu-system-x86
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            qemu_package: qemu-system-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: linos-kernel-${{ matrix.arch }}
+          path: kernel-package
+      - name: Install OS image dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            mmdebstrap dpkg-dev e2fsprogs qemu-utils ca-certificates \
+            gnupg curl expect fakeroot ${{ matrix.qemu_package }}
+      - name: Install a stable Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Verify Debian 13 archive keys
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          keydir="$RUNNER_TEMP/linos-debian-keys"
+          mkdir -p "$keydir"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13.asc \
+            --output "$keydir/archive.asc"
+          curl --fail --location --silent --show-error \
+            https://ftp-master.debian.org/keys/archive-key-13-security.asc \
+            --output "$keydir/security.asc"
+          (
+            cd "$keydir"
+            printf '%s\n' \
+              '6f1d277429dd7ffedcc6f8688a7ad9a458859b1139ffa026d1eeaadcbffb0da7  archive.asc' \
+              '844c07d242db37f283afab9d5531270a0550841e90f9f1a9c3bd599722b808b7  security.asc' \
+              | sha256sum --check
+          )
+          gpg --batch --dearmor --output "$keydir/archive.gpg" "$keydir/archive.asc"
+          gpg --batch --dearmor --output "$keydir/security.gpg" "$keydir/security.asc"
+          cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
+          echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
+      - name: Assemble Linos 13 with the exact qualified kernel package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          arch="${{ matrix.arch }}"
+          package="$GITHUB_WORKSPACE/kernel-package/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.deb"
+          test -s "$package"
+          (cd kernel-package && sha256sum -c SHA256SUMS)
+          ./build/package.sh
+          LINOS_KERNEL_MODE=linos LINOS_KERNEL_PACKAGE="$package" \
+            bash build/image.sh
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          image="images/server/builds/$arch/$build_id"
+          test -s "$image/kernel-manifest"
+          grep -Fxq mode=linos "$image/kernel-manifest"
+          grep -Eq '^release=[^[:space:]]+-linos$' "$image/kernel-manifest"
+          test -s "$image/boot/kernel"
+          test -s "$image/boot/initramfs"
+      - name: Boot Linos 13 Server under QEMU
+        run: bash tests/server.sh smoke ${{ matrix.arch }}
+      - name: Preserve actual guest diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kernel-installed-boot-failure-${{ matrix.arch }}
+          path: |
+            images/server/builds/**/smoke.log
+            images/server/builds/**/qemu.log
+            images/server/builds/**/kernel-manifest
+          if-no-files-found: ignore
+          retention-days: 7

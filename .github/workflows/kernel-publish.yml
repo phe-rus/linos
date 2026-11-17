@@ -30,6 +30,16 @@ jobs:
           test "$GITHUB_EVENT_NAME" = push
           test "$(find release -type f -name '*.deb' | wc -l)" -eq 2
           assets=()
+          # Every binary is linked to its signed upstream source, Linos overlay
+          # and exact build configuration in the published release materials.
+          recipe="$RUNNER_TEMP/linos-kernel-source-recipe_$LINOS_KERNEL_VERSION.tar.gz"
+          tar -czf "$recipe" \
+            kernel/source.conf kernel/config kernel/overlays \
+            kernel/apply-source.py kernel/README.md \
+            build/kernel.sh build/kernel-package.sh
+          recipe_sums="$recipe.sha256"
+          sha256sum "$recipe" > "$recipe_sums"
+          assets+=("$recipe" "$recipe_sums")
           for arch in amd64 arm64; do
             dir="release/linos-kernel-$arch"
             file="$dir/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.deb"
@@ -39,7 +49,12 @@ jobs:
             test "$(dpkg-deb -f "$file" Package)" = linos-kernel
             test "$(dpkg-deb -f "$file" Version)" = "$LINOS_KERNEL_VERSION"
             test "$(dpkg-deb -f "$file" Architecture)" = "$arch"
-            assets+=("$file")
+            test -s "$dir/provenance.txt"
+            grep -Fxq "linos_kernel_version=$LINOS_KERNEL_VERSION" "$dir/provenance.txt"
+            grep -Fxq "architecture=$arch" "$dir/provenance.txt"
+            grep -Fxq "source_tag=v$LINOS_KERNEL_LTS" "$dir/provenance.txt"
+            cp "$dir/provenance.txt" "$RUNNER_TEMP/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.provenance.txt"
+            assets+=("$file" "$RUNNER_TEMP/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.provenance.txt")
           done
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1 ||
              gh release view "$tag" >/dev/null 2>&1; then
@@ -49,5 +64,5 @@ jobs:
           gh release create "$tag" "${assets[@]}" \
             --target "$GITHUB_SHA" \
             --title "Linos $LINOS_KERNEL_VERSION" \
-            --notes "Linos kernel packages for amd64 and arm64, based on verified upstream Linux $LINOS_KERNEL_LTS and tested using QEMU. Experimental prerelease, not production-ready." \
+            --notes "Linos kernel packages for amd64 and arm64, based on signed upstream Linux $LINOS_KERNEL_LTS and Linos source overlays. Each package includes build provenance. The attached source recipe identifies the Linos changes; upstream source is https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git tag v$LINOS_KERNEL_LTS. Experimental prerelease, not production-ready." \
             --prerelease

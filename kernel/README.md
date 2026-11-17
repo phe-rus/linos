@@ -78,3 +78,23 @@ A commit containing `kernel:build` triggers the same signed-source kernel
 build and packaged-kernel QEMU boot checks, but does **not** create a tag or
 publish a GitHub Release. `kernel:release` triggers the full qualified
 publication process only when the kernel is demonstrably ready.
+
+## Linos kernel build policy: responsiveness and recovery
+
+The common kernel profile now explicitly requires dynamic preemption and
+high-resolution timers, cgroup memory/CPU/I/O pressure accounting, seccomp,
+pstore crash logging, device mapper verity/crypt, and overlayfs support.
+These are capabilities that Linos owns and validates as *kernel contracts*.
+Linos userspace must still supply the policy, integrity keys, update
+mechanisms and recovery UX. No claim of full-disk encryption, secure boot
+or automatic rollback is made merely by setting a Kconfig option.
+
+The kernel build and package staging directories stay under the checked-out
+Linos workspace. The distribution's config is checked again after the
+kernel package is extracted for the QEMU boot test.
+
+A release needs more than a minimal QEMU boot: verified multi-architecture
+kernel and installed Linos 13 boots, rescue-console behavior, hardware
+compatibility, latency and pressure measurements, lifecycle and power
+testing, security review, and complete corresponding source availability.
+None of those is waived by a successful compile.

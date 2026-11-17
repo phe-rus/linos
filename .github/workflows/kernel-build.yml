@@ -80,6 +80,7 @@ jobs:
           bash build/kernel-package.sh kernel/build/${{ matrix.arch }}/linos-kernel kernel/dist
           (cd kernel/dist && sha256sum -c SHA256SUMS)
           test "$(dpkg-deb -f kernel/dist/linos-kernel_*.deb Architecture)" = "${{ matrix.arch }}"
+          cp "kernel/build/${{ matrix.arch }}/provenance.txt" kernel/dist/provenance.txt
       - name: Upload kernel package for boot and release stages
         uses: actions/upload-artifact@v7
         with:
@@ -88,6 +89,7 @@ jobs:
             kernel/dist/*.deb
             kernel/dist/SHA256SUMS
             kernel/dist/kernel-release
+            kernel/dist/provenance.txt
           if-no-files-found: error
           retention-days: 14
       - name: Preserve failed kernel config

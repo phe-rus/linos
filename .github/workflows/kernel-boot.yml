@@ -51,6 +51,21 @@ jobs:
           test "$release" = "$(basename "$(find extracted/boot -name 'vmlinuz-*-linos' -print -quit)" | sed 's/^vmlinuz-//')"
           image="extracted/boot/vmlinuz-$release"
           test -s "$image"
+          # Verify the actual distributed config, not just the build input.
+          config="extracted/boot/config-$release"
+          test -s "$config"
+          for setting in \
+            CONFIG_LINOS_BOOT_STATE=y \
+            CONFIG_PSI=y \
+            CONFIG_PREEMPT_DYNAMIC=y \
+            CONFIG_SECCOMP_FILTER=y \
+            CONFIG_PSTORE=y \
+            CONFIG_DM_VERITY=y; do
+            grep -Fxq "$setting" "$config" || {
+              echo "Distributed Linos kernel missing $setting" >&2
+              exit 1
+            }
+          done
 
           root="$RUNNER_TEMP/initramfs"
           mkdir -p "$root"/{bin,dev,proc,sys}

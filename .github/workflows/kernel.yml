@@ -34,9 +34,17 @@ jobs:
       contents: read
       actions: read
 
-  publish:
+  integration:
     if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
     needs: boot
+    uses: ./.github/workflows/kernel-integration.yml
+    permissions:
+      contents: read
+      actions: read
+
+  publish:
+    if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
+    needs: integration
     uses: ./.github/workflows/kernel-publish.yml
     permissions:
       contents: write
