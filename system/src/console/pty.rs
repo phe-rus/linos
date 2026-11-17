@@ -61,6 +61,10 @@ impl Session {
         cmd.arg("-i")
             .env("LINOS_NO_WELCOME", "1")
             .env("LINOS_EMBEDDED_PTY", "1")
+            // Bash is started without rc files in embedded mode, so supply
+            // a stable, compact prompt instead of its generic bash-5.x$.
+            // This is intentionally only a display preference, not identity.
+            .env("PS1", r"\h:\w\$ ")
             .env("TERM", "xterm-256color")
             .stdin(Stdio::from(slave_file.try_clone()?))
             .stdout(Stdio::from(slave_file.try_clone()?))
