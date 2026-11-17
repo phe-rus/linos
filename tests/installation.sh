@@ -143,17 +143,22 @@ timeout --signal=TERM --kill-after=5s 180s qemu-system-x86_64 \
     -chardev "file,id=linos_serial,path=$LOG" -serial chardev:linos_serial \
     > "$WORK/qemu.log" 2>&1 &
 PID=$!
+# Linos uses Cliclack on a local serial console. Accept the current
+# branded sign-in and the supported text-mode fallback, but always require
+# device initialization to report an unclaimed state.
+has_sign_in() {
+    grep -Fq 'Linos 13 · Sign in' "$LOG" ||
+    grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG"
+}
 while kill -0 "$PID" 2>/dev/null; do
-    if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" &&
-       grep -q 'Provisioning state: unclaimed' "$LOG"; then
+    if has_sign_in && grep -q 'Provisioning state: unclaimed' "$LOG"; then
         kill -TERM "$PID" 2>/dev/null || true
         break
     fi
     sleep 2
 done
 wait "$PID" || true
-if grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" &&
-   grep -q 'Provisioning state: unclaimed' "$LOG"; then
+if has_sign_in && grep -q 'Provisioning state: unclaimed' "$LOG"; then
     echo "PASS: offline payload deployed to GPT System A and booted in UEFI QEMU"
 else
     echo "FAIL: simulated installed system did not reach login" >&2
