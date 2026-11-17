@@ -15,14 +15,14 @@ class OverlayTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.source = Path(self.directory.name)
         (self.source / "kernel").mkdir()
-        (self.source / "kernel/Kconfig").write_text('menu "Kernel"\nendmenu\n')
+        (self.source / "Kconfig").write_text('menu "Kernel"\nendmenu\n')
         (self.source / "kernel/Makefile").write_text("obj-y += fork.o\n")
         self.overlay = ROOT / "kernel/overlays"
 
     def test_applies_and_is_idempotent(self) -> None:
         APPLY(self.source, self.overlay)
         APPLY(self.source, self.overlay)
-        config = (self.source / "kernel/Kconfig").read_text()
+        config = (self.source / "Kconfig").read_text()
         makefile = (self.source / "kernel/Makefile").read_text()
         self.assertEqual(config.count('source "kernel/Kconfig.linos"'), 1)
         self.assertEqual(
@@ -39,7 +39,7 @@ class OverlayTests(unittest.TestCase):
             APPLY(self.source, self.overlay)
 
     def test_requires_kernel_source_layout(self) -> None:
-        (self.source / "kernel/Kconfig").unlink()
+        (self.source / "Kconfig").unlink()
         with self.assertRaisesRegex(RuntimeError, "upstream"):
             APPLY(self.source, self.overlay)
 

@@ -5,7 +5,7 @@ import sys
 import hashlib
 
 def apply(src: Path, overlay: Path) -> None:
-    for p in ("kernel/Kconfig", "kernel/Makefile"):
+    for p in ("Kconfig", "kernel/Makefile"):
         if not (src / p).is_file():
             raise RuntimeError("Not an upstream Linux source tree: " + p)
     for name in ("linos_boot_state.c", "Kconfig.linos"):
@@ -16,7 +16,7 @@ def apply(src: Path, overlay: Path) -> None:
         dest.write_bytes(data)
         print(f"overlay {name}: {hashlib.sha256(data).hexdigest()}")
     for name, line in (
-        ("kernel/Kconfig", 'source "kernel/Kconfig.linos"'),
+        ("Kconfig", 'source "kernel/Kconfig.linos"'),
         ("kernel/Makefile", "obj-$(CONFIG_LINOS_BOOT_STATE) += linos_boot_state.o"),
     ):
         path = src / name
