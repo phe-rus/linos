@@ -106,10 +106,11 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
         eof { puts stderr "Login UI exited before password authentication"; exit 1 }
     }
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
-    # Ratatui draws into the alternate screen. /shell exits the dashboard.
-    # The dashboard has a slash command palette that accepts typed commands.
-    after 1200
-    send -- "/shell\r"
+    # Login opens the Ratatui dashboard. Wait for its real command surface,
+    # then use the documented Ctrl+T shortcut to switch into the genuine
+    # Bash shell. Do not race terminal initialization by typing /shell.
+    await {Type / for commands}
+    send -- "\024"
     await {❯ }
     send -- "stty -echo\r"
     await {❯ }
