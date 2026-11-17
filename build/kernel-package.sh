@@ -49,7 +49,7 @@ fi
 POSTINST
 chmod 755 "$PKG/DEBIAN/postinst"
 mkdir -p "$OUT"
-FILE="$OUT/linos-kernel_\${VERSION}_\${ARCH}.deb"
+FILE="$OUT/linos-kernel_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group --build "$PKG" "$FILE"
 [[ "$(dpkg-deb -f "$FILE" Package)" == linos-kernel &&
    "$(dpkg-deb -f "$FILE" Architecture)" == "$ARCH" ]] || exit 1
