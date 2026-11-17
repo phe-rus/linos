@@ -147,7 +147,13 @@ impl Session {
         let line = last_line.trim_end();
         line == "$"
             || line == "#"
-            || (line.starts_with("bash-") && (line.ends_with('
+            || (line.starts_with("bash-") && (line.ends_with('$') || line.ends_with('#')))
+            || line.rsplit_once(':').is_some_and(|(hostname, path)| {
+                !hostname.is_empty()
+                    && hostname.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+                    && (path.starts_with('~') || path.starts_with('/'))
+                    && (path.ends_with('$') || path.ends_with('#'))
+            })
     }
 
     /// Avoid treating an idle interactive shell as an authentication request.
