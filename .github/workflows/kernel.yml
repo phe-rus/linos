@@ -14,12 +14,13 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: linos-kernel-release-main
-  cancel-in-progress: false
-
 jobs:
   build:
+    # Only a requested kernel build enters the concurrency queue.
+    # Regular kernel commits skip immediately without blocking the workflow.
+    concurrency:
+      group: linos-kernel-build-main
+      cancel-in-progress: false
     # An exact, deliberate commit-message marker gates expensive work.
     # A push without this marker has no build/boot/release jobs.
     if: ${{ contains(github.event.head_commit.message, 'kernel:build') || contains(github.event.head_commit.message, 'kernel:release') }}
