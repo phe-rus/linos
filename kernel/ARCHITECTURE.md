@@ -97,3 +97,13 @@ gates and package provenance. This is **not yet** a fully validated shipping
 kernel. At present we must not claim finished recovery, signed boot, full
 hardware portability, mobile support, Rust kernel drivers, or Apple-level
 responsiveness. Those need implementations and tests.
+
+### CI cost and latency standard
+
+The kernel release entry point remains the only tag-producing pipeline.
+Static policy and source overlay tests run **before** upstream source downloads.
+The two supported architecture builds use different native GitHub runners
+and may run concurrently within that single release workflow. Each architecture
+compiles only once, using a bounded 1.5 GB ccache restored across runs;
+QEMU and image verification consume packaged artifacts and do not recompile.
+The legacy unreferenced kernel research workflow has been superseded.

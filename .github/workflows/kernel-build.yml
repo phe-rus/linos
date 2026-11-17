@@ -14,7 +14,9 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 1
+      # One workflow, two isolated native runners. Parallelism saves elapsed
+      # time without compiling the same architecture twice.
+      max-parallel: 2
       matrix:
         include:
           - arch: amd64
@@ -34,6 +36,10 @@ jobs:
           [[ "$GITHUB_EVENT_NAME" == push ]]
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - name: Validate Linos kernel contracts before compilation
+        run: |
+          python3 tests/kernel-source-overlay.py
+          python3 tests/kernel-policy.py
       - name: Install kernel toolchain
         run: |
           sudo apt-get update
@@ -79,10 +85,6 @@ jobs:
           git -C kernel/source/linux verify-tag "v$LINOS_KERNEL_LTS"
           test "$(git -C kernel/source/linux rev-parse HEAD)" = \
             "$(git -C kernel/source/linux rev-list -n 1 "v$LINOS_KERNEL_LTS")"
-      - name: Validate Linos kernel contracts before compilation
-        run: |
-          python3 tests/kernel-source-overlay.py
-          python3 tests/kernel-policy.py
 
       - name: Compile and package kernel once
         shell: bash
