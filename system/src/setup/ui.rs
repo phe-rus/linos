@@ -1,7 +1,7 @@
 //! Clack-style first-boot experience for the native Linos Server console.
 //! The UI only collects choices. System configuration lives in setup.rs.
 use std::{
-    env,
+    env, fs,
     io::{self, IsTerminal, Write},
     process::Command,
     thread,
@@ -31,6 +31,10 @@ fn end_boot_status_output() -> io::Result<()> {
 pub fn start() -> io::Result<()> {
     if interactive() {
         end_boot_status_output()?;
+        // Kernel printk is independent of systemd boot status. Keep emergencies
+        // visible, but stop routine driver notices from corrupting Cliclack.
+        // Messages remain available through dmesg/journalctl -k.
+        fs::write("/proc/sys/kernel/printk", "1\n")?;
         // Clear the visible terminal AND supported scrollback, not just scroll up.
         print!("\x1b[3J\x1b[2J\x1b[H");
         io::stdout().flush()?;

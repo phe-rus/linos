@@ -31,11 +31,14 @@ fn prompt() -> io::Result<String> {
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         return Err(io::Error::other("Not a trusted interactive console"));
     }
-    // Boot progress remains visible until local sign-in takes ownership.
-    // Switching off console progress does not change journal logging.
+    // Claim the local console before drawing the interactive sign-in screen.
+    // Kernel logging remains available in the journal and dmesg.
     let _ = Command::new("/usr/bin/kill")
         .args(["-s", "RTMIN+21", "1"])
         .status();
+    // A kernel driver can initialize after sign-in has already appeared.
+    // Suppress routine console printk, not the kernel log itself.
+    fs::write("/proc/sys/kernel/printk", "1\n")?;
     print!("\x1b[3J\x1b[2J\x1b[H");
     io::stdout().flush()?;
 
