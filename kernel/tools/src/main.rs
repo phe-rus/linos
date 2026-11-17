@@ -29,7 +29,10 @@ fn overlay(source: &Path, overlays: &Path) -> Result<()> {
         if dest.exists() {
             let existing = fs::read(&dest).map_err(|e| format!("{}: {e}", dest.display()))?;
             if existing != contents {
-                return Err(format!("Refusing conflicting Linos overlay: {}", dest.display()));
+                return Err(format!(
+                    "Refusing conflicting Linos overlay: {}",
+                    dest.display()
+                ));
             }
         } else {
             write(&dest, &contents)?;
@@ -37,7 +40,10 @@ fn overlay(source: &Path, overlays: &Path) -> Result<()> {
     }
     for (relative, line) in [
         ("Kconfig", r#"source "kernel/Kconfig.linos""#),
-        ("kernel/Makefile", "obj-$(CONFIG_LINOS_BOOT_STATE) += linos_boot_state.o"),
+        (
+            "kernel/Makefile",
+            "obj-$(CONFIG_LINOS_BOOT_STATE) += linos_boot_state.o",
+        ),
     ] {
         let path = source.join(relative);
         let old = read(&path)?;
@@ -60,33 +66,56 @@ fn policy_file(path: &Path) -> Result<BTreeMap<String, String>> {
             continue;
         }
         let (name, value) = line.split_once('=').ok_or_else(|| {
-            format!("{}:{} invalid Kconfig assignment", path.display(), index + 1)
+            format!(
+                "{}:{} invalid Kconfig assignment",
+                path.display(),
+                index + 1
+            )
         })?;
         let valid = name.starts_with("CONFIG_")
-            && name[7..].chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+            && name[7..]
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
             && !name[7..].is_empty()
             && matches!(value, "y" | "m" | "n");
         if !valid {
-            return Err(format!("{}:{} invalid policy: {line}", path.display(), index + 1));
+            return Err(format!(
+                "{}:{} invalid policy: {line}",
+                path.display(),
+                index + 1
+            ));
         }
         if entries.insert(name.to_owned(), value.to_owned()).is_some() {
-            return Err(format!("{}:{} duplicate option: {name}", path.display(), index + 1));
+            return Err(format!(
+                "{}:{} duplicate option: {name}",
+                path.display(),
+                index + 1
+            ));
         }
     }
     Ok(entries)
 }
 
 fn require(map: &BTreeMap<String, String>, name: &str, expected: &str) -> Result<()> {
-    if map.get(name).map(String::as_str) == Some(expected) { Ok(()) }
-    else { Err(format!("{name} must be {expected} in Linos kernel policy")) }
+    if map.get(name).map(String::as_str) == Some(expected) {
+        Ok(())
+    } else {
+        Err(format!("{name} must be {expected} in Linos kernel policy"))
+    }
 }
 
 fn valid_version(source: &str, key: &str) -> Result<()> {
     let prefix = format!("{key}=");
-    let value = source.lines().find_map(|line| line.strip_prefix(&prefix))
+    let value = source
+        .lines()
+        .find_map(|line| line.strip_prefix(&prefix))
         .ok_or_else(|| format!("Missing {key}"))?;
     let sections: Vec<_> = value.split('.').collect();
-    if sections.len() != 3 || sections.iter().any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit())) {
+    if sections.len() != 3
+        || sections
+            .iter()
+            .any(|p| p.is_empty() || !p.chars().all(|c| c.is_ascii_digit()))
+    {
         return Err(format!("Invalid {key}: {value}"));
     }
     Ok(())
@@ -96,10 +125,22 @@ fn policy(root: &Path) -> Result<()> {
     let config = root.join("kernel/config");
     let common = policy_file(&config.join("common.config"))?;
     for option in [
-        "MODULES", "BLK_DEV_INITRD", "SECURITY_LANDLOCK", "SECURITY_YAMA",
-        "HARDENED_USERCOPY", "SECCOMP_FILTER", "LINOS_BOOT_STATE", "PSI",
-        "MEMCG", "CGROUP_PIDS", "HIGH_RES_TIMERS", "PREEMPT_DYNAMIC",
-        "PSTORE", "DM_VERITY", "OVERLAY_FS", "DEBUG_INFO_NONE",
+        "MODULES",
+        "BLK_DEV_INITRD",
+        "SECURITY_LANDLOCK",
+        "SECURITY_YAMA",
+        "HARDENED_USERCOPY",
+        "SECCOMP_FILTER",
+        "LINOS_BOOT_STATE",
+        "PSI",
+        "MEMCG",
+        "CGROUP_PIDS",
+        "HIGH_RES_TIMERS",
+        "PREEMPT_DYNAMIC",
+        "PSTORE",
+        "DM_VERITY",
+        "OVERLAY_FS",
+        "DEBUG_INFO_NONE",
     ] {
         require(&common, &format!("CONFIG_{option}"), "y")?;
     }
@@ -108,19 +149,32 @@ fn policy(root: &Path) -> Result<()> {
     }
     for arch in ["amd64", "arm64"] {
         let selected = policy_file(&config.join(format!("{arch}.config")))?;
-        for option in ["DRM_VIRTIO_GPU", "FRAMEBUFFER_CONSOLE", "INPUT_EVDEV", "VT_CONSOLE"] {
+        for option in [
+            "DRM_VIRTIO_GPU",
+            "FRAMEBUFFER_CONSOLE",
+            "INPUT_EVDEV",
+            "VT_CONSOLE",
+        ] {
             require(&selected, &format!("CONFIG_{option}"), "y")?;
         }
         for key in selected.keys() {
-            if common.contains_key(key) { return Err(format!("{arch}: duplicate common policy option: {key}")); }
+            if common.contains_key(key) {
+                return Err(format!("{arch}: duplicate common policy option: {key}"));
+            }
         }
     }
     let versions = read(&root.join("kernel/source.conf"))?;
     valid_version(&versions, "LINOS_KERNEL_VERSION")?;
     valid_version(&versions, "LINOS_KERNEL_LTS")?;
     let code = read(&root.join("kernel/overlays/linos_boot_state.c"))?;
-    for phrase in ["CAP_SYS_BOOT", r#"sysfs_streq(buf, "ready")"#, "atomic_cmpxchg"] {
-        if !code.contains(phrase) { return Err(format!("Missing boot-state contract: {phrase}")); }
+    for phrase in [
+        "CAP_SYS_BOOT",
+        r#"sysfs_streq(buf, "ready")"#,
+        "atomic_cmpxchg",
+    ] {
+        if !code.contains(phrase) {
+            return Err(format!("Missing boot-state contract: {phrase}"));
+        }
     }
     Ok(())
 }
@@ -145,8 +199,12 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
     fn sandbox() -> PathBuf {
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path = env::temp_dir().join(format!("linos-kernel-tool-{}-{unique}", std::process::id()));
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            env::temp_dir().join(format!("linos-kernel-tool-{}-{unique}", std::process::id()));
         fs::create_dir_all(path.join("kernel")).unwrap();
         path
     }
@@ -162,10 +220,26 @@ mod tests {
         let overlays = root.join("kernel/overlays");
         overlay(&path, &overlays).unwrap();
         overlay(&path, &overlays).unwrap();
-        assert_eq!(read(&path.join("Kconfig")).unwrap().matches(r#"source "kernel/Kconfig.linos""#).count(), 1);
-        assert_eq!(read(&path.join("kernel/Makefile")).unwrap().matches("linos_boot_state.o").count(), 1);
+        assert_eq!(
+            read(&path.join("Kconfig"))
+                .unwrap()
+                .matches(r#"source "kernel/Kconfig.linos""#)
+                .count(),
+            1
+        );
+        assert_eq!(
+            read(&path.join("kernel/Makefile"))
+                .unwrap()
+                .matches("linos_boot_state.o")
+                .count(),
+            1
+        );
         write(&path.join("kernel/linos_boot_state.c"), b"conflict").unwrap();
-        assert!(overlay(&path, &overlays).unwrap_err().contains("conflicting"));
+        assert!(
+            overlay(&path, &overlays)
+                .unwrap_err()
+                .contains("conflicting")
+        );
         fs::remove_dir_all(path).unwrap();
     }
     #[test]

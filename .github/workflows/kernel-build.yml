@@ -110,7 +110,8 @@ jobs:
           cp "kernel/build/${{ matrix.arch }}/provenance.txt" kernel/dist/provenance.txt
       - name: Show compiler reuse statistics
         if: always()
-        run: ccache --show-stats
+        run: |
+          if command -v ccache >/dev/null 2>&1; then ccache --show-stats; fi
       - name: Upload kernel package for boot and release stages
         uses: actions/upload-artifact@v7
         with:
