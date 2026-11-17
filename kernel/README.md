@@ -98,3 +98,22 @@ kernel and installed Linos 13 boots, rescue-console behavior, hardware
 compatibility, latency and pressure measurements, lifecycle and power
 testing, security review, and complete corresponding source availability.
 None of those is waived by a successful compile.
+
+## Build performance and deliberate minimalism
+
+The release kernel disables automatically appended Git local versions and
+unnecessary DWARF/BTF debug data. Compiler output is cached independently per
+architecture between CI runs. Linos does **not** disable security, kernel
+instrumentation or hardware drivers indiscriminately to improve a benchmark.
+
+The base starts from upstream `defconfig`, which is not yet a fully minimized
+hardware-specific production configuration. The supported release target is
+initially AMD64 and ARM64 QEMU, **not every PC or phone**. A device is supported
+only after its firmware, graphics, sleep/wake, network, storage, input,
+power and recovery behavior has been tested. An absent driver means no support,
+not automatic performance improvement.
+
+Rust applications and system services run in Linos 13 userspace already. The
+kernel source currently contains C code. Enabling Linux's optional Rust kernel
+toolchain without a specific implemented Rust driver would increase compiler
+and dependency cost without providing a new product capability.

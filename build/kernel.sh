@@ -109,7 +109,7 @@ done
 JOBS="${LINOS_KERNEL_JOBS:-2}"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "LINOS_KERNEL_JOBS must be positive" >&2; exit 2; }
 make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" -j "$JOBS" "${IMAGE##*/}" modules
-KERNEL_RELEASE="$(make -s -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" kernelrelease)"
+KERNEL_RELEASE="$(make -s -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" kernelrelease)"
 [[ "$KERNEL_RELEASE" == *-linos ]] || { echo "Kernel identity mismatch" >&2; exit 1; }
 MODULES_DEST="$OUTPUT/staged"
 make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" \

@@ -60,7 +60,8 @@ jobs:
             CONFIG_PREEMPT_DYNAMIC=y \
             CONFIG_SECCOMP_FILTER=y \
             CONFIG_PSTORE=y \
-            CONFIG_DM_VERITY=y; do
+            CONFIG_DM_VERITY=y \
+            CONFIG_DEBUG_INFO_NONE=y; do
             grep -Fxq "$setting" "$config" || {
               echo "Distributed Linos kernel missing $setting" >&2
               exit 1

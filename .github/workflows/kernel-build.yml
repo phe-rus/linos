@@ -38,7 +38,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            bc bison flex libssl-dev libelf-dev dwarves gnupg git make gcc kmod dpkg-dev ca-certificates
+            bc bison flex libssl-dev libelf-dev gnupg git make gcc kmod dpkg-dev ca-certificates ccache
+      - name: Restore reusable compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: linos-kernel-ccache-${{ matrix.arch }}-${{ hashFiles('kernel/source.conf', 'kernel/config/*.config', 'kernel/overlays/**', 'build/kernel.sh') }}
+          restore-keys: |
+            linos-kernel-ccache-${{ matrix.arch }}-
+      - name: Configure compiler cache
+        run: |
+          ccache --max-size=1500M
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
       - name: Verify official Linux stable signing key
         shell: bash
         run: |
@@ -68,8 +79,11 @@ jobs:
           git -C kernel/source/linux verify-tag "v$LINOS_KERNEL_LTS"
           test "$(git -C kernel/source/linux rev-parse HEAD)" = \
             "$(git -C kernel/source/linux rev-list -n 1 "v$LINOS_KERNEL_LTS")"
-      - name: Validate Linos source overlay before compilation
-        run: python3 tests/kernel-source-overlay.py
+      - name: Validate Linos kernel contracts before compilation
+        run: |
+          python3 tests/kernel-source-overlay.py
+          python3 tests/kernel-policy.py
+
       - name: Compile and package kernel once
         shell: bash
         run: |
@@ -81,6 +95,9 @@ jobs:
           (cd kernel/dist && sha256sum -c SHA256SUMS)
           test "$(dpkg-deb -f kernel/dist/linos-kernel_*.deb Architecture)" = "${{ matrix.arch }}"
           cp "kernel/build/${{ matrix.arch }}/provenance.txt" kernel/dist/provenance.txt
+      - name: Show compiler reuse statistics
+        if: always()
+        run: ccache --show-stats
       - name: Upload kernel package for boot and release stages
         uses: actions/upload-artifact@v7
         with:
