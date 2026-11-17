@@ -9,56 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  # One orchestration run for each branch or pull request; latest commit wins.
+  # Manual runs on the same ref replace older unfinished manual runs.
   group: linos-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Decide whether kernel compilation is necessary
-    runs-on: ubuntu-24.04
-    outputs:
-      kernel: ${{ steps.paths.outputs.kernel }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Compare all commits in the push or pull request
-        id: paths
-        shell: bash
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -Eeuo pipefail
-          if [[ "$EVENT" == workflow_dispatch ]]; then
-            echo 'kernel=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [[ "$EVENT" == pull_request ]]; then
-            base="$PR_BASE"
-          else
-            base="$BEFORE"
-          fi
-          if [[ ! "$base" =~ ^[0-9a-f]{40}$ || "$base" == 0000000000000000000000000000000000000000 ]]; then
-            echo 'kernel=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changes="$(git diff --name-only "$base" HEAD)"
-          # Graphics development is userspace-only; it must not rebuild the kernel.
-          changes="$(grep -v '^system/src/graphics/' <<<"$changes" || true)"
-          if grep -Eq '^(kernel/|build/(kernel|kernel-package|image|package|media)\.sh$|tests/kernel\.sh$|system/(src|release)/|\.github/workflows/kernel-research\.yml$)' <<<"$changes"; then
-            echo 'kernel=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'kernel=false' >> "$GITHUB_OUTPUT"
-          fi
-
-
   build-and-boot:
     name: ${{ matrix.arch }} · Rust, image, QEMU
-    needs: changes
-    if: needs.changes.result == 'success'
     runs-on: ${{ matrix.runner }}
     # Compatibility images are tested separately; product image boots require
     # the verified Linos kernel and cannot use this escape hatch by default.
