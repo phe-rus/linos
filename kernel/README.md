@@ -70,3 +70,13 @@ LINOS_KERNEL_BUILD_DIR=/tmp/linos-kernel-out bash build/image.sh
 The resulting `images/server/builds/<arch>/<build-id>/linos-kernel/` directory contains a separately bootable `kernel`, `initramfs`, `disk.ext4`, release/architecture metadata, and checksums. It is assembled from the same Server root filesystem, with matching kernel modules and an initramfs regenerated for that kernel. The normal `boot/` and `disk.ext4` outputs are left unchanged. A separate UEFI research image can be generated using `LINOS_KERNEL_TEST_IMAGE_DIR` with `build/media.sh`. This is not automatic production promotion, Secure Boot signing, or persistent A/B rollback.
 
 Kernel CI exercises this **normal image builder integration** before completing its actual Linos Server QEMU and amd64 UEFI boot gates. For now, the Linos kernel candidate is explicitly selected for testing, not installed onto physical machines.
+
+## Primary Server kernel (promoted from a verified candidate)
+
+If `LINOS_KERNEL_BUILD_DIR` is set when building the Server image, `build/image.sh` now promotes that Linos kernel candidate to the **normal boot locations by default**. Boot kernel, initramfs, disk and packaged rootfs are selected together; the matching modules are included in the root filesystem used by the offline installer. The previous kernel's complete boot files and OS image remain in `fallback/` for manual recovery. Use `LINOS_KERNEL_PRIMARY=0` to keep a new candidate separate without promotion. No upstream source checkout is implicitly trusted: the candidate must be produced from the existing signed-source verification workflow.
+
+```sh
+LINOS_KERNEL_BUILD_DIR=/path/to/verified/kernel-build ./build/image.sh
+```
+
+Without a provided Linos kernel build, the existing Debian-based image build remains the compatibility path; this is deliberate until standalone Linos kernel distribution is available. This does **not** constitute automated rollback, signed production updates, or full removal of Debian packages from Linos 13.

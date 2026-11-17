@@ -241,7 +241,7 @@ if [[ -n "${LINOS_KERNEL_BUILD_DIR:-}" ]]; then
     echo "Assembling isolated Linos $CANDIDATE_RELEASE Server image"
     bash "$ROOT/build/kernel.sh" server-image "$ROOT/$ROOTFS" "$CANDIDATE_SOURCE" "$CANDIDATE_DEST"
     [[ -s "$CANDIDATE_DEST/kernel" && -s "$CANDIDATE_DEST/initramfs" &&
-       -s "$CANDIDATE_DEST/disk.ext4" ]] || {
+       -s "$CANDIDATE_DEST/disk.ext4" && -s "$CANDIDATE_DEST/rootfs.tar" ]] || {
         echo "Linos kernel Server image was not assembled" >&2
         exit 1
     }
@@ -250,7 +250,32 @@ if [[ -n "${LINOS_KERNEL_BUILD_DIR:-}" ]]; then
         sha256sum -c "$BUILD_DIR/linos-kernel/SHA256SUMS"
     )
     echo "Linos kernel candidate: $CANDIDATE_DEST"
-    echo "Default Debian-kernel image preserved: $DISK"
+    if [[ "${LINOS_KERNEL_PRIMARY:-1}" == 1 ]]; then
+        # Promote the complete, matching Linos artifact set. Retain the
+        # previous image as an explicit fallback, not the default boot.
+        # Relative links keep the build relocatable and avoid duplicate
+        # multi-gigabyte disk copies.
+        FALLBACK="$BUILD_DIR/fallback"
+        mkdir -p "$FALLBACK/boot"
+        mv -- "$BOOT_DIR/kernel" "$FALLBACK/boot/kernel"
+        mv -- "$BOOT_DIR/initramfs" "$FALLBACK/boot/initramfs"
+        mv -- "$DISK" "$FALLBACK/disk.ext4"
+        mv -- "$ROOTFS" "$FALLBACK/rootfs.tar"
+        ln -s ../linos-kernel/kernel "$BOOT_DIR/kernel"
+        ln -s ../linos-kernel/initramfs "$BOOT_DIR/initramfs"
+        ln -s linos-kernel/disk.ext4 "$DISK"
+        ln -s linos-kernel/rootfs.tar "$ROOTFS"
+        printf '%s\n' "$CANDIDATE_RELEASE" > "$BUILD_DIR/kernel-release"
+        [[ "$(readlink -f "$DISK")" == "$(readlink -f "$CANDIDATE_DEST/disk.ext4")" ]] || exit 1
+        echo "Linos is the primary Server kernel: $CANDIDATE_RELEASE"
+        echo "Previous boot files retained under $FALLBACK"
+    else
+        [[ "${LINOS_KERNEL_PRIMARY}" == 0 ]] || {
+            echo "LINOS_KERNEL_PRIMARY must be 0 or 1" >&2
+            exit 2
+        }
+        echo "Linos remains an isolated candidate; default image unchanged."
+    fi
 fi
 )
 

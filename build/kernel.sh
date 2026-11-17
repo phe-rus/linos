@@ -206,9 +206,12 @@ install -m 644 "$IMAGE" "$DEST/kernel"
 sudo install -m 644 "$STAGE/boot/initrd.img-$REL" "$DEST/initramfs"
 truncate -s 3G "$DEST/disk.ext4"
 sudo mkfs.ext4 -F -q -L linos-root -d "$STAGE" "$DEST/disk.ext4"
+# Package the *same* rootfs that went into the Linos disk. Installer
+# payloads must not silently revert to the earlier Debian-kernel rootfs.
+sudo tar --numeric-owner --exclude='./dev/*' -C "$STAGE" -cf "$DEST/rootfs.tar" .
 printf '%s\n' "$REL" > "$DEST/kernel-release"
 printf '%s\n' "$ARCH" > "$DEST/architecture"
-sha256sum "$DEST/kernel" "$DEST/initramfs" "$DEST/disk.ext4" > "$DEST/SHA256SUMS"
+sha256sum "$DEST/kernel" "$DEST/initramfs" "$DEST/disk.ext4" "$DEST/rootfs.tar" > "$DEST/SHA256SUMS"
 echo "Disposable Server kernel image assembled: $DEST"
 )
 
