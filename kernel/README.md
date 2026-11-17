@@ -57,3 +57,17 @@ No `kernel` branch, no merge request, and no manual release tag.
 This pipeline is separate from Linos 13 OS CI. Do not use
 `kernel:release` until the kernel policy has been locally
 validated or reviewed for qualification.
+
+## First Linos-owned kernel service
+
+The reviewed source overlay under `kernel/overlays/` adds a privileged
+boot-readiness acknowledgement at `/sys/kernel/linos/boot_state`. It begins
+as `starting`, and a local process with `CAP_SYS_BOOT` can write `ready`.
+The state can be read without privilege. It does not claim rollback, watchdog
+recovery or attestation. QEMU qualification must test both states using the
+*packaged kernel*, not merely check its version string.
+
+The signed upstream checkout remains unmodified: the build creates a
+separate temporary Git worktree for applying Linos source additions.
+Pressure stall reporting and cgroup controllers are required for future
+measured resource management, not claimed to automatically improve latency.

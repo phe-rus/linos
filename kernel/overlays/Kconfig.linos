@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-only
+menu "Linos platform services"
+config LINOS_BOOT_STATE
+	bool "Linos userspace boot-completion handshake"
+	depends on SYSFS
+	default y
+	help
+	  Expose /sys/kernel/linos/boot_state to report 'starting' until
+	  an authorized boot manager with CAP_SYS_BOOT writes 'ready'.
+	  This is a reporting contract, not a watchdog or rollback engine.
+endmenu

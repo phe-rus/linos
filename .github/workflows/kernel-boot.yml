@@ -62,6 +62,11 @@ jobs:
           #!/bin/sh
           /bin/busybox mount -t proc proc /proc
           /bin/busybox mount -t sysfs sysfs /sys
+          state=/sys/kernel/linos/boot_state
+          test "$(/bin/busybox cat "$state")" = starting || exit 41
+          echo ready > "$state" || exit 42
+          test "$(/bin/busybox cat "$state")" = ready || exit 43
+          echo LINOS_BOOT_STATE_OK
           echo LINOS_KERNEL_BOOT_OK
           /bin/busybox poweroff -f
           INIT
@@ -79,6 +84,10 @@ jobs:
             -append "console=$console rdinit=/init loglevel=4" \
             -smp 2 -m 1024 -display none -monitor none -serial stdio \
             -no-reboot -net none >"$RUNNER_TEMP/qemu.log" 2>&1 || true
+          grep -Fq LINOS_BOOT_STATE_OK "$RUNNER_TEMP/qemu.log" || {
+            tail -n 100 "$RUNNER_TEMP/qemu.log"
+            exit 1
+          }
           grep -Fq LINOS_KERNEL_BOOT_OK "$RUNNER_TEMP/qemu.log" || {
             tail -n 120 "$RUNNER_TEMP/qemu.log"
             exit 1

@@ -48,7 +48,20 @@ fi
 git -C "$SOURCE" verify-tag "$TAG" || {
   echo "Upstream tag signature verification failed: $TAG" >&2; exit 1
 }
-for cmd in make gcc bc bison flex openssl sha256sum; do
+# Keep the verified upstream Git checkout pristine. Apply Linos-owned code
+# only to an isolated source worktree beside the build output.
+WORKTREE="${OUTPUT}.source"
+[[ ! -e "$WORKTREE" ]] || {
+  echo "Existing derived source worktree: $WORKTREE" >&2; exit 2
+}
+mkdir -p "$(dirname "$OUTPUT")"
+git -C "$SOURCE" worktree add --quiet --detach "$WORKTREE" "$TAG"
+cleanup_kernel_worktree() {
+  git -C "$SOURCE" worktree remove --force "$WORKTREE" || true
+}
+trap cleanup_kernel_worktree EXIT
+python3 "$REPO/kernel/apply-source.py" "$WORKTREE" "$REPO/kernel/overlays"
+for cmd in make gcc bc bison flex openssl sha256sum python3; do
   command -v "$cmd" >/dev/null || { echo "Missing build dependency: $cmd" >&2; exit 2; }
 done
 mkdir -p "$OUTPUT"
@@ -57,7 +70,7 @@ export KBUILD_BUILD_HOST=builder
 export KBUILD_BUILD_TIMESTAMP="${SOURCE_DATE_EPOCH:-@0}"
 export KBUILD_BUILD_VERSION=1
 
-make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" defconfig
+make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" defconfig
 
 # Apply and verify versioned, architecture-specific Linos kernel policy.
 for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_NAME.config"; do
@@ -69,14 +82,15 @@ for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_N
     }
     symbol="${BASH_REMATCH[1]#CONFIG_}"
     case "${BASH_REMATCH[2]}" in
-      y) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --enable "$symbol" ;;
-      m) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --module "$symbol" ;;
-      n) "$SOURCE/scripts/config" --file "$OUTPUT/.config" --disable "$symbol" ;;
+      y) "$WORKTREE/scripts/config" --file "$OUTPUT/.config" --enable "$symbol" ;;
+      m) "$WORKTREE/scripts/config" --file "$OUTPUT/.config" --module "$symbol" ;;
+      n) "$WORKTREE/scripts/config" --file "$OUTPUT/.config" --disable "$symbol" ;;
     esac
   done < "$fragment"
 done
-"$SOURCE/scripts/config" --file "$OUTPUT/.config" --set-str LOCALVERSION '-linos'
-make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" olddefconfig
+"$WORKTREE/scripts/config" --file "$OUTPUT/.config" --enable LINOS_BOOT_STATE
+"$WORKTREE/scripts/config" --file "$OUTPUT/.config" --set-str LOCALVERSION '-linos'
+make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" olddefconfig
 for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_NAME.config"; do
   while IFS= read -r entry || [[ -n "$entry" ]]; do
     [[ -z "$entry" || "$entry" == \#* ]] && continue
@@ -94,11 +108,11 @@ for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_N
 done
 JOBS="${LINOS_KERNEL_JOBS:-2}"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "LINOS_KERNEL_JOBS must be positive" >&2; exit 2; }
-make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" -j "$JOBS" "${IMAGE##*/}" modules
+make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" -j "$JOBS" "${IMAGE##*/}" modules
 KERNEL_RELEASE="$(make -s -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" kernelrelease)"
 [[ "$KERNEL_RELEASE" == *-linos ]] || { echo "Kernel identity mismatch" >&2; exit 1; }
 MODULES_DEST="$OUTPUT/staged"
-make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
+make -C "$WORKTREE" O="$OUTPUT" ARCH="$KARCH" \
   INSTALL_MOD_PATH="$MODULES_DEST" DEPMOD=true modules_install
 [[ -s "$OUTPUT/$IMAGE" ]] || { echo "Kernel image missing" >&2; exit 1; }
 MODULES_SOURCE="$MODULES_DEST/lib/modules/$KERNEL_RELEASE"
