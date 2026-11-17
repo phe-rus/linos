@@ -1,0 +1,53 @@
+name: Linos Kernel · Publish
+
+# Reusable release publishing only. Never compiles or boots kernels.
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: Publish verified version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: linos-kernel-*
+          path: release
+      - name: Validate packages and publish prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          tag="linos-v$LINOS_KERNEL_VERSION"
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_EVENT_NAME" = push
+          test "$(find release -type f -name '*.deb' | wc -l)" -eq 2
+          assets=()
+          for arch in amd64 arm64; do
+            dir="release/linos-kernel-$arch"
+            file="$dir/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.deb"
+            test -s "$file"
+            test -s "$dir/SHA256SUMS"
+            (cd "$dir" && sha256sum -c SHA256SUMS)
+            test "$(dpkg-deb -f "$file" Package)" = linos-kernel
+            test "$(dpkg-deb -f "$file" Version)" = "$LINOS_KERNEL_VERSION"
+            test "$(dpkg-deb -f "$file" Architecture)" = "$arch"
+            assets+=("$file")
+          done
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1 ||
+             gh release view "$tag" >/dev/null 2>&1; then
+            echo "Tag or release $tag exists: refusing to overwrite" >&2
+            exit 1
+          fi
+          gh release create "$tag" "${assets[@]}" \
+            --target "$GITHUB_SHA" \
+            --title "Linos $LINOS_KERNEL_VERSION" \
+            --notes "Linos kernel packages for amd64 and arm64, based on verified upstream Linux $LINOS_KERNEL_LTS and tested using QEMU. Experimental prerelease, not production-ready." \
+            --prerelease

@@ -1,0 +1,42 @@
+name: Linos Kernel Release
+
+# The latest main-branch commit must explicitly request a release.
+# The version tag is created only after qualification passes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kernel/**'
+      - 'build/kernel.sh'
+      - 'build/kernel-package.sh'
+      - '.github/workflows/kernel*.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linos-kernel-release-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # An exact, deliberate commit-message marker gates expensive work.
+    # A push without this marker has no build/boot/release jobs.
+    if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
+    uses: ./.github/workflows/kernel-build.yml
+    permissions:
+      contents: read
+
+  boot:
+    needs: build
+    uses: ./.github/workflows/kernel-boot.yml
+    permissions:
+      contents: read
+      actions: read
+
+  publish:
+    needs: boot
+    uses: ./.github/workflows/kernel-publish.yml
+    permissions:
+      contents: write
+      actions: read

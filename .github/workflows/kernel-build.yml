@@ -1,0 +1,98 @@
+name: Linos Kernel · Build
+
+# Reusable kernel build only. No QEMU, OS images, or publication.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Confirm explicit kernel release request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$GITHUB_EVENT_NAME" == push ]]
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+      - name: Install kernel toolchain
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev dwarves gnupg git make gcc kmod dpkg-dev ca-certificates
+      - name: Verify official Linux stable signing key
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          expected=647F28654894E3BD457199BE38DBBDC86092693E
+          gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$expected" ||
+            gpg --batch --locate-keys gregkh@kernel.org ||
+            gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$expected"
+          gpg --batch --with-colons --fingerprint "$expected" |
+            grep -Fxq "fpr:::::::::$expected:"
+      - name: Obtain verified upstream Linux source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          for remote in \
+            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
+            https://github.com/gregkh/linux.git; do
+            rm -rf -- kernel/source/linux
+            if timeout 180s git -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=30 \
+              clone --depth 1 --single-branch --branch "v$LINOS_KERNEL_LTS" \
+              "$remote" kernel/source/linux; then
+              break
+            fi
+          done
+          test -d kernel/source/linux/.git
+          git -C kernel/source/linux verify-tag "v$LINOS_KERNEL_LTS"
+          test "$(git -C kernel/source/linux rev-parse HEAD)" = \
+            "$(git -C kernel/source/linux rev-list -n 1 "v$LINOS_KERNEL_LTS")"
+      - name: Compile and package kernel once
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source kernel/source.conf
+          LINOS_KERNEL_RELEASE="$LINOS_KERNEL_LTS" LINOS_KERNEL_JOBS=4 \
+            bash build/kernel.sh build "${{ matrix.arch }}" kernel/source/linux kernel/build/${{ matrix.arch }}
+          bash build/kernel-package.sh kernel/build/${{ matrix.arch }}/linos-kernel kernel/dist
+          (cd kernel/dist && sha256sum -c SHA256SUMS)
+          test "$(dpkg-deb -f kernel/dist/linos-kernel_*.deb Architecture)" = "${{ matrix.arch }}"
+      - name: Upload kernel package for boot and release stages
+        uses: actions/upload-artifact@v7
+        with:
+          name: linos-kernel-${{ matrix.arch }}
+          path: |
+            kernel/dist/*.deb
+            kernel/dist/SHA256SUMS
+            kernel/dist/kernel-release
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve failed kernel config
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kernel-build-failure-${{ matrix.arch }}
+          path: kernel/build/${{ matrix.arch }}/.config
+          if-no-files-found: ignore
+          retention-days: 7

@@ -101,7 +101,11 @@ MODULES_DEST="$OUTPUT/staged"
 make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
   INSTALL_MOD_PATH="$MODULES_DEST" DEPMOD=true modules_install
 [[ -s "$OUTPUT/$IMAGE" ]] || { echo "Kernel image missing" >&2; exit 1; }
-[[ -d "$MODULES_DEST/lib/modules/$KERNEL_RELEASE" || -d "$MODULES_DEST/usr/lib/modules/$KERNEL_RELEASE" ]] || {
+MODULES_SOURCE="$MODULES_DEST/lib/modules/$KERNEL_RELEASE"
+if [[ ! -d "$MODULES_SOURCE" ]]; then
+  MODULES_SOURCE="$MODULES_DEST/usr/lib/modules/$KERNEL_RELEASE"
+fi
+[[ -d "$MODULES_SOURCE" ]] || {
   echo "Kernel modules staging directory missing" >&2; exit 1;
 }
 {
@@ -116,11 +120,11 @@ make -C "$SOURCE" O="$OUTPUT" ARCH="$KARCH" \
 } >"$OUTPUT/provenance.txt"
 # Package kernel, configuration, modules and checksums as one release candidate.
 ARTIFACT="$OUTPUT/linos-kernel"
-mkdir -p "$ARTIFACT/boot" "$ARTIFACT/lib/modules"
+mkdir -p "$ARTIFACT/boot" "$ARTIFACT/lib/modules/$KERNEL_RELEASE"
 install -m 644 "$OUTPUT/$IMAGE" "$ARTIFACT/boot/kernel"
 install -m 644 "$OUTPUT/.config" "$ARTIFACT/boot/config-$KERNEL_RELEASE"
 install -m 644 "$OUTPUT/System.map" "$ARTIFACT/boot/System.map-$KERNEL_RELEASE"
-cp -a "$MODULES_DEST/lib/modules/$KERNEL_RELEASE" "$ARTIFACT/lib/modules/$KERNEL_RELEASE"
+cp -a "$MODULES_SOURCE/." "$ARTIFACT/lib/modules/$KERNEL_RELEASE/"
 install -m 644 "$OUTPUT/provenance.txt" "$ARTIFACT/provenance.txt"
 (cd "$ARTIFACT" && find boot lib -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 echo "Linos kernel release candidate: $ARTIFACT"
@@ -164,6 +168,9 @@ case "$ARCH" in
 esac
 [[ -s "$IMAGE" ]] || { echo "Kernel image not built: $IMAGE" >&2; exit 1; }
 MODULE_SOURCE="$BUILD/staged/lib/modules/$REL"
+if [[ ! -d "$MODULE_SOURCE" ]]; then
+  MODULE_SOURCE="$BUILD/staged/usr/lib/modules/$REL"
+fi
 [[ -d "$MODULE_SOURCE" ]] || { echo "Kernel module directory missing: $MODULE_SOURCE" >&2; exit 1; }
 
 mkdir -p "$DEST"
