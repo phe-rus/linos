@@ -125,3 +125,12 @@ is unset even with automatic Git suffixes disabled. The build now explicitly
 sets `LOCALVERSION` empty while `CONFIG_LOCALVERSION=-linos` supplies
 our deterministic suffix. A mismatched release string fails with its
 actual value printed.
+
+### Language contract
+
+Linos-owned build-support code is Rust. The external Linux kernel contains
+upstream C and assembly and requires standard Linux build scripts. Linos does
+not rewrite those upstream subsystems merely to declare a single-language
+product. Kernel-level Linos Rust code requires a supported `CONFIG_RUST`
+toolchain and a deliberate design/review and QEMU test for the specific API;
+none is falsely claimed by this tooling migration.

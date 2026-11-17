@@ -36,10 +36,10 @@ jobs:
           [[ "$GITHUB_EVENT_NAME" == push ]]
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
-      - name: Validate Linos kernel contracts before compilation
+      - name: Validate Linos kernel contracts with Rust
         run: |
-          python3 tests/kernel-source-overlay.py
-          python3 tests/kernel-policy.py
+          cargo test --manifest-path kernel/tools/Cargo.toml --locked
+          cargo build --release --manifest-path kernel/tools/Cargo.toml --locked
       - name: Install kernel toolchain
         run: |
           sudo apt-get update

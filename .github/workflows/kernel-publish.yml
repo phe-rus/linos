@@ -35,7 +35,7 @@ jobs:
           recipe="$RUNNER_TEMP/linos-kernel-source-recipe_$LINOS_KERNEL_VERSION.tar.gz"
           tar -czf "$recipe" \
             kernel/source.conf kernel/config kernel/overlays \
-            kernel/apply-source.py kernel/README.md \
+            kernel/tools/Cargo.toml kernel/tools/Cargo.lock kernel/tools/src/main.rs kernel/README.md \
             build/kernel.sh build/kernel-package.sh
           recipe_sums="$recipe.sha256"
           sha256sum "$recipe" > "$recipe_sums"

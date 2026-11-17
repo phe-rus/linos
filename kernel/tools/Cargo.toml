@@ -1,0 +1,11 @@
+[package]
+name = "linos-kernel-tool"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "linos-kernel-tool"
+path = "src/main.rs"
+
+[dependencies]

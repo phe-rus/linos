@@ -60,8 +60,8 @@ cleanup_kernel_worktree() {
   git -C "$SOURCE" worktree remove --force "$WORKTREE" || true
 }
 trap cleanup_kernel_worktree EXIT
-python3 "$REPO/kernel/apply-source.py" "$WORKTREE" "$REPO/kernel/overlays"
-for cmd in make gcc bc bison flex openssl sha256sum python3; do
+"$REPO/kernel/tools/target/release/linos-kernel-tool" apply "$WORKTREE" "$REPO/kernel/overlays"
+for cmd in make gcc bc bison flex openssl sha256sum; do
   command -v "$cmd" >/dev/null || { echo "Missing build dependency: $cmd" >&2; exit 2; }
 done
 mkdir -p "$OUTPUT"
@@ -144,7 +144,7 @@ fi
   printf 'image_sha256=%s\n' "$(sha256sum "$OUTPUT/$IMAGE" | cut -d ' ' -f1)"
   printf 'linos_overlay_c_sha256=%s\n' "$(sha256sum "$REPO/kernel/overlays/linos_boot_state.c" | cut -d ' ' -f1)"
   printf 'linos_overlay_kconfig_sha256=%s\n' "$(sha256sum "$REPO/kernel/overlays/Kconfig.linos" | cut -d ' ' -f1)"
-  printf 'linos_source_application_sha256=%s\n' "$(sha256sum "$REPO/kernel/apply-source.py" | cut -d ' ' -f1)"
+  printf 'linos_source_application_sha256=%s\n' "$(sha256sum "$REPO/kernel/tools/src/main.rs" | cut -d ' ' -f1)"
   printf 'linos_build_script_sha256=%s\n' "$(sha256sum "$REPO/build/kernel.sh" | cut -d ' ' -f1)"
   printf 'image_bytes=%s\n' "$(stat -c %s "$OUTPUT/$IMAGE")"
   printf 'module_files=%s\n' "$(find "$MODULES_SOURCE" -type f -name '*.ko*' | wc -l | tr -d ' ')"

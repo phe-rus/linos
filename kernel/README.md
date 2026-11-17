@@ -122,3 +122,13 @@ The config validator permits a forbidden feature to be absent when Linux
 Kconfig hides it because its dependencies are disabled. A forbidden feature
 set to `y` or `m` still fails the build. Positive capability requirements
 continue to require an exact `y` value after Kconfig resolution.
+
+## Linos-owned tooling language
+
+Linos-maintained kernel overlay application, source checks and kernel policy
+validation are implemented in **Rust** under `kernel/tools/`. CI runs Rust
+unit tests and compiles the small dependency-free tool once before the signed
+upstream kernel build. There are no Linos-owned Python scripts in the kernel
+pipeline. Linux itself remains upstream C and assembly, with GNU Make and
+shell build commands required by Linux. The existing Linos boot-state source
+overlay is C until replaced by a verified supported Rust-for-Linux mechanism.
