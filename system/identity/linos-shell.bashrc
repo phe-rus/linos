@@ -9,5 +9,5 @@ fi
 # SSH, sudo and tmux retain their own terminal input.
 if [[ $- == *i* ]]; then
     bind -x '"\C-t": "exit"'
-    PS1='\[\e[36m\]linos\[\e[0m\] \w ❯ '
+    PS1='\[\e[36m\]\h\[\e[0m\]:\w\$ '
 fi
