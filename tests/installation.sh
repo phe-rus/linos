@@ -13,7 +13,7 @@ data_partition_last_sector() {
     last_usable=$((sectors - 34))
     aligned_end=$(((last_usable / 2048) * 2048 - 1))
     (( aligned_end > 2048 )) || return 1
-    printf '%s\\n' "$aligned_end"
+    printf '%s\n' "$aligned_end"
 }
 
 layout() (
