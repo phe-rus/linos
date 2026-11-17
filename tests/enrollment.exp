@@ -90,17 +90,19 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     # Enrollment service is skipped after an owner is committed.
     # The local serial getty runs the Clack username screen, then execs
     # the standard PAM-backed login program for the password prompt.
-    await {Username}
-    # Accept the remembered username first. Fall back to typing it if the
-    # terminal implementation leaves the optional default unselected.
-    send -- "\r"
+    # A remembered username is presented automatically and handed to PAM.
+    # A first-time console without a saved hint still prompts for Username.
+    # Never send Enter before checking for Password:, or it can be treated
+    # as an empty password and leave the test stalled in a login retry.
     expect {
-        -re {Password:} {}
-        -re {Input required} {
+        -re {Password:} {
+            puts "Using remembered username; PAM requested password"
+        }
+        -re {Username} {
             send -- "$username\r"
             await {Password:}
         }
-        timeout { puts stderr "Login UI failed to reach PAM password prompt"; exit 1 }
+        timeout { puts stderr "Login UI failed to reach username or PAM password prompt"; exit 1 }
         eof { puts stderr "Login UI exited before password authentication"; exit 1 }
     }
     send -- "$env(LINOS_ENROLL_PASSWORD)\r"
