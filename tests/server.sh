@@ -229,16 +229,33 @@ else
     CPU="qemu64"
 fi
 echo "QEMU accelerator: $ACCEL"
-echo "To exit: press Ctrl+A, release both keys, then press X (not Ctrl+X)."
-echo "Alternatively: Ctrl+A, release, C to open QEMU monitor, then type quit."
+if [[ "${LINOS_QEMU_DISPLAY:-gtk}" == "none" ]]; then
+    echo "Serial-only mode selected. Use Ctrl+A then X to exit."
+    exec qemu-system-x86_64 \
+        -machine "pc,accel=$ACCEL" -cpu "$CPU" -smp 2 -m 2048 \
+        -nographic -net none \
+        -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
+        -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
+        -device virtio-blk-pci,drive=rootfs \
+        -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 loglevel=6 systemd.show_status=yes rd.systemd.show_status=yes systemd.unit=multi-user.target"
+fi
 
+# Interactive Server setup belongs in the guest's QEMU VGA window, not the
+# host terminal. Keep boot/service messages visible on tty1 until enrollment
+# explicitly clears the screen for Cliclack. Mirror serial logs to a file.
+DISPLAY_BACKEND="${LINOS_QEMU_DISPLAY:-gtk}"
+echo "Opening the Linos Server guest display ($DISPLAY_BACKEND)."
+echo "Boot messages will be visible in the guest before first-time setup."
+echo "Serial diagnostics: $DIR/console-serial.log"
+echo "Close the QEMU window to stop the guest."
 exec qemu-system-x86_64 \
     -machine "pc,accel=$ACCEL" -cpu "$CPU" -smp 2 -m 2048 \
-    -nographic -net none \
+    -display "$DISPLAY_BACKEND" -vga std -monitor none -net none \
+    -serial "file:$DIR/console-serial.log" \
     -kernel "$DIR/boot/kernel" -initrd "$DIR/boot/initramfs" \
     -drive "file=$OVERLAY,if=none,format=qcow2,id=rootfs" \
     -device virtio-blk-pci,drive=rootfs \
-    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 quiet loglevel=3 systemd.show_status=auto rd.systemd.show_status=auto systemd.unit=multi-user.target"
+    -append "root=/dev/vda rootwait rw console=ttyS0,115200n8 console=tty0 loglevel=6 systemd.show_status=yes rd.systemd.show_status=yes systemd.unit=multi-user.target"
 )
 
 case "${1:-smoke}" in
