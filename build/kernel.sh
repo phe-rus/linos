@@ -96,9 +96,13 @@ for fragment in "$REPO/kernel/config/common.config" "$REPO/kernel/config/$ARCH_N
     [[ -z "$entry" || "$entry" == \#* ]] && continue
     if [[ "$entry" == *=n ]]; then
       symbol="${entry%%=*}"
-      grep -Fxq "# $symbol is not set" "$OUTPUT/.config" || {
-        echo "Kernel policy missing disabled option: $entry" >&2; exit 1;
-      }
+      # Kconfig may omit a disabled symbol entirely when its dependencies
+      # are false. It is safe if absent or explicitly disabled, never if
+      # enabled or built as a module. Required positive settings remain strict.
+      if grep -Eq "^${symbol}=" "$OUTPUT/.config"; then
+        echo "Kernel policy requires this option disabled: $entry" >&2
+        exit 1
+      fi
     else
       grep -Fxq "$entry" "$OUTPUT/.config" || {
         echo "Kernel policy not satisfied: $entry" >&2; exit 1;

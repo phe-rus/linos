@@ -117,3 +117,8 @@ Rust applications and system services run in Linos 13 userspace already. The
 kernel source currently contains C code. Enabling Linux's optional Rust kernel
 toolchain without a specific implemented Rust driver would increase compiler
 and dependency cost without providing a new product capability.
+
+The config validator permits a forbidden feature to be absent when Linux
+Kconfig hides it because its dependencies are disabled. A forbidden feature
+set to `y` or `m` still fails the build. Positive capability requirements
+continue to require an exact `y` value after Kconfig resolution.
