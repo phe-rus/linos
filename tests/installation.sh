@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# GPT reserves its final sectors for the backup partition table. End the
+# data partition at the end of the preceding complete 2048-sector region.
+# The last LBA is thus 2047 modulo 2048, yielding 1 MiB alignment.
+data_partition_last_sector() {
+    local bytes sectors last_usable aligned_end
+    bytes="$(stat -c '%s' "$1")"
+    (( bytes % 512 == 0 )) || { echo "Disk size not sector-aligned" >&2; return 1; }
+    sectors=$((bytes / 512))
+    (( sectors > 4096 )) || { echo "GPT disk too small" >&2; return 1; }
+    last_usable=$((sectors - 34))
+    aligned_end=$(((last_usable / 2048) * 2048 - 1))
+    (( aligned_end > 2048 )) || return 1
+    printf '%s\\n' "$aligned_end"
+}
+
 layout() (
 set -Eeuo pipefail
 
@@ -21,16 +36,23 @@ WORK="$(mktemp -d /tmp/linos-layout-test.XXXXXXXX)"
 trap 'rm -r -- "$WORK"' EXIT
 DISK="$WORK/server-layout.raw"
 truncate -s 16G "$DISK"
+DATA_END="$(data_partition_last_sector "$DISK")"
 
 sgdisk --clear \
     --new=1:2048:+512M --typecode=1:ef00 --change-name=1:linos-efi \
     --new=2:0:+2G --typecode=2:8300 --change-name=2:linos-recovery \
     --new=3:0:+4G --typecode=3:8300 --change-name=3:linos-system-a \
     --new=4:0:+4G --typecode=4:8300 --change-name=4:linos-system-b \
-    --new=5:0:0 --typecode=5:8300 --change-name=5:linos-data \
+    --new=5:0:"$DATA_END" --typecode=5:8300 --change-name=5:linos-data \
     "$DISK" >/dev/null
 
 sgdisk --verify "$DISK"
+DATA_GEOMETRY="$(sgdisk --info=5 "$DISK")"
+DATA_LAST="$(sed -n 's/^Last sector: \\([0-9]*\\).*$/\\1/p' <<<"$DATA_GEOMETRY")"
+[[ "$DATA_LAST" == "$DATA_END" ]] || {
+    echo "Data partition does not meet 1 MiB end-alignment policy" >&2
+    exit 1
+}
 for item in \
     '1:linos-efi' \
     '2:linos-recovery' \
@@ -94,14 +116,21 @@ debugfs -R 'stat /usr/bin/linos' "$SYSTEM" 2>/dev/null | grep -q 'Type: regular'
 }
 
 truncate -s 16G "$DISK"
+DATA_END="$(data_partition_last_sector "$DISK")"
 sgdisk --clear \
     --new=1:2048:+512M --typecode=1:ef00 --change-name=1:linos-efi \
     --new=2:0:+2G --typecode=2:8300 --change-name=2:linos-recovery \
     --new=3:0:+4G --typecode=3:8300 --change-name=3:linos-system-a \
     --new=4:0:+4G --typecode=4:8300 --change-name=4:linos-system-b \
-    --new=5:0:0 --typecode=5:8300 --change-name=5:linos-data \
+    --new=5:0:"$DATA_END" --typecode=5:8300 --change-name=5:linos-data \
     "$DISK" >/dev/null
 sgdisk --verify "$DISK"
+DATA_GEOMETRY="$(sgdisk --info=5 "$DISK")"
+DATA_LAST="$(sed -n 's/^Last sector: \\([0-9]*\\).*$/\\1/p' <<<"$DATA_GEOMETRY")"
+[[ "$DATA_LAST" == "$DATA_END" ]] || {
+    echo "Data partition does not meet 1 MiB end-alignment policy" >&2
+    exit 1
+}
 ESP_START="$(sgdisk -i 1 "$DISK" | sed -n 's/^First sector: \([0-9]*\).*$/\1/p')"
 SYSTEM_START="$(sgdisk -i 3 "$DISK" | sed -n 's/^First sector: \([0-9]*\).*$/\1/p')"
 [[ -n "$ESP_START" && -n "$SYSTEM_START" ]] || { echo "GPT inspection failed" >&2; exit 1; }

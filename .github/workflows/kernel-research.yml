@@ -60,9 +60,27 @@ jobs:
           RELEASE: '7.3.4'
         run: |
           set -Eeuo pipefail
-          git clone --depth 1 --branch "v$RELEASE" \
+          # kernel.org can be unreachable from a GitHub-hosted ARM runner.
+          # Use the stable maintainer's GitHub mirror as a transport fallback,
+          # never as an alternative to verifying the pinned signed tag.
+          source kernel/source.conf
+          test "$RELEASE" = "$LINOS_KERNEL_STABLE"
+          for remote in \
             https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
-            "$RUNNER_TEMP/linux"
+            https://github.com/gregkh/linux.git; do
+            rm -rf -- "$RUNNER_TEMP/linux"
+            if timeout 120s git -c http.lowSpeedLimit=1024 \
+              -c http.lowSpeedTime=30 clone --depth 1 --single-branch \
+              --branch "v$RELEASE" "$remote" "$RUNNER_TEMP/linux"; then
+              echo "Fetched upstream stable kernel from $remote"
+              break
+            fi
+            echo "Source transport unavailable: $remote" >&2
+          done
+          test -d "$RUNNER_TEMP/linux/.git" || {
+            echo "No upstream Linux source mirror reachable" >&2
+            exit 1
+          }
           git -C "$RUNNER_TEMP/linux" verify-tag "v$RELEASE"
           test "$(git -C "$RUNNER_TEMP/linux" rev-parse HEAD)" = \
             "$(git -C "$RUNNER_TEMP/linux" rev-list -n 1 "v$RELEASE")"
