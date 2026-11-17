@@ -226,6 +226,7 @@ mod tests {
         assert!(Session::prompt_ready("bash-5.2$ "));
         assert!(Session::prompt_ready("linos:~$ "));
         assert!(Session::prompt_ready("linos:~/projects$ "));
+        assert!(Session::prompt_ready("server01:/var/log$ "));
         assert!(Session::prompt_ready("ls\nbash-5.2$ "));
         assert!(Session::prompt_ready("bash-5.2$ bash-5.2$ "));
         assert!(!Session::prompt_ready("[sudo] password for linos: "));
