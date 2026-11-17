@@ -1,7 +1,7 @@
 name: Linos Kernel Release
 
-# The latest main-branch commit must explicitly request a release.
-# The version tag is created only after qualification passes.
+# Explicit commit markers: kernel:build tests, kernel:release publishes after tests.
+# Kernel build-only runs never create GitHub tags or releases.
 on:
   push:
     branches: [main]
@@ -22,7 +22,7 @@ jobs:
   build:
     # An exact, deliberate commit-message marker gates expensive work.
     # A push without this marker has no build/boot/release jobs.
-    if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
+    if: ${{ contains(github.event.head_commit.message, 'kernel:build') || contains(github.event.head_commit.message, 'kernel:release') }}
     uses: ./.github/workflows/kernel-build.yml
     permissions:
       contents: read
@@ -35,6 +35,7 @@ jobs:
       actions: read
 
   publish:
+    if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
     needs: boot
     uses: ./.github/workflows/kernel-publish.yml
     permissions:

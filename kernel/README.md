@@ -71,3 +71,10 @@ The signed upstream checkout remains unmodified: the build creates a
 separate temporary Git worktree for applying Linos source additions.
 Pressure stall reporting and cgroup controllers are required for future
 measured resource management, not claimed to automatically improve latency.
+
+## Qualification without publication
+
+A commit containing `kernel:build` triggers the same signed-source kernel
+build and packaged-kernel QEMU boot checks, but does **not** create a tag or
+publish a GitHub Release. `kernel:release` triggers the full qualified
+publication process only when the kernel is demonstrably ready.
