@@ -211,6 +211,31 @@ jobs:
           bash build/media.sh amd64
           bash tests/boot.sh uefi
 
+      - name: Build and verify installable Linos kernel package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash build/kernel-package.sh "$RUNNER_TEMP/kernel-out/linos-kernel" "$RUNNER_TEMP/linos-deb"
+          (cd "$RUNNER_TEMP/linos-deb" && sha256sum -c SHA256SUMS)
+          deb="$(find "$RUNNER_TEMP/linos-deb" -maxdepth 1 -name 'linos-kernel_*.deb' -print -quit)"
+          test -s "$deb"
+          test "$(dpkg-deb -f "$deb" Package)" = linos-kernel
+          test "$(dpkg-deb -f "$deb" Architecture)" = '${{ matrix.arch }}'
+          release="$(cat "$RUNNER_TEMP/linos-deb/kernel-release")"
+          dpkg-deb --fsys-tarfile "$deb" | tar -tf - | grep -Fx "./boot/vmlinuz-$release"
+          dpkg-deb --fsys-tarfile "$deb" | tar -tf - | grep -Fx "./usr/lib/modules/$release/"
+
+      - name: Upload installable Linos kernel package
+        uses: actions/upload-artifact@v7
+        with:
+          name: linos-kernel-${{ matrix.arch }}-deb
+          path: |
+            ${{ runner.temp }}/linos-deb/*.deb
+            ${{ runner.temp }}/linos-deb/SHA256SUMS
+            ${{ runner.temp }}/linos-deb/kernel-release
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Package tested Linos kernel candidate
         shell: bash
         run: |
