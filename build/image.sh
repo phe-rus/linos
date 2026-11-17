@@ -308,6 +308,33 @@ if [[ -n "${LINOS_KERNEL_BUILD_DIR:-}" ]]; then
         echo "Linos remains an isolated candidate; default image unchanged."
     fi
 fi
+
+# Record the kernel used by the final bootable image, not a build-time
+# aspiration. This is consumed by the interactive QEMU launcher.
+BOOTED_KERNEL="$(readlink -f -- "$BOOT_DIR/kernel")"
+BOOTED_INITRAMFS="$(readlink -f -- "$BOOT_DIR/initramfs")"
+[[ -s "$BOOTED_KERNEL" && -s "$BOOTED_INITRAMFS" ]] || {
+    echo "Missing final kernel or initramfs" >&2
+    exit 1
+}
+FINAL_KERNEL_RELEASE="$KERNEL_VERSION"
+FINAL_KERNEL_MODE="$KERNEL_MODE"
+if [[ -s "$BUILD_DIR/kernel-release" ]]; then
+    FINAL_KERNEL_RELEASE="$(cat "$BUILD_DIR/kernel-release")"
+    FINAL_KERNEL_MODE=linos
+fi
+if [[ "$FINAL_KERNEL_MODE" == linos && "$FINAL_KERNEL_RELEASE" != *-linos ]]; then
+    echo "Linos image has a non-Linos kernel release: $FINAL_KERNEL_RELEASE" >&2
+    exit 1
+fi
+{
+    printf 'mode=%s\n' "$FINAL_KERNEL_MODE"
+    printf 'release=%s\n' "$FINAL_KERNEL_RELEASE"
+    printf 'kernel_sha256=%s\n' "$(sha256sum "$BOOTED_KERNEL" | cut -d' ' -f1)"
+    printf 'initramfs_sha256=%s\n' "$(sha256sum "$BOOTED_INITRAMFS" | cut -d' ' -f1)"
+} > "$BUILD_DIR/kernel-manifest"
+echo "Image kernel policy: $FINAL_KERNEL_MODE ($FINAL_KERNEL_RELEASE)"
+
 )
 
 minimal_rootfs() (
