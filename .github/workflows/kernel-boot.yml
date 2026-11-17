@@ -64,6 +64,13 @@ jobs:
           /bin/busybox mount -t sysfs sysfs /sys
           state=/sys/kernel/linos/boot_state
           test "$(/bin/busybox cat "$state")" = starting || exit 41
+          test -r /proc/pressure/memory || exit 44
+          test -r /proc/pressure/cpu || exit 45
+          if echo invalid > "$state"; then
+            echo "ERROR: kernel accepted invalid boot state"
+            exit 46
+          fi
+          test "$(/bin/busybox cat "$state")" = starting || exit 47
           echo ready > "$state" || exit 42
           test "$(/bin/busybox cat "$state")" = ready || exit 43
           echo LINOS_BOOT_STATE_OK
