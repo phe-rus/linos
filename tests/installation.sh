@@ -48,8 +48,8 @@ sgdisk --clear \
 
 sgdisk --verify "$DISK"
 DATA_GEOMETRY="$(sgdisk --info=5 "$DISK")"
-DATA_LAST="$(sed -n 's/^Last sector: \\([0-9]*\\).*$/\\1/p' <<<"$DATA_GEOMETRY")"
-[[ "$DATA_LAST" == "$DATA_END" ]] || {
+DATA_LAST="$(awk '/^Last sector:/ { print $3 }' <<<"$DATA_GEOMETRY")"
+[[ "$DATA_LAST" =~ ^[0-9]+$ && "$DATA_LAST" == "$DATA_END" ]] || {
     echo "Data partition does not meet 1 MiB end-alignment policy" >&2
     exit 1
 }
@@ -126,8 +126,8 @@ sgdisk --clear \
     "$DISK" >/dev/null
 sgdisk --verify "$DISK"
 DATA_GEOMETRY="$(sgdisk --info=5 "$DISK")"
-DATA_LAST="$(sed -n 's/^Last sector: \\([0-9]*\\).*$/\\1/p' <<<"$DATA_GEOMETRY")"
-[[ "$DATA_LAST" == "$DATA_END" ]] || {
+DATA_LAST="$(awk '/^Last sector:/ { print $3 }' <<<"$DATA_GEOMETRY")"
+[[ "$DATA_LAST" =~ ^[0-9]+$ && "$DATA_LAST" == "$DATA_END" ]] || {
     echo "Data partition does not meet 1 MiB end-alignment policy" >&2
     exit 1
 }
