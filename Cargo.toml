@@ -34,3 +34,7 @@ path = "system/src/recovery/main.rs"
 [[bin]]
 name = "init"
 path = "system/src/init.rs"
+
+[[bin]]
+name = "linos-graphics"
+path = "system/src/graphics/main.rs"

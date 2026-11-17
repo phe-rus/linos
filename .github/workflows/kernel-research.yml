@@ -34,7 +34,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             bc bison flex libssl-dev libelf-dev dwarves cpio busybox-static \
             ${{ matrix.qemu_package }} gnupg git make gcc kmod e2fsprogs \
-            mmdebstrap dpkg-dev fakeroot ca-certificates curl expect
+            mmdebstrap dpkg-dev fakeroot ca-certificates curl expect libx11-6
 
       - name: Import and verify pinned kernel.org signer
         shell: bash
