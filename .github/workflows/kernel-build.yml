@@ -38,6 +38,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
       - name: Validate Linos kernel contracts with Rust
         run: |
+          cargo fmt --manifest-path kernel/tools/Cargo.toml --check
           cargo test --manifest-path kernel/tools/Cargo.toml --locked
           cargo build --release --manifest-path kernel/tools/Cargo.toml --locked
       - name: Install kernel toolchain
