@@ -613,6 +613,571 @@ fn draw(frame: &mut Frame, app: &App) {
         return;
     }
 
+    // Linux commands are not dashboard cards. Keep their transcript close to
+    // the top and use a single compact command line instead of a framed
+    // composer, repeated shell prompt, directory banner and footer.
+    if app.view == View::Terminal {
+        let left = area.x.saturating_add(2);
+        let width = area.width.saturating_sub(4);
+        paragraph_at(
+            frame,
+            Rect::new(left, area.y.saturating_add(1), width, 1),
+            vec![Line::styled(
+                "Linos 13 · Server",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            )],
+        );
+        let output = if pty::Session::prompt_ready(&app.terminal_output) {
+            app.terminal_output
+                .rsplit_once('\n')
+                .map(|(prior, _)| prior)
+                .unwrap_or("")
+        } else {
+            app.terminal_output.as_str()
+        };
+        let transcript_height = area.height.saturating_sub(6);
+        let transcript_scroll = output
+            .lines()
+            .count()
+            .saturating_sub(usize::from(transcript_height))
+            .min(u16::MAX as usize) as u16;
+        frame.render_widget(
+            Paragraph::new(output)
+                .wrap(Wrap { trim: false })
+                .scroll((if app.follow_tail { transcript_scroll } else { app.scroll }, 0)),
+            Rect::new(left, area.y.saturating_add(3), width, transcript_height),
+        );
+        let home = env::var("HOME").unwrap_or_default();
+        let directory = app
+            .cwd
+            .strip_prefix(&home)
+            .ok()
+            .map(|relative| {
+                if relative.as_os_str().is_empty() {
+                    "~".to_owned()
+                } else {
+                    format!("~/{}", relative.display())
+                }
+            })
+            .unwrap_or_else(|| app.cwd.display().to_string());
+        let prompt = format!(
+            "{}:{}{} ",
+            host(),
+            directory,
+            if app.user == "root" { '#' } else { '
+    let width = area
+        .width
+        .saturating_sub(if area.width > 100 { 8 } else { 2 });
+    let x = area.x + (area.width - width) / 2;
+    let top = area.y + 1;
+    let composer_y = area.bottom().saturating_sub(5);
+    let left = x + 2;
+    let inner_width = width.saturating_sub(4);
+
+    paragraph_at(
+        frame,
+        Rect::new(x, top, width, 1),
+        vec![Line::from(vec![
+            Span::styled(
+                "◆  Linos",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  13  /  Server", Style::default().fg(DIM)),
+            Span::styled(
+                format!("    •    {}@{}", app.user, host()),
+                Style::default().fg(DIM),
+            ),
+        ])],
+    );
+
+    if app.view == View::Home {
+        let hero_y = top + 3;
+        paragraph_at(
+            frame,
+            Rect::new(left, hero_y, inner_width, 2),
+            vec![
+                Line::styled(
+                    format!("Welcome back, {}.", app.user),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Line::styled(
+                    "Your server is ready. What would you like to do?",
+                    Style::default().fg(DIM),
+                ),
+            ],
+        );
+
+        if composer_y > hero_y + 11 {
+            let status_y = hero_y + 4;
+            frame.render_widget(
+                Block::default()
+                    .title("  Server overview  ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+                Rect::new(x, status_y, width, 6),
+            );
+            paragraph_at(
+                frame,
+                Rect::new(left, status_y + 1, inner_width, 4),
+                vec![
+                    Line::from(vec![
+                        Span::styled("Device       ", Style::default().fg(DIM)),
+                        Span::raw(host()),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Uptime       ", Style::default().fg(DIM)),
+                        Span::raw(uptime().unwrap_or_else(|| "Unavailable".into())),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Memory       ", Style::default().fg(DIM)),
+                        Span::raw(memory().unwrap_or_else(|| "Unavailable".into())),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Setup        ", Style::default().fg(DIM)),
+                        Span::raw(ownership()),
+                    ]),
+                ],
+            );
+
+            if composer_y > status_y + 9 {
+                paragraph_at(
+                    frame,
+                    Rect::new(left, status_y + 7, inner_width, 2),
+                    vec![
+                        Line::styled(
+                            "Explore your server",
+                            Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+                        ),
+                        Line::from(vec![
+                            Span::styled("/status  ", Style::default().fg(ACCENT)),
+                            Span::styled("Overview    ", Style::default().fg(DIM)),
+                            Span::styled("/network  ", Style::default().fg(ACCENT)),
+                            Span::styled("Network    ", Style::default().fg(DIM)),
+                            Span::styled("/services  ", Style::default().fg(ACCENT)),
+                            Span::styled("Services", Style::default().fg(DIM)),
+                        ]),
+                    ],
+                );
+            }
+        }
+    } else {
+        let title = match app.view {
+            View::Home => "Home",
+            View::Status => "System overview",
+            View::Network => "Network interfaces",
+            View::Services => "Running services",
+            View::Logs => "System logs",
+            View::Help => "Help and shortcuts",
+            View::Resources => "System resources",
+            View::Assets => "Assets",
+            View::Settings => "Settings",
+            View::Updates => "Updates",
+            View::Hardware => "Hardware",
+            View::Store => "Linus store",
+            View::Terminal => "Terminal",
+        };
+        paragraph_at(
+            frame,
+            Rect::new(left, top + 3, inner_width, 1),
+            vec![Line::styled(
+                title,
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            )],
+        );
+    }
+
+    let waiting_for_secret = app.password_input_active();
+    let suggestions = if waiting_for_secret {
+        Vec::new()
+    } else {
+        app.suggestions()
+    };
+    let available_suggestions = composer_y.saturating_sub(top + 8) as usize;
+    let count = suggestions.len().min(5).min(available_suggestions);
+    let suggestion_y = composer_y.saturating_sub(count as u16 + 1);
+    if app.view != View::Home && suggestion_y > top + 6 {
+        frame.render_widget(
+            Paragraph::new(app.content.as_str())
+                .wrap(Wrap { trim: false })
+                .scroll((app.scroll, 0))
+                .style(Style::default().fg(Color::White)),
+            Rect::new(left, top + 6, inner_width, suggestion_y - (top + 6)),
+        );
+    }
+
+    for (index, (_, command, description)) in suggestions.iter().take(count).enumerate() {
+        let active = index == app.highlighted.min(count - 1);
+        paragraph_at(
+            frame,
+            Rect::new(left, suggestion_y + index as u16, inner_width, 1),
+            vec![Line::from(vec![
+                Span::styled(
+                    format!("{} {command:<12}", if active { "›" } else { " " }),
+                    Style::default().fg(if active { ACCENT } else { DIM }),
+                ),
+                Span::styled(
+                    *description,
+                    Style::default().fg(if active { Color::White } else { DIM }),
+                ),
+            ])],
+        );
+    }
+
+    paragraph_at(
+        frame,
+        Rect::new(left, composer_y.saturating_sub(1), inner_width, 1),
+        vec![Line::styled(
+            format!(
+                "  {}  {}",
+                if app.view == View::Assets {
+                    "Assets"
+                } else {
+                    "Directory"
+                },
+                if app.view == View::Assets {
+                    app.assets.path.display().to_string()
+                } else {
+                    app.cwd.display().to_string()
+                }
+            ),
+            Style::default().fg(DIM),
+        )],
+    );
+    frame.render_widget(
+        Block::default()
+            .title("  Command  ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(if app.input.is_empty() {
+                Color::DarkGray
+            } else {
+                ACCENT
+            })),
+        Rect::new(x, composer_y, width, 3),
+    );
+    let display_input = if waiting_for_secret {
+        "•".repeat(app.input.chars().count())
+    } else {
+        app.input.clone()
+    };
+    paragraph_at(
+        frame,
+        Rect::new(left, composer_y + 1, inner_width, 1),
+        vec![Line::from(vec![
+            Span::styled("› ", Style::default().fg(ACCENT)),
+            Span::styled(
+                if app.input.is_empty() {
+                    if waiting_for_secret {
+                        "Password (hidden)"
+                    } else {
+                        "Type / for commands or enter a Linux command"
+                    }
+                } else {
+                    &display_input
+                },
+                Style::default().fg(if app.input.is_empty() {
+                    DIM
+                } else {
+                    Color::White
+                }),
+            ),
+        ])],
+    );
+    // The cursor follows the user input rather than showing a static cursor glyph.
+    let cursor_x = left
+        .saturating_add(2)
+        .saturating_add(app.input.chars().count() as u16)
+        .min(x + width.saturating_sub(2));
+    frame.set_cursor_position((cursor_x, composer_y + 1));
+
+    let footer = if let Some(action) = app.confirm {
+        if action == Action::Reboot {
+            "Restart server?  Y Confirm · Enter Cancel"
+        } else {
+            "Shut down server?  Y Confirm · Enter Cancel"
+        }
+    } else {
+        &app.notice
+    };
+    paragraph_at(
+        frame,
+        Rect::new(x, area.bottom().saturating_sub(1), width, 1),
+        vec![Line::from(vec![
+            Span::styled(format!("◆  {footer}"), Style::default().fg(DIM)),
+            Span::styled(
+                "    / Commands · Ctrl+T Shell · Ctrl+R Fit",
+                Style::default().fg(DIM),
+            ),
+        ])],
+    );
+}
+
+fn interactive_shell() -> io::Result<()> {
+    // The Ratatui terminal has already been restored before this child starts.
+    // Run the user's genuine interactive shell with normal shell behaviour:
+    // cd, sudo, jobs, pipes, SSH and nested TUIs all work normally.
+    let shell = env::var("SHELL")
+        .ok()
+        .filter(|path| path.starts_with('/') && std::path::Path::new(path).is_file())
+        .unwrap_or_else(|| "/bin/sh".into());
+    let bash = shell.ends_with("/bash")
+        && std::path::Path::new("/usr/lib/linos/linos-shell.bashrc").is_file();
+    let mut child = Command::new(shell);
+    if bash {
+        child.args(["--rcfile", "/usr/lib/linos/linos-shell.bashrc"]);
+    }
+    let status = child.arg("-i").env("LINOS_NO_WELCOME", "1").status()?;
+    if !status.success() {
+        eprintln!("Shell exited with status {status}");
+    }
+    Ok(())
+}
+
+pub fn run() -> io::Result<ExitCode> {
+    let mut app = App::new();
+    loop {
+        // Ratatui owns the terminal only while Linos Home is active. Leaving
+        // this scope restores the real terminal before entering a child shell.
+        let result = ratatui::run(|terminal| {
+            let mut last_refresh = Instant::now();
+            let mut last_geometry = Instant::now();
+            let serial_console = geometry::serial_console();
+            let mut dirty = true;
+            loop {
+                if serial_console
+                    && last_geometry.elapsed() >= Duration::from_secs(4)
+                    && app.input.is_empty()
+                {
+                    if geometry::negotiate().unwrap_or(false) {
+                        terminal.autoresize()?;
+                        dirty = true;
+                    }
+                    last_geometry = Instant::now();
+                }
+                if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
+                    app.content = resources();
+                    last_refresh = Instant::now();
+                    dirty = true;
+                }
+                if let Some(shell) = &mut app.session {
+                    if let Some(cwd) = shell.current_dir()
+                        && app.cwd != cwd
+                    {
+                        app.cwd = cwd;
+                        dirty = true;
+                    }
+                    let previous = app.terminal_output.len();
+                    shell.drain(&mut app.terminal_output);
+                    if previous != app.terminal_output.len()
+                        && pty::Session::prompt_ready(&app.terminal_output)
+                    {
+                        app.command_pending = false;
+                    }
+                    if previous != app.terminal_output.len() && app.view == View::Terminal {
+                        app.content.clone_from(&app.terminal_output);
+                        if app.follow_tail {
+                            let height = crossterm::terminal::size()
+                                .map(|(_, h)| h.saturating_sub(14))
+                                .unwrap_or(10);
+                            app.scroll = app
+                                .content
+                                .lines()
+                                .count()
+                                .saturating_sub(usize::from(height))
+                                .min(usize::from(u16::MAX))
+                                as u16;
+                        }
+                        dirty = true;
+                    }
+                }
+                if dirty {
+                    terminal.draw(|frame| draw(frame, &app))?;
+                    dirty = false;
+                }
+                if event::poll(Duration::from_millis(100))? {
+                    match event::read()? {
+                        Event::Key(key) => {
+                            if key.kind == KeyEventKind::Press
+                                && key.code == KeyCode::Char('r')
+                                && key.modifiers.contains(KeyModifiers::CONTROL)
+                            {
+                                app.notice = if geometry::negotiate()? {
+                                    "Terminal geometry refreshed".into()
+                                } else {
+                                    "Terminal does not support size reporting; use stty rows/cols"
+                                        .into()
+                                };
+                                terminal.autoresize()?;
+                                dirty = true;
+                                continue;
+                            }
+                            if let Some(exit) = app.key(key)? {
+                                break Ok::<Exit, io::Error>(exit);
+                            }
+                            dirty = true;
+                        }
+                        Event::Resize(width, height) => {
+                            if let Some(shell) = &mut app.session {
+                                shell.resize(height.saturating_sub(12), width.saturating_sub(4))?;
+                            }
+                            dirty = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        })?;
+        match result {
+            Exit::Shell => {
+                // Exiting the nested shell (exit/Ctrl+D) returns here rather
+                // than terminating the Linos Home session.
+                interactive_shell()?;
+                app.navigate(View::Home);
+            }
+            Exit::Power => return Ok(ExitCode::SUCCESS),
+            Exit::Logout => return Ok(ExitCode::from(20)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn is_responsive_at_common_terminal_sizes() {
+        for (width, height) in [(30, 10), (48, 18), (80, 24), (120, 32), (160, 42)] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| draw(frame, &App::new())).unwrap();
+            let screen: String = terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|cell| cell.symbol().to_owned())
+                .collect();
+            assert!(
+                screen.contains("Linos"),
+                "Missing Linos identity at {width}x{height}"
+            );
+            assert!(screen.contains("Type / for commands") || width < 36 || height < 14);
+        }
+    }
+
+    #[test]
+    fn new_management_views_are_reachable() {
+        let mut app = App::new();
+        for (action, expected) in [
+            (Action::Resources, View::Resources),
+            (Action::Assets, View::Assets),
+            (Action::Settings, View::Settings),
+            (Action::Updates, View::Updates),
+        ] {
+            assert!(app.apply(action).is_none());
+            assert_eq!(app.view, expected);
+        }
+    }
+
+    #[test]
+    fn palette_filters_and_executes_commands() {
+        let mut app = App::new();
+        app.key(press(KeyCode::Char('/'))).unwrap();
+        app.key(press(KeyCode::Char('s'))).unwrap();
+        assert_eq!(app.suggestions().len(), 6); // status, services, settings, store, shell, shutdown
+        app.key(press(KeyCode::Char('t'))).unwrap();
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert_eq!(app.view, View::Status);
+    }
+
+    #[test]
+    fn password_and_shell_are_not_captured_by_the_dashboard() {
+        let mut app = App::new();
+        for c in "/shell".chars() {
+            app.key(press(KeyCode::Char(c))).unwrap();
+        }
+        assert_eq!(app.key(press(KeyCode::Enter)).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn shell_switch_is_a_temporary_session_mode() {
+        let mut app = App::new();
+        assert_eq!(app.apply(Action::Shell), Some(Exit::Shell));
+        assert_eq!(app.view, View::Home);
+        let shortcut = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+        assert_eq!(app.key(shortcut).unwrap(), Some(Exit::Shell));
+    }
+
+    #[test]
+    fn idle_terminal_does_not_invent_password_request() {
+        let mut app = App::new();
+        app.view = View::Terminal;
+        app.command_pending = false;
+        assert!(!app.password_input_active());
+    }
+
+    #[test]
+    fn resource_bars_handle_zero_and_percentages() {
+        assert!(usage_bar(0, 0, 12).contains("Not configured"));
+        assert!(usage_bar(5, 10, 10).contains("50%"));
+        assert!(usage_bar(15, 10, 10).contains("100%"));
+    }
+
+    #[test]
+    fn ctrl_l_clears_output_without_exiting_home() {
+        let mut app = App::new();
+        app.view = View::Terminal;
+        app.terminal_output = "previous command output".into();
+        app.content = app.terminal_output.clone();
+        let key = KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL);
+        assert_eq!(app.key(key).unwrap(), None);
+        assert!(app.content.is_empty());
+        assert!(app.terminal_output.is_empty());
+    }
+
+    #[test]
+    fn power_requests_are_cancelled_by_default() {
+        let mut app = App::new();
+        app.apply(Action::Shutdown);
+        assert_eq!(app.confirm, Some(Action::Shutdown));
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert!(app.confirm.is_none());
+    }
+}
+ }
+        );
+        let secret = app.password_input_active();
+        let input = if secret {
+            "•".repeat(app.input.chars().count())
+        } else {
+            app.input.clone()
+        };
+        let prompt_width = prompt.chars().count() as u16;
+        let input_y = area.bottom().saturating_sub(2);
+        paragraph_at(
+            frame,
+            Rect::new(left, input_y, width, 1),
+            vec![Line::from(vec![
+                Span::styled(prompt, Style::default().fg(ACCENT)),
+                Span::styled(input, Style::default().fg(Color::White)),
+            ])],
+        );
+        frame.set_cursor_position((
+            left.saturating_add(prompt_width)
+                .saturating_add(app.input.chars().count() as u16)
+                .min(left.saturating_add(width.saturating_sub(1))),
+            input_y,
+        ));
+        return;
+    }
+
     // Keep the main workspace centred on wide terminals, like a modern CLI.
     let width = area
         .width
