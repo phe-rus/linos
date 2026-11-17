@@ -212,6 +212,31 @@ for path in "$DIR/boot/kernel" "$DIR/boot/initramfs" "$DISK"; do
     [[ -f "$path" ]] || { echo "Missing build artifact: $path" >&2; exit 2; }
 done
 
+# Never silently label an old Debian-kernel VM as a Linos-kernel boot.
+# Compatibility is an explicit test-only escape hatch.
+MANIFEST="$DIR/kernel-manifest"
+if [[ ! -s "$MANIFEST" ]]; then
+    echo "No verified kernel manifest in $DIR" >&2
+    echo "Build a fresh Linos image. Legacy testing: LINOS_ALLOW_COMPAT=1" >&2
+    [[ "${LINOS_ALLOW_COMPAT:-0}" == 1 ]] || exit 2
+else
+    KERNEL_MODE="$(sed -n 's/^mode=//p' "$MANIFEST")"
+    KERNEL_RELEASE="$(sed -n 's/^release=//p' "$MANIFEST")"
+    KERNEL_HASH="$(sed -n 's/^kernel_sha256=//p' "$MANIFEST")"
+    INITRAMFS_HASH="$(sed -n 's/^initramfs_sha256=//p' "$MANIFEST")"
+    [[ "$KERNEL_MODE" == linos && "$KERNEL_RELEASE" == *-linos ]] || {
+        echo "Image is not using a Linos kernel ($KERNEL_MODE $KERNEL_RELEASE)" >&2
+        [[ "${LINOS_ALLOW_COMPAT:-0}" == 1 ]] || exit 2
+    }
+    [[ "$KERNEL_HASH" == "$(sha256sum "$DIR/boot/kernel" | cut -d' ' -f1)" ]] || {
+        echo "Kernel hash differs from image manifest" >&2; exit 1;
+    }
+    [[ "$INITRAMFS_HASH" == "$(sha256sum "$DIR/boot/initramfs" | cut -d' ' -f1)" ]] || {
+        echo "Initramfs hash differs from image manifest" >&2; exit 1;
+    }
+    echo "Verified image kernel: $KERNEL_RELEASE ($KERNEL_MODE)"
+fi
+
 if [[ ! -f "$OVERLAY" ]]; then
     qemu-img create -f qcow2 -F raw -b "$(realpath "$DISK")" "$OVERLAY"
 fi
