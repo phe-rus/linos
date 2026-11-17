@@ -48,7 +48,7 @@ jobs:
             exit 0
           fi
           changes="$(git diff --name-only "$base" HEAD)"
-          if grep -Eq '^(kernel/|build/(kernel|image|package|media)\.sh$|tests/kernel\.sh$|system/(src|release)/|\.github/workflows/(ci|kernel-research)\.yml$)' <<<"$changes"; then
+          if grep -Eq '^(kernel/|build/(kernel|image|package|media)\.sh$|tests/kernel\.sh$|system/(src|release)/|\.github/workflows/kernel-research\.yml$)' <<<"$changes"; then
             echo 'kernel=true' >> "$GITHUB_OUTPUT"
           else
             echo 'kernel=false' >> "$GITHUB_OUTPUT"
@@ -178,6 +178,8 @@ jobs:
 
   recovery-uefi:
     needs: build-and-boot
+    # The optional kernel job can be skipped without suppressing recovery CI.
+    if: ${{ always() && needs.build-and-boot.result == 'success' }}
     name: amd64 · Recovery image, OVMF
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -243,6 +245,7 @@ jobs:
 
   installer-media:
     needs: recovery-uefi
+    if: ${{ always() && needs.recovery-uefi.result == 'success' }}
     name: amd64 · Offline installer media
     runs-on: ubuntu-24.04
     timeout-minutes: 30

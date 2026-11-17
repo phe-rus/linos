@@ -57,3 +57,16 @@ Before Linos can become the default **Linos 13** kernel we still require:
 - Actual reviewed Linos kernel changes, when measurements justify them. No scheduler/memory superiority is claimed yet.
 
 **No percentage of kernel completion is meaningful without these independently verifiable gates.** The build-and-QEMU foundation is implemented; integrated release and hardware qualification are unfinished. Completion of this kernel foundation is a prerequisite to developing broader hardware intelligence or UI resource policies.
+
+## Opt-in Server image integration
+
+The normal `build/image.sh` invocation produces the existing Debian-kernel Linos 13 Server image. To test the Linos kernel **without replacing this fallback**, provide the completed signed-source Linos kernel build directory:
+
+```sh
+bash build/package.sh
+LINOS_KERNEL_BUILD_DIR=/tmp/linos-kernel-out bash build/image.sh
+```
+
+The resulting `images/server/builds/<arch>/<build-id>/linos-kernel/` directory contains a separately bootable `kernel`, `initramfs`, `disk.ext4`, release/architecture metadata, and checksums. It is assembled from the same Server root filesystem, with matching kernel modules and an initramfs regenerated for that kernel. The normal `boot/` and `disk.ext4` outputs are left unchanged. A separate UEFI research image can be generated using `LINOS_KERNEL_TEST_IMAGE_DIR` with `build/media.sh`. This is not automatic production promotion, Secure Boot signing, or persistent A/B rollback.
+
+Kernel CI exercises this **normal image builder integration** before completing its actual Linos Server QEMU and amd64 UEFI boot gates. For now, the Linos kernel candidate is explicitly selected for testing, not installed onto physical machines.

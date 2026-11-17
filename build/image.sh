@@ -221,6 +221,37 @@ sha256sum \
     "$BOOT_DIR/kernel" \
     "$BOOT_DIR/initramfs" \
     "$DISK"
+
+# Optional Linos kernel candidate: use the same verified OS rootfs, but
+# produce an independently bootable image instead of altering the fallback.
+# The default image and its Debian kernel remain byte-for-byte unchanged.
+if [[ -n "${LINOS_KERNEL_BUILD_DIR:-}" ]]; then
+    CANDIDATE_SOURCE="$(realpath -- "$LINOS_KERNEL_BUILD_DIR")"
+    [[ -s "$CANDIDATE_SOURCE/provenance.txt" && -s "$CANDIDATE_SOURCE/.config" ]] || {
+        echo "Linos kernel candidate is missing provenance or configuration" >&2
+        exit 2
+    }
+    CANDIDATE_ARCH="$(sed -n 's/^architecture=//p' "$CANDIDATE_SOURCE/provenance.txt")"
+    CANDIDATE_RELEASE="$(sed -n 's/^kernel_release=//p' "$CANDIDATE_SOURCE/provenance.txt")"
+    [[ "$CANDIDATE_ARCH" == "$ARCH" && "$CANDIDATE_RELEASE" == *-linos ]] || {
+        echo "Linos kernel candidate does not match this Server architecture" >&2
+        exit 2
+    }
+    CANDIDATE_DEST="$ROOT/$BUILD_DIR/linos-kernel"
+    echo "Assembling isolated Linos $CANDIDATE_RELEASE Server image"
+    bash "$ROOT/build/kernel.sh" server-image "$ROOT/$ROOTFS" "$CANDIDATE_SOURCE" "$CANDIDATE_DEST"
+    [[ -s "$CANDIDATE_DEST/kernel" && -s "$CANDIDATE_DEST/initramfs" &&
+       -s "$CANDIDATE_DEST/disk.ext4" ]] || {
+        echo "Linos kernel Server image was not assembled" >&2
+        exit 1
+    }
+    (
+        cd "$ROOT"
+        sha256sum -c "$BUILD_DIR/linos-kernel/SHA256SUMS"
+    )
+    echo "Linos kernel candidate: $CANDIDATE_DEST"
+    echo "Default Debian-kernel image preserved: $DISK"
+fi
 )
 
 minimal_rootfs() (

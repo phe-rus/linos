@@ -152,24 +152,21 @@ jobs:
           cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
           echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
-      - name: Build existing Linos Server rootfs without modifying release outputs
+      - name: Build Linos 13 Server and integrate isolated Linos kernel candidate
         shell: bash
         run: |
           set -Eeuo pipefail
           bash build/package.sh
-          bash build/image.sh
+          LINOS_KERNEL_BUILD_DIR="$RUNNER_TEMP/kernel-out" bash build/image.sh
           build_id="$(awk -F '"' '/^BUILD_ID=/ {print $2}' system/release/usr/lib/linos/release)"
-          echo "LINOS_ROOTFS=$GITHUB_WORKSPACE/images/server/builds/${{ matrix.arch }}/$build_id/rootfs.tar" >> "$GITHUB_ENV"
+          candidate="$GITHUB_WORKSPACE/images/server/builds/${{ matrix.arch }}/$build_id/linos-kernel"
+          test -s "$candidate/kernel"
+          test -s "$candidate/disk.ext4"
+          echo "LINOS_SERVER_KERNEL_DIR=$candidate" >> "$GITHUB_ENV"
 
-      - name: Assemble disposable Server with research kernel
+      - name: Boot real Linos Server under integrated kernel candidate
         shell: bash
-        run: |
-          set -Eeuo pipefail
-          bash build/kernel.sh server-image "$LINOS_ROOTFS" "$RUNNER_TEMP/kernel-out" "$RUNNER_TEMP/server-kernel-test"
-
-      - name: Boot real Linos Server under research kernel
-        shell: bash
-        run: bash tests/kernel.sh "$RUNNER_TEMP/server-kernel-test"
+        run: bash tests/kernel.sh "$LINOS_SERVER_KERNEL_DIR"
 
       - name: Install AMD64 UEFI firmware and media tooling
         if: matrix.arch == 'amd64'
@@ -183,7 +180,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          export LINOS_KERNEL_TEST_IMAGE_DIR="$RUNNER_TEMP/server-kernel-test"
+          export LINOS_KERNEL_TEST_IMAGE_DIR="$LINOS_SERVER_KERNEL_DIR"
           bash build/media.sh amd64
           bash tests/boot.sh uefi
 
@@ -216,11 +213,11 @@ jobs:
             ${{ runner.temp }}/kernel-out/provenance.txt
             ${{ runner.temp }}/kernel-out/linos-kernel/SHA256SUMS
             ${{ runner.temp }}/kernel-qemu.log
-            ${{ runner.temp }}/server-kernel-test/kernel-release
-            ${{ runner.temp }}/server-kernel-test/architecture
-            ${{ runner.temp }}/server-kernel-test/server-smoke.log
-            ${{ runner.temp }}/server-kernel-test/server-qemu.log
-            ${{ runner.temp }}/server-kernel-test/uefi-smoke.log
-            ${{ runner.temp }}/server-kernel-test/uefi-qemu.log
+            images/server/builds/**/linos-kernel/kernel-release
+            images/server/builds/**/linos-kernel/architecture
+            images/server/builds/**/linos-kernel/server-smoke.log
+            images/server/builds/**/linos-kernel/server-qemu.log
+            images/server/builds/**/linos-kernel/uefi-smoke.log
+            images/server/builds/**/linos-kernel/uefi-qemu.log
           if-no-files-found: ignore
           retention-days: 7
