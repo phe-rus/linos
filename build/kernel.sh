@@ -135,6 +135,13 @@ fi
   printf 'kernel_release=%s\n' "$KERNEL_RELEASE"
   printf 'config_sha256=%s\n' "$(sha256sum "$OUTPUT/.config" | cut -d ' ' -f1)"
   printf 'image_sha256=%s\n' "$(sha256sum "$OUTPUT/$IMAGE" | cut -d ' ' -f1)"
+  printf 'linos_overlay_c_sha256=%s\n' "$(sha256sum "$REPO/kernel/overlays/linos_boot_state.c" | cut -d ' ' -f1)"
+  printf 'linos_overlay_kconfig_sha256=%s\n' "$(sha256sum "$REPO/kernel/overlays/Kconfig.linos" | cut -d ' ' -f1)"
+  printf 'linos_source_application_sha256=%s\n' "$(sha256sum "$REPO/kernel/apply-source.py" | cut -d ' ' -f1)"
+  printf 'linos_build_script_sha256=%s\n' "$(sha256sum "$REPO/build/kernel.sh" | cut -d ' ' -f1)"
+  printf 'image_bytes=%s\n' "$(stat -c %s "$OUTPUT/$IMAGE")"
+  printf 'module_files=%s\n' "$(find "$MODULES_SOURCE" -type f -name '*.ko*' | wc -l | tr -d ' ')"
+  printf 'module_tree_bytes=%s\n' "$(du -sb "$MODULES_SOURCE" | cut -f1)"
 } >"$OUTPUT/provenance.txt"
 # Package kernel, configuration, modules and checksums as one release candidate.
 ARTIFACT="$OUTPUT/linos-kernel"

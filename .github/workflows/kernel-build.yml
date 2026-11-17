@@ -71,15 +71,25 @@ jobs:
         run: |
           set -Eeuo pipefail
           source kernel/source.conf
-          for remote in \
-            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
-            https://github.com/gregkh/linux.git; do
+          # ARM-hosted runners cannot always reach git.kernel.org. Use the
+          # maintainer's GitHub mirror first there; prefer kernel.org on amd64.
+          # Both transports must pass verification of the identical signed tag.
+          if [[ "${{ matrix.arch }}" == arm64 ]]; then
+            remotes=(https://github.com/gregkh/linux.git
+                     https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git)
+          else
+            remotes=(https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+                     https://github.com/gregkh/linux.git)
+          fi
+          for remote in "${remotes[@]}"; do
             rm -rf -- kernel/source/linux
-            if timeout 180s git -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=30 \
+            if timeout 420s git -c http.lowSpeedLimit=1 -c http.lowSpeedTime=120 \
               clone --depth 1 --single-branch --branch "v$LINOS_KERNEL_LTS" \
               "$remote" kernel/source/linux; then
+              echo "Obtained signed source candidate via $remote"
               break
             fi
+            echo "Source transport failed: $remote" >&2
           done
           test -d kernel/source/linux/.git
           git -C kernel/source/linux verify-tag "v$LINOS_KERNEL_LTS"

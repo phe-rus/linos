@@ -107,3 +107,14 @@ and may run concurrently within that single release workflow. Each architecture
 compiles only once, using a bounded 1.5 GB ccache restored across runs;
 QEMU and image verification consume packaged artifacts and do not recompile.
 The legacy unreferenced kernel research workflow has been superseded.
+
+### Provenance and build budgets
+
+Every kernel candidate now records byte size of the kernel image and module
+installation, module-file counts, signing tag, upstream Git commit, binary
+and configuration SHA-256 hashes, and SHA-256 hashes of Linos source overlays,
+source-application logic and the build script. The first successful artifacts
+set the *measured* size and build-time baseline. Do not fabricate a universal
+size or latency target before observing architecture-specific results.
+The arm64 source-fetch order is tuned for GitHub-hosted ARM runners, while
+the upstream signed-tag and exact-commit verification remains mandatory.
