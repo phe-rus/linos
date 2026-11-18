@@ -145,3 +145,17 @@ Linos device ID to remain unchanged. An image that boots once but loses its
 identity or cannot recover its ext4 filesystem fails integration.
 This is a targeted recovery test, not yet full update rollback or physical
 power-loss certification.
+
+### Kernel artifact source consistency
+
+The Rust kernel tool validates reused build artifacts against the exact
+Linos overlay C source, overlay Kconfig, kernel build script, upstream LTS
+release, product version, architecture and Linos release suffix **before**
+assembling an OS image. It also checks the downloaded provenance record is
+byte-identical to the record embedded in the kernel Debian package. A stale,
+altered or wrong-architecture kernel now fails integration without booting.
+The source-application tool's own hash is recorded in provenance, but the
+integration-only job deliberately permits newer *verification tooling* when
+reusing previously compiled kernel packages. Full releases compile new
+packages on the same commit. This is supply-chain regression protection,
+not full binary reproducibility or a signature on the OS image.

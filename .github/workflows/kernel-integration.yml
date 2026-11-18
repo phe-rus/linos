@@ -83,6 +83,14 @@ jobs:
           # It does not compile Linux again.
           test "$(dpkg-deb -f "$package" Version)" = "$LINOS_KERNEL_VERSION"
           test "$(dpkg-deb -f "$package" Architecture)" = "$arch"
+          # Match recorded overlays, source version and build script to this
+          # exact checkout before spending time on a full Linos OS image.
+          test -s kernel-package/provenance.txt
+          cargo run --quiet --locked --manifest-path kernel/tools/Cargo.toml -- \
+            verify-provenance . kernel-package/provenance.txt "$arch"
+          dpkg-deb --fsys-tarfile "$package" |
+            tar -xOf - ./usr/share/doc/linos-kernel/provenance.txt |
+            cmp - kernel-package/provenance.txt
           ./build/package.sh
           LINOS_ARCH="$arch" LINOS_KERNEL_MODE=linos LINOS_KERNEL_PACKAGE="$package" \
             bash build/image.sh

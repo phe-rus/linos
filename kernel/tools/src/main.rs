@@ -183,6 +183,83 @@ fn policy(root: &Path) -> Result<()> {
     Ok(())
 }
 
+
+/// Check build provenance against the Linos kernel sources actually checked out.
+/// Only hashes which can influence the upstream build are compared in a reused
+/// qualification run. A release builds all artifacts from its own exact commit.
+fn verify_provenance(root: &Path, file: &Path, arch: &str) -> Result<()> {
+    if !matches!(arch, "amd64" | "arm64") {
+        return Err(format!("Unsupported kernel architecture: {arch}"));
+    }
+    let mut values = BTreeMap::new();
+    for line in read(file)?.lines() {
+        let (name, value) = line
+            .split_once('=')
+            .ok_or_else(|| format!("Invalid kernel provenance record: {line}"))?;
+        if values.insert(name.to_owned(), value.to_owned()).is_some() {
+            return Err(format!("Duplicate kernel provenance field: {name}"));
+        }
+    }
+    for (field, expected) in [
+        ("name", "linos"),
+        ("architecture", arch),
+    ] {
+        if values.get(field).map(String::as_str) != Some(expected) {
+            return Err(format!("Kernel provenance {field} does not match {expected}"));
+        }
+    }
+    let source = read(&root.join("kernel/source.conf"))?;
+    for (field, prefix) in [
+        ("linos_kernel_version", "LINOS_KERNEL_VERSION="),
+        ("source_tag", "LINOS_KERNEL_LTS="),
+    ] {
+        let version = source
+            .lines()
+            .find_map(|line| line.strip_prefix(prefix))
+            .ok_or_else(|| format!("Missing kernel source setting: {prefix}"))?;
+        let expected = if field == "source_tag" {
+            format!("v{version}")
+        } else {
+            version.to_owned()
+        };
+        if values.get(field) != Some(&expected) {
+            return Err(format!("Kernel provenance {field} differs from {expected}"));
+        }
+    }
+    if !values
+        .get("kernel_release")
+        .is_some_and(|value| value.ends_with("-linos"))
+    {
+        return Err("Kernel provenance does not identify a Linos kernel".to_owned());
+    }
+    for (field, relative) in [
+        (
+            "linos_overlay_c_sha256",
+            "kernel/overlays/linos_boot_state.c",
+        ),
+        ("linos_overlay_kconfig_sha256", "kernel/overlays/Kconfig.linos"),
+        ("linos_build_script_sha256", "build/kernel.sh"),
+    ] {
+        let path = root.join(relative);
+        let output = std::process::Command::new("sha256sum")
+            .arg(&path)
+            .output()
+            .map_err(|e| format!("Unable to hash {}: {e}", path.display()))?;
+        if !output.status.success() {
+            return Err(format!("Hashing {} failed", path.display()));
+        }
+        let digest = String::from_utf8(output.stdout)
+            .map_err(|e| format!("Bad checksum output: {e}"))?;
+        let expected = digest.split_whitespace().next().unwrap_or("");
+        if !values.get(field).is_some_and(|hash| hash == expected) {
+            return Err(format!(
+                "Kernel provenance mismatch for {relative}; refusing stale or altered kernel package"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn main() {
     let args: Vec<_> = env::args_os().collect();
     let result = match args.get(1).and_then(|arg| arg.to_str()) {
@@ -190,7 +267,12 @@ fn main() {
             overlay(&PathBuf::from(&args[2]), &PathBuf::from(&args[3]))
         }
         Some("check") if args.len() == 3 => policy(&PathBuf::from(&args[2])),
-        _ => Err("Usage: linos-kernel-tool apply <disposable-linux-source> <overlay-dir> | check <linos-root>".to_owned()),
+        Some("verify-provenance") if args.len() == 5 => verify_provenance(
+            &PathBuf::from(&args[2]),
+            &PathBuf::from(&args[3]),
+            args[4].to_str().unwrap_or(""),
+        ),
+        _ => Err("Usage: linos-kernel-tool apply <disposable-linux-source> <overlay-dir> | check <linos-root> | verify-provenance <linos-root> <provenance.txt> <amd64|arm64>".to_owned()),
     };
     if let Err(error) = result {
         eprintln!("linos-kernel-tool: {error}");
@@ -265,6 +347,19 @@ mod tests {
         write(&cfg, b"CONFIG_ABC=y\nCONFIG_ABC=n\n").unwrap();
         assert!(policy_file(&cfg).unwrap_err().contains("duplicate"));
         fs::remove_dir_all(path).unwrap();
+    }
+    #[test]
+    fn provenance_rejects_missing_and_altered_source() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let temp = sandbox();
+        let file = temp.join("provenance.txt");
+        write(&file, b"name=linos\narchitecture=amd64\n").unwrap();
+        assert!(verify_provenance(&root, &file, "amd64").is_err());
+        assert!(verify_provenance(&root, &file, "arm64").is_err());
+        assert!(verify_provenance(&root, &file, "unknown").is_err());
+        write(&file, b"name=linos\nname=linos\narchitecture=amd64\n").unwrap();
+        assert!(verify_provenance(&root, &file, "amd64").unwrap_err().contains("Duplicate"));
+        fs::remove_dir_all(temp).unwrap();
     }
     #[test]
     fn invalid_version_rejected() {
