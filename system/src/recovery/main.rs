@@ -46,7 +46,7 @@ fn disks(sys_block: &Path) -> io::Result<Vec<String>> {
 }
 
 fn show_status() {
-    debug_assert!(supported_edition(EDITION));
+    debug_assert!(supported_edition(EDITION.as_str()));
     println!("Linos 13 Recovery");
     println!("Edition: {} (fixed by bootable image)", EDITION.as_str());
     println!("Interface: CLI");
