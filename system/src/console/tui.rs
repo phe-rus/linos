@@ -664,7 +664,25 @@ fn draw(frame: &mut Frame, app: &App) {
             "{}:{}{} ",
             host(),
             directory,
-            if app.user == "root" { '#' } else { '
+            if app.user == "root" { '#' } else { '$' }
+        );
+        let input_y = area.bottom().saturating_sub(2);
+        paragraph_at(
+            frame,
+            Rect::new(left, input_y, width, 1),
+            vec![Line::from(vec![
+                Span::styled(prompt.clone(), Style::default().fg(ACCENT)),
+                Span::raw(app.input.clone()),
+            ])],
+        );
+        let cursor_x = left
+            .saturating_add(prompt.chars().count().min(u16::MAX as usize) as u16)
+            .saturating_add(app.input.chars().count().min(u16::MAX as usize) as u16)
+            .min(left.saturating_add(width.saturating_sub(1)));
+        frame.set_cursor_position((cursor_x, input_y));
+        return;
+    }
+
     let width = area
         .width
         .saturating_sub(if area.width > 100 { 8 } else { 2 });

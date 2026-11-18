@@ -37,6 +37,8 @@ jobs:
           path: kernel-package
           run-id: ${{ inputs.source_run_id || github.run_id }}
           github-token: ${{ github.token }}
+      - name: Check Linos 13 Rust userspace before image construction
+        run: cargo check --locked --bins
       - name: Install OS image dependencies
         run: |
           sudo apt-get update
