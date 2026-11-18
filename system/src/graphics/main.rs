@@ -2,6 +2,9 @@
 //! This temporary X11/XWayland adapter targets ChromeOS Crostini development.
 //! It is NOT a compositor, a final Linos UI toolkit or a bootable Desktop edition.
 //! Requires the system X11 runtime library (libX11.so.6).
+#[path = "../platform/edition.rs"]
+mod edition;
+
 use std::{
     env,
     ffi::{CString, c_char, c_int, c_long, c_uint, c_ulong, c_void},
@@ -153,7 +156,7 @@ fn run() -> Result<(), String> {
             XCloseDisplay(display);
             return Err("Could not create native window".into());
         }
-        let title = CString::new("Linos 13 - Graphics laboratory").map_err(|e| e.to_string())?;
+        let title = CString::new(format!("Linos 13 {} - Graphics laboratory", edition::Edition::Desktop.as_str())).map_err(|e| e.to_string())?;
         XStoreName(display, window, title.as_ptr());
         const KEY_PRESS: c_long = 1;
         const BUTTON_PRESS: c_long = 1 << 2;

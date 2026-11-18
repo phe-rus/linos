@@ -18,7 +18,7 @@ Linux has the capability. Linos is about making that capability feel natural, de
 
 Linux is enormously capable, but capability alone does not make a system one that ordinary people can comfortably choose. Linos is being built to close that gap. We want the care, consistency, clarity and responsiveness people expect from mainstream consumer operating systems, without asking everyone to become technically proficient first.
 
-Linos is **not intended to be a Debian spin or a conventional Linux distribution with a different skin**. We initially draw software from stable upstream repositories, but the operating-system structure, kernel policy, app experience, developer tools, updates and interactions are intended to be designed and validated as Linos. Today those independent layers are still under development, and our booted images continue to rely on Debian's kernel and packages.
+Linos is **not intended to be a Debian spin or a conventional Linux distribution with a different skin**. We initially draw software from stable upstream repositories, but the operating-system structure, kernel policy, app experience, developer tools, updates and interactions are intended to be designed and validated as Linos. Those independent layers remain under development. Linos kernel packages derived from verified Linux 6.18.63 have passed AMD64 and ARM64 QEMU tests, including installed Server boots and identity-persistence recovery. Debian continues to supply much of the initial userspace.
 
 Our long-term target is a first-class **Rust-native application platform**, a full **Assets** file manager, **Linus store** for developers and users, and a repeatable Linos kernel and performance contract. Those goals are not features already shipped.
 
@@ -55,9 +55,9 @@ The edition is defined by the installation media. Setup is tailored to the devic
 - Safe installation onto real devices, A/B updates and rollback.
 - Correct embedded prompt/password handling and complete controlled Settings interactions.
 - Hardware awareness (new source, QEMU validation pending), Linus store inventory/search/simulation (new source, validation pending), physical hardware support beyond QEMU.
-- Reproducible kernel configuration, independent package release policy and production hardening.
+- Production kernel release, verified updates/rollback, hardware qualification and performance regression budgets.
 
-The Linux kernel and Debian 13 (Trixie) packages currently provide the bootstrap foundation. Linos-specific services and tools are being developed in Rust. We do not yet claim our own kernel, independent repository or finished installer.
+Linos kernel 1.0.0 development candidates based on Linux 6.18.63 and Debian 13 (Trixie) packages currently provide the bootstrap foundation. Linos-specific services and tools are being developed in Rust. We maintain an experimental Linos kernel with Linos-owned source additions. We do not claim physical hardware certification, an independent package repository, or a finished installer.
 
 ### A recovery system that belongs there.
 
@@ -108,3 +108,11 @@ Offline device setup comes first. Integration with **Passid** (`passid`) and opt
 ---
 
 <div align="center">**Linos 13** · Made to feel at home. 🐧</div>
+
+### Rust efficiency for smaller development devices
+
+Local Rust builds default to two concurrent compiler jobs via `.cargo/config.toml`.
+Release Server packages compile only the four executables they install.
+The `rust:measure` commit marker runs independent CI to record compiler RAM,
+wall-clock build time and installed binary sizes; the Desktop graphics adapter
+is checked separately and is not bundled into Server.

@@ -64,3 +64,10 @@ It proves permitted state transitions and rejects stale/unverified operations
 in unit tests. It does not write partitions, alter the bootloader, persist
 transactions or perform rollback. Actual update machinery remains a Server
 release blocker and a shared requirement for Desktop.
+
+## Measured Rust engineering baseline
+
+The independent `rust:measure` CI path compiles the four shipped Server
+executables using the production Cargo profile. It records elapsed time,
+peak compiler resident memory, and per-binary disk sizes. Desktop's existing
+X11 graphics adapter is only type-checked, not installed in Server.

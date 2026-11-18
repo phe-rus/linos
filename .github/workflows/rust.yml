@@ -1,0 +1,60 @@
+name: Linos Rust Resource Baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.cargo/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'system/src/**'
+      - 'build/package.sh'
+      - '.github/workflows/rust.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    if: \${{ contains(github.event.head_commit.message, 'rust:measure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install stable Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Validate recovery and Desktop graphics compilation
+        run: |
+          cargo +stable test --locked --bin init --bin recovery
+          cargo +stable check --locked --bin linos-graphics
+      - name: Measure shipped Server Rust binaries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p rust-metrics
+          export CARGO_BUILD_JOBS=2
+          /usr/bin/time -v -o rust-metrics/compiler.txt \
+            cargo +stable build --locked --release \
+              --bin init --bin enroll --bin linos-login --bin linos
+          {
+            printf 'Linos Rust release resource baseline\n'
+            printf 'Git commit: %s\n' "$GITHUB_SHA"
+            printf 'Architecture: %s\n' "$(uname -m)"
+            printf 'Compiler jobs: %s\n' "$CARGO_BUILD_JOBS"
+            grep -E 'Maximum resident set size|Elapsed \(wall clock\) time' \
+              rust-metrics/compiler.txt
+            for executable in init enroll linos-login linos; do
+              test -s "target/release/$executable"
+              printf '%s bytes: %s\n' "$executable" \
+                "$(stat -c %s "target/release/$executable")"
+            done
+          } | tee rust-metrics/summary.txt
+          cat rust-metrics/summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Save measured build data
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-resource-metrics
+          path: rust-metrics/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -100,13 +100,13 @@ is deliberately disabled.
 ## Kernel configuration and portability (not complete)
 
 - [x] Boot using the supported Debian kernel in amd64 and arm64 QEMU images.
-- [ ] Define reproducible Linos kernel config fragments with per-hardware capability profiles.
-- [ ] Record kernel version, configuration, patches, module/firmware inventory and provenance in build artifacts.
+- [x] Add checked-in AMD64/ARM64 kernel configuration fragments, mandatory capability checks and source-overlay build.
+- [x] Record kernel version, configuration, source-overlay hashes, module counts and provenance in build artifacts. Full firmware inventory remains pending.
 - [ ] Enforce config checks during kernel upgrades, including a kernel version compatibility gate.
 - [ ] Benchmark boot, idle memory, storage, scheduling, networking and security posture.
 - [ ] Validate Pi/RK3588 and physical x86 targets using actual firmware, drivers and power-management behaviour.
 
-**Current kernel status:** the image script installs Debian's kernel package, not an independently compiled or consistently retuned Linos kernel. Do not claim automatic preservation of Linos-specific tuning across upstream updates.
+**Current kernel status:** Linos builds its own configured and source-extended kernel from signed upstream Linux. AMD64/ARM64 QEMU package boots and installed Server tests pass. Hardware qualification, performance regression thresholds and a production release remain outstanding. Explicit compatibility mode retains the Debian kernel for legacy tests.
 
 ## Milestone 5: balanced system resources
 

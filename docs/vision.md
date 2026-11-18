@@ -69,7 +69,7 @@ Linos is intended to own a repeatable kernel and systems policy: versioned confi
 
 The target is Apple's level of care for responsiveness, timing, interaction physics, visual rendering and perceived fluidity. **Those properties cannot be achieved by kernel tuning alone.** The compositor, display stack, application frameworks, input pipeline, graphics drivers, resource scheduling, animation timing and the entire build-to-release validation process must cooperate. There is no universal kernel setting that guarantees perfect smoothness across every device.
 
-At present Linos still boots Debian-provided kernel packages in QEMU. The Linos-owned kernel build, configuration profiles, reproducibility checks and measured latency/graphics validation are **not yet implemented**. This is a major foundation to build, not an achieved differentiator.
+Linos has compiled and QEMU-tested its Linux-derived `6.18.63-linos` kernel for AMD64 and ARM64, including full Server boots and basic filesystem/identity recovery. This is a development milestone, not a claim of universal PC, board or mobile support. Measured latency, real hardware validation, verified updates and a complete graphical pipeline remain outstanding.
 
 ## Open foundations, shaped into one experience
 
