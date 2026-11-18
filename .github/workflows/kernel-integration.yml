@@ -95,6 +95,11 @@ jobs:
           test -s "$image/boot/initramfs"
       - name: Boot Linos 13 Server under QEMU
         run: bash tests/server.sh smoke ${{ matrix.arch }}
+      - name: Verify disk recovery and persistent Linos identity across two boots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/server.sh persistence ${{ matrix.arch }}
       - name: Preserve actual guest diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -104,5 +109,7 @@ jobs:
             images/server/builds/**/smoke.log
             images/server/builds/**/qemu.log
             images/server/builds/**/kernel-manifest
+            images/server/builds/**/boot-*.log
+            images/server/builds/**/fsck-*.log
           if-no-files-found: ignore
           retention-days: 7

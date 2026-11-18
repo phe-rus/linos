@@ -134,3 +134,14 @@ not rewrite those upstream subsystems merely to declare a single-language
 product. Kernel-level Linos Rust code requires a supported `CONFIG_RUST`
 toolchain and a deliberate design/review and QEMU test for the specific API;
 none is falsely claimed by this tooling migration.
+
+### Installed-system persistence release gate
+
+Kernel integration now tests both the initial Linos 13 Server sign-in and
+**two successive writable QEMU boots** using a disposable copy of the same
+kernel-backed OS image. The existing Rust/Linos test harness exercises
+filesystem recovery after the guest is stopped and requires the persistent
+Linos device ID to remain unchanged. An image that boots once but loses its
+identity or cannot recover its ext4 filesystem fails integration.
+This is a targeted recovery test, not yet full update rollback or physical
+power-loss certification.
