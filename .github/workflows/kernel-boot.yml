@@ -67,8 +67,13 @@ jobs:
             }
           done
           # DEBUG_INFO_NONE can be hidden when DEBUG_KERNEL is disabled.
-          # Verify the actual delivered configuration does not include DWARF.
-          if grep -Eq '^CONFIG_DEBUG_INFO(_DWARF[0-9]+)?=y
+          # Check for actual emitted debug information instead of its menu.
+          if grep -Eq '^(CONFIG_DEBUG_INFO=y|CONFIG_DEBUG_INFO_DWARF[0-9]+=y)' "$config"; then
+            echo "Release kernel unexpectedly enables debug information" >&2
+            exit 1
+          fi
+
+          root="$RUNNER_TEMP/initramfs"
           mkdir -p "$root"/{bin,dev,proc,sys}
           sudo mknod -m 600 "$root/dev/console" c 5 1
           sudo mknod -m 666 "$root/dev/null" c 1 3
