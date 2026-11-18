@@ -8,8 +8,30 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Rust policy and source checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Validate requested kernel commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_EVENT_NAME" = push
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - name: Validate Linos Rust kernel tooling
+        run: |
+          cargo fmt --manifest-path kernel/tools/Cargo.toml --check
+          cargo test --manifest-path kernel/tools/Cargo.toml --locked
+
   compile:
     name: Build ${{ matrix.arch }}
+    needs: preflight
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     strategy:
@@ -25,22 +47,8 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Confirm explicit kernel release request
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          source kernel/source.conf
-          test "$GITHUB_REF" = refs/heads/main
-          [[ "$GITHUB_EVENT_NAME" == push ]]
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
-      - name: Validate Linos kernel contracts with Rust
-        run: |
-          cargo fmt --manifest-path kernel/tools/Cargo.toml --check
-          cargo test --manifest-path kernel/tools/Cargo.toml --locked
-          cargo build --release --manifest-path kernel/tools/Cargo.toml --locked
+      - name: Build Linos Rust overlay utility
+        run: cargo build --release --manifest-path kernel/tools/Cargo.toml --locked
       - name: Install kernel toolchain
         run: |
           sudo apt-get update
