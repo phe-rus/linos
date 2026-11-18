@@ -22,7 +22,7 @@ Linos is **not intended to be a Debian spin or a conventional Linux distribution
 
 Our long-term target is a first-class **Rust-native application platform**, a full **Assets** file manager, **Linus store** for developers and users, and a repeatable Linos kernel and performance contract. Those goals are not features already shipped.
 
-Linos is intended as a family of experiences for everyday devices. **Server** is the first edition in development, not the limit of the vision. Desktop and other device experiences follow as the common platform matures.
+Linos is intended as a family of experiences for everyday devices. **Server** is the first edition in development, not the limit of the vision. Desktop and other device experiences follow as the common platform matures. The [shared Rust platform and Desktop execution plan](docs/architecture/desktop-platform.md) defines common edition, recovery and boot contracts.
 
 We want the experience to feel considered from power-on to daily use: a clear recovery environment, approachable setup, dependable updates and a system that remains useful without a cloud account.
 

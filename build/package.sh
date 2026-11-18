@@ -49,7 +49,10 @@ if [[ "${LINOS_ARCH:-$ARCH}" != "$ARCH" ]]; then
     exit 2
 fi
 
-cargo build --release --bins
+# Only build binaries installed by the Server package. Desktop graphics,
+# Recovery and hardware experiments are built by their own targets.
+cargo build --release --locked \
+    --bin init --bin enroll --bin linos-login --bin linos
 
 STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT

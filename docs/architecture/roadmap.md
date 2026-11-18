@@ -167,3 +167,15 @@ git status --short
 ```
 
 Run QEMU boot tests before calling a build bootable. Keep generated images ignored by Git and never test partitioning against the development host's boot disk.
+
+## Shared Rust platform and Desktop preparation (November 2026)
+
+- [x] Explicit Server/Desktop edition types for recovery without coupling to display hardware.
+- [x] Memory-conscious Cargo profiles and targeted Server package compilation.
+- [x] A/B update state machine in Rust, planning only with no disk writes.
+- [ ] Persist and sign update state, implement verified inactive-slot updates and tested rollback.
+- [ ] Build a native Desktop compositor, graphical setup and login, reusing the same identity and recovery contracts.
+- [ ] Benchmark Rust build RAM/CPU, installed binary sizes and runtime performance on supported targets.
+
+See [shared platform and Desktop plan](desktop-platform.md). A passing Rust
+planner test is not an operational A/B updater.

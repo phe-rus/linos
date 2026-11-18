@@ -38,3 +38,26 @@ path = "system/src/init.rs"
 [[bin]]
 name = "linos-graphics"
 path = "system/src/graphics/main.rs"
+
+# Development builds prioritize low RAM usage and fast feedback on
+# Chromebooks, small ARM boards and modest CI runners.
+[profile.dev]
+debug = 0
+codegen-units = 16
+incremental = true
+
+[profile.test]
+debug = 0
+codegen-units = 16
+incremental = true
+
+# Release builds optimize without expensive whole-program LTO.
+# We can introduce measured per-binary LTO only when the gain warrants it.
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 8
+debug = 0
+strip = "debuginfo"
+incremental = false
+panic = "abort"

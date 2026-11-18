@@ -1,0 +1,4 @@
+# Conservative default for local development on memory-constrained hosts.
+# Override with CARGO_BUILD_JOBS for faster workstations and CI.
+[build]
+jobs = 2

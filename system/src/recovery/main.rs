@@ -1,6 +1,9 @@
 mod layout;
 mod payload;
 mod planner;
+mod update;
+#[path = "../platform/edition.rs"]
+mod edition;
 
 use std::{
     fs,
@@ -8,10 +11,10 @@ use std::{
     path::Path,
 };
 
-const EDITION: &str = "server";
+const EDITION: edition::Edition = edition::Edition::Server;
 
 fn supported_edition(value: &str) -> bool {
-    matches!(value, "server" | "desktop")
+    edition::Edition::from_name(value).is_some()
 }
 
 fn visible_block_device(name: &str) -> bool {
@@ -45,7 +48,7 @@ fn disks(sys_block: &Path) -> io::Result<Vec<String>> {
 fn show_status() {
     debug_assert!(supported_edition(EDITION));
     println!("Linos 13 Recovery");
-    println!("Edition: {EDITION} (fixed by bootable image)");
+    println!("Edition: {} (fixed by bootable image)", EDITION.as_str());
     println!("Interface: CLI");
     println!("Installation: unavailable in this development build");
     println!("Disk operations: read-only");
@@ -74,7 +77,8 @@ fn interactive() -> io::Result<()> {
         println!("  3. Install Linos (not available yet)");
         println!("  4. Repair or restore (not available yet)");
         println!("  5. Verify offline payload");
-        println!("  6. Exit");
+        println!("  6. Inspect A/B update and rollback policy");
+    println!("  7. Exit");
         print!("Select an option: ");
         io::stdout().flush()?;
         let mut input = String::new();
@@ -90,8 +94,9 @@ fn interactive() -> io::Result<()> {
                     println!("Offline payload unavailable or invalid: {error}");
                 }
             }
-            "6" => return Ok(()),
-            _ => println!("Choose a number from 1 to 6."),
+            "6" => println!("{}", update::describe_initial_state()),
+            "7" => return Ok(()),
+            _ => println!("Choose a number from 1 to 7."),
         }
     }
 }
@@ -106,7 +111,7 @@ fn profile_field<'a>(body: &'a str, key: &str) -> Option<&'a str> {
 
 fn validate_profile(body: &str) -> bool {
     profile_field(body, "schema") == Some("1")
-        && profile_field(body, "edition") == Some("server")
+        && profile_field(body, "edition") == Some(EDITION.as_str())
         && profile_field(body, "architecture") == Some("amd64")
         && profile_field(body, "boot") == Some("uefi")
         && profile_field(body, "recovery") == Some("cli")
@@ -134,7 +139,7 @@ fn run(args: &[String]) -> io::Result<()> {
         [] => interactive(),
         [flag] if flag == "--help" || flag == "-h" => {
             println!(
-                "Usage: linos-recovery [status|disks|profile|payload|plan /dev/DEVICE|--help]"
+                "Usage: linos-recovery [status|disks|profile|payload|updates|plan /dev/DEVICE|--help]"
             );
             println!("Linos Server recovery console. All commands are read-only.");
             Ok(())
@@ -146,6 +151,10 @@ fn run(args: &[String]) -> io::Result<()> {
         [command] if command == "disks" => show_disks(Path::new("/sys/block")),
         [command] if command == "profile" => show_profile(),
         [command] if command == "payload" => payload::verify(),
+        [command] if command == "updates" => {
+            println!("{}", update::describe_initial_state());
+            Ok(())
+        },
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
