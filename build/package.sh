@@ -74,7 +74,6 @@ mkdir -p "$UNIT_DIR" "$WANTS_DIR"
 install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
 install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
 install -m 644 system/services/linos-ready.service "$UNIT_DIR/linos-ready.service"
-install -m 755 system/identity/linos-ready.sh "$STAGING_DIR/package/usr/lib/linos/linos-ready"
 
 # SSH remains unavailable until local enrollment creates an owner record.
 for unit in ssh.service ssh.socket; do

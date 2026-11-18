@@ -159,3 +159,14 @@ integration-only job deliberately permits newer *verification tooling* when
 reusing previously compiled kernel packages. Full releases compile new
 packages on the same commit. This is supply-chain regression protection,
 not full binary reproducibility or a signature on the OS image.
+
+### Rust-native kernel readiness acknowledgement
+
+The installed Linos OS uses the existing Rust `linos-init` binary for the
+kernel readiness handshake. Before acknowledging readiness, it checks the
+Linos release identity, provisioned state, completed setup marker and the
+administrator record bound to the machine's persisted device UUID. The
+operation is idempotent; malformed kernel state and mismatched owner records
+are rejected. Unit tests cover these failure cases. The previous Linos-owned
+shell readiness helper is removed. This is not a substitute for measured
+service health, boot watchdogs or authenticated update rollback.

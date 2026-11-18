@@ -254,15 +254,107 @@ fn initialize_live() -> io::Result<Device> {
     initialize_for_root(Path::new("/"), true)
 }
 
+
+// The userspace/kernel readiness contract is deliberately separate from
+// "the kernel booted". Never acknowledge a device that is unclaimed or whose
+// owner record does not match the generated device identifier.
+fn acknowledge_ready(root: &Path, kernel_state: &Path) -> io::Result<()> {
+    let release = fs::read_to_string(root.join("usr/lib/linos/release"))?;
+    if !is_linos_release(&release) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Readiness acknowledgement requires Linos",
+        ));
+    }
+    let root_fd = File::from(
+        rfs::open(
+            root,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(filesystem_error)?,
+    );
+    let state_dir = open_directory(&root_fd, &["var", "lib", "linos"], false)?
+        .ok_or_else(|| io::Error::other("Missing Linos identity directory"))?;
+    let value = |name: &str| {
+        read_existing(Some(&state_dir), name)?
+            .ok_or_else(|| io::Error::other(format!("Missing Linos identity: {name}")))
+    };
+    let device_id = value("device-id")?;
+    if !valid_uuid(&device_id) || value("provisioning-state")? != "provisioned" {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "The Linos device has not completed enrollment",
+        ));
+    }
+    if value("setup-complete")? != "ready" {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Linos setup completion has not been recorded",
+        ));
+    }
+    let owner = value("owner")?;
+    let mut lines = owner.lines();
+    let username = lines.next().and_then(|line| line.strip_prefix("username="));
+    let bound_device = lines.next().and_then(|line| line.strip_prefix("device-id="));
+    if !username.is_some_and(|name| !name.is_empty())
+        || bound_device != Some(device_id.as_str())
+        || lines.next().is_some()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "The Linos owner record does not match this device",
+        ));
+    }
+
+    match fs::read_to_string(kernel_state)?.trim() {
+        "starting" => {
+            fs::write(kernel_state, b"ready\n")?;
+            if fs::read_to_string(kernel_state)?.trim() != "ready" {
+                return Err(io::Error::other("The kernel did not acknowledge readiness"));
+            }
+            Ok(())
+        }
+        "ready" => Ok(()),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Unexpected Linos kernel readiness state",
+        )),
+    }
+}
+
+fn acknowledge_ready_live() -> io::Result<()> {
+    if rustix::process::geteuid().as_raw() != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Kernel readiness acknowledgement requires root",
+        ));
+    }
+    acknowledge_ready(
+        Path::new("/"),
+        Path::new("/sys/kernel/linos/boot_state"),
+    )
+}
+
 fn main() -> io::Result<()> {
     let mut arguments = env::args().skip(1);
     let Some(option) = arguments.next() else {
-        eprintln!("Usage: linos-init --root <directory> | --first-boot");
+        eprintln!("Usage: linos-init --root <directory> | --first-boot | --acknowledge-ready");
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Missing initialization mode",
         ));
     };
+
+    if option == "--acknowledge-ready" {
+        if arguments.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Unexpected readiness arguments",
+            ));
+        }
+        return acknowledge_ready_live();
+    }
 
     let device = match option.as_str() {
         "--first-boot" => {
@@ -289,7 +381,7 @@ fn main() -> io::Result<()> {
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Expected --root or --first-boot",
+                "Expected --root, --first-boot or --acknowledge-ready",
             ));
         }
     };
@@ -428,6 +520,50 @@ mod tests {
         assert!(!external.join("hostname").exists());
         cleanup(root);
         cleanup(external);
+    }
+
+    #[test]
+    fn readiness_requires_completed_enrollment_and_matching_owner() {
+        let root = test_root();
+        let device = initialize(&root).unwrap();
+        let state = root.join("kernel-state");
+        fs::write(&state, "starting\n").unwrap();
+        fs::create_dir_all(root.join("usr/lib/linos")).unwrap();
+        fs::write(root.join("usr/lib/linos/release"), "ID=linos\n").unwrap();
+        assert!(acknowledge_ready(&root, &state).is_err());
+        let data = root.join("var/lib/linos");
+        fs::write(data.join("provisioning-state"), "provisioned\n").unwrap();
+        fs::write(data.join("setup-complete"), "ready\n").unwrap();
+        fs::write(
+            data.join("owner"),
+            format!("username=linosadmin\ndevice-id={}\n", device.id),
+        ).unwrap();
+        acknowledge_ready(&root, &state).unwrap();
+        assert_eq!(fs::read_to_string(&state).unwrap(), "ready\n");
+        // Repeating the acknowledgement is safe.
+        acknowledge_ready(&root, &state).unwrap();
+        fs::write(&state, "starting\n").unwrap();
+        fs::write(data.join("owner"), "username=wrong\ndevice-id=invalid\n").unwrap();
+        assert!(acknowledge_ready(&root, &state).is_err());
+        assert_eq!(fs::read_to_string(&state).unwrap(), "starting\n");
+        cleanup(root);
+    }
+
+    #[test]
+    fn readiness_rejects_bad_kernel_state() {
+        let root = test_root();
+        let device = initialize(&root).unwrap();
+        let state = root.join("kernel-state");
+        fs::create_dir_all(root.join("usr/lib/linos")).unwrap();
+        fs::write(root.join("usr/lib/linos/release"), "ID=linos\n").unwrap();
+        let data = root.join("var/lib/linos");
+        fs::write(data.join("provisioning-state"), "provisioned\n").unwrap();
+        fs::write(data.join("setup-complete"), "ready\n").unwrap();
+        fs::write(data.join("owner"),
+            format!("username=admin\ndevice-id={}\n", device.id)).unwrap();
+        fs::write(&state, "invalid\n").unwrap();
+        assert!(acknowledge_ready(&root, &state).is_err());
+        cleanup(root);
     }
 
     #[test]

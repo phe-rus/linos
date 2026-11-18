@@ -9,7 +9,7 @@ ConditionPathExists=/var/lib/linos/owner
 
 [Service]
 Type=oneshot
-ExecStart=/usr/lib/linos/linos-ready
+ExecStart=/usr/lib/linos/linos-init --acknowledge-ready
 User=root
 Group=root
 NoNewPrivileges=yes
