@@ -1,6 +1,6 @@
 name: Linos Kernel Release
 
-# Explicit commit markers: kernel:build tests, kernel:integration reuses qualified binaries, kernel:release publishes after all tests.
+# Explicit commit markers: kernel:validate runs lightweight Rust tests, kernel:build compiles Linux, kernel:integration reuses qualified binaries, kernel:release publishes after all tests.
 # Kernel build-only runs never create GitHub tags or releases.
 on:
   push:
@@ -21,6 +21,19 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    # Lightweight Rust checks requested by the explicit kernel:validate
+    # marker. No Linux source download, kernel compile, QEMU, or OS images.
+    if: ${{ contains(github.event.head_commit.message, 'kernel:validate') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Rust kernel tooling and Linos initialization
+        run: |
+          cargo test --locked --manifest-path kernel/tools/Cargo.toml
+          cargo test --locked --bin init
+
   build:
     # Only a requested kernel build enters the concurrency queue.
     # Regular kernel commits skip immediately without blocking the workflow.
