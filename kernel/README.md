@@ -137,3 +137,8 @@ The release policy forbids `CONFIG_DEBUG_INFO=y`, rather than requiring
 the optional `DEBUG_INFO_NONE` Kconfig choice. ARM64 can hide that choice
 when `DEBUG_KERNEL` is disabled. We validate the resulting configuration
 rather than imposing an unavailable choice.
+
+The shipping configuration disables `CONFIG_DEBUG_KERNEL` to prevent
+Kconfig from selecting an active DWARF debug-information choice on ARM64.
+We separately reject debug-information settings after resolution. This does
+not disable standard panic logs, serial console output or pstore support.
