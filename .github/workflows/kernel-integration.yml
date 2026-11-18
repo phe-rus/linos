@@ -3,6 +3,12 @@ name: Linos Kernel · Installed OS Boot
 # Release-only gate. Reuses compiled kernel .deb; does not compile Linux again.
 on:
   workflow_call:
+    inputs:
+      source_run_id:
+        description: "Successful kernel qualification run to reuse, or zero for this run"
+        required: false
+        type: number
+        default: 0
 
 permissions:
   contents: read
@@ -29,6 +35,8 @@ jobs:
         with:
           name: linos-kernel-${{ matrix.arch }}
           path: kernel-package
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Install OS image dependencies
         run: |
           sudo apt-get update
@@ -69,8 +77,12 @@ jobs:
           package="$GITHUB_WORKSPACE/kernel-package/linos-kernel_${LINOS_KERNEL_VERSION}_${arch}.deb"
           test -s "$package"
           (cd kernel-package && sha256sum -c SHA256SUMS)
+          # This check runs against the pinned, previously qualified package.
+          # It does not compile Linux again.
+          test "$(dpkg-deb -f "$package" Version)" = "$LINOS_KERNEL_VERSION"
+          test "$(dpkg-deb -f "$package" Architecture)" = "$arch"
           ./build/package.sh
-          LINOS_KERNEL_MODE=linos LINOS_KERNEL_PACKAGE="$package" \
+          LINOS_ARCH="$arch" LINOS_KERNEL_MODE=linos LINOS_KERNEL_PACKAGE="$package" \
             bash build/image.sh
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           image="images/server/builds/$arch/$build_id"

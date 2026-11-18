@@ -1,6 +1,6 @@
 name: Linos Kernel Release
 
-# Explicit commit markers: kernel:build tests, kernel:release publishes after tests.
+# Explicit commit markers: kernel:build tests, kernel:integration reuses qualified binaries, kernel:release publishes after all tests.
 # Kernel build-only runs never create GitHub tags or releases.
 on:
   push:
@@ -31,6 +31,17 @@ jobs:
   boot:
     needs: build
     uses: ./.github/workflows/kernel-boot.yml
+    permissions:
+      contents: read
+      actions: read
+
+  # Reuse already verified packages instead of compiling them again.
+  # Pinned to successful AMD64+ARM64 QEMU qualification 44213747067.
+  integration-check:
+    if: ${{ contains(github.event.head_commit.message, 'kernel:integration') }}
+    uses: ./.github/workflows/kernel-integration.yml
+    with:
+      source_run_id: 44213747067
     permissions:
       contents: read
       actions: read
