@@ -71,3 +71,20 @@ The independent `rust:measure` CI path compiles the four shipped Server
 executables using the production Cargo profile. It records elapsed time,
 peak compiler resident memory, and per-binary disk sizes. Desktop's existing
 X11 graphics adapter is only type-checked, not installed in Server.
+
+### Initial measured Rust baseline
+
+GitHub Actions AMD64, November 18 2026, two Cargo jobs, release profile:
+24.13 seconds for the four shipped Server executables; maximum resident
+set size reported by GNU time was 438,720 KiB for the largest measured
+process. This is **not** aggregate RAM across concurrently running compiler
+processes. Binary sizes: init 496,408 bytes, enroll 923,128 bytes,
+linos-login 782,712 bytes, linos 1,073,576 bytes, totaling 3,275,824 bytes.
+These are measurements for that runner and commit, not guaranteed limits on
+ChromeOS, ARM or other hardware. See the `rust:measure` CI artifacts.
+
+Recovery now supports strictly validated, read-only inspection of an optional
+`/var/lib/linos/update-state` journal, rejecting symlinks, duplicate fields,
+invalid slots and invalid boot-attempt counts. No code writes that journal or
+switches a boot target yet; authentication, persistence and rollback remain
+part of the required update engine.

@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   measure:
-    if: \${{ contains(github.event.head_commit.message, 'rust:measure') }}
+    if: ${{ contains(github.event.head_commit.message, 'rust:measure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

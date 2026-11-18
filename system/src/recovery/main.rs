@@ -94,7 +94,7 @@ fn interactive() -> io::Result<()> {
                     println!("Offline payload unavailable or invalid: {error}");
                 }
             }
-            "6" => println!("{}", update::describe_initial_state()),
+            "6" => update::inspect_journal(Path::new("/var/lib/linos/update-state"))?,
             "7" => return Ok(()),
             _ => println!("Choose a number from 1 to 7."),
         }
@@ -152,8 +152,7 @@ fn run(args: &[String]) -> io::Result<()> {
         [command] if command == "profile" => show_profile(),
         [command] if command == "payload" => payload::verify(),
         [command] if command == "updates" => {
-            println!("{}", update::describe_initial_state());
-            Ok(())
+            update::inspect_journal(Path::new("/var/lib/linos/update-state"))
         },
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
         _ => Err(io::Error::new(
