@@ -132,3 +132,8 @@ upstream kernel build. There are no Linos-owned Python scripts in the kernel
 pipeline. Linux itself remains upstream C and assembly, with GNU Make and
 shell build commands required by Linux. The existing Linos boot-state source
 overlay is C until replaced by a verified supported Rust-for-Linux mechanism.
+
+The release policy forbids `CONFIG_DEBUG_INFO=y`, rather than requiring
+the optional `DEBUG_INFO_NONE` Kconfig choice. ARM64 can hide that choice
+when `DEBUG_KERNEL` is disabled. We validate the resulting configuration
+rather than imposing an unavailable choice.

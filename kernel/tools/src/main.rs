@@ -140,11 +140,10 @@ fn policy(root: &Path) -> Result<()> {
         "PSTORE",
         "DM_VERITY",
         "OVERLAY_FS",
-        "DEBUG_INFO_NONE",
     ] {
         require(&common, &format!("CONFIG_{option}"), "y")?;
     }
-    for option in ["LOCALVERSION_AUTO", "DEBUG_INFO_BTF"] {
+    for option in ["LOCALVERSION_AUTO", "DEBUG_INFO", "DEBUG_INFO_BTF"] {
         require(&common, &format!("CONFIG_{option}"), "n")?;
     }
     for arch in ["amd64", "arm64"] {
