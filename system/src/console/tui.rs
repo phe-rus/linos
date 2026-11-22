@@ -12,12 +12,12 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
 use super::{
-    Action, action_for, assets::Browser, geometry, hardware, host, memory, ownership, pty, store,
-    uptime, version,
+    Action, action_for, assets::Browser, geometry, hardware, host, memory, monitor, ownership,
+    preferences, pty, query, store, uptime, version,
 };
 
 const ACCENT: Color = Color::Cyan;
@@ -35,6 +35,7 @@ const COMMANDS: &[(Action, &str, &str)] = &[
         "CPU, memory, swap and storage",
     ),
     (Action::Assets, "/assets", "Browse your home directory"),
+    (Action::Tasks, "/tasks", "Live processes and task controls"),
     (Action::Settings, "/settings", "System settings and About"),
     (
         Action::Updates,
@@ -96,6 +97,7 @@ enum View {
     Terminal,
     Hardware,
     Store,
+    Tasks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,8 +107,41 @@ enum Exit {
     Power,
 }
 
+fn confirms_action(key: KeyEvent) -> bool {
+    key.kind == KeyEventKind::Press
+        && matches!(key.code, KeyCode::Char('y' | 'Y'))
+        && !key.modifiers.intersects(
+            KeyModifiers::CONTROL
+                | KeyModifiers::ALT
+                | KeyModifiers::SUPER
+                | KeyModifiers::HYPER
+                | KeyModifiers::META,
+        )
+}
+
+struct ViewJob {
+    receiver: std::sync::mpsc::Receiver<String>,
+    cancel: query::Cancellation,
+}
+impl Drop for ViewJob {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+
 struct App {
     input: String,
+    cursor: usize,
+    history: Vec<String>,
+    history_index: Option<usize>,
+    history_draft: String,
+    preferences: preferences::Preferences,
+    monitor: monitor::Monitor,
+    task_selected: usize,
+    task_confirmation: Option<(monitor::Task, String)>,
+    setting_confirmation: Option<(String, String)>,
+    native_command: Option<String>,
+    view_job: Option<ViewJob>,
     highlighted: usize,
     view: View,
     content: String,
@@ -126,6 +161,17 @@ impl App {
     fn new() -> Self {
         Self {
             input: String::new(),
+            cursor: 0,
+            history: Vec::new(),
+            history_index: None,
+            history_draft: String::new(),
+            preferences: preferences::Preferences::load(),
+            monitor: monitor::Monitor::new(),
+            task_selected: 0,
+            task_confirmation: None,
+            setting_confirmation: None,
+            native_command: None,
+            view_job: None,
             highlighted: 0,
             view: View::Home,
             content: String::new(),
@@ -156,6 +202,7 @@ impl App {
 
     fn navigate(&mut self, view: View) {
         self.view = view;
+        self.view_job = None;
         self.scroll = 0;
         self.content = match view {
             View::Home => String::new(),
@@ -168,28 +215,45 @@ impl App {
                 memory().unwrap_or_else(|| "Unavailable".into()),
                 ownership(),
             ),
-            View::Resources => resources(),
+            View::Resources => {
+                if self.monitor.tasks.is_empty() {
+                    self.monitor.sample();
+                }
+                self.monitor.resources()
+            }
+            View::Tasks => {
+                self.monitor.sample();
+                self.monitor.display(self.task_selected, self.task_rows())
+            }
             View::Assets => self.assets.display(),
-            View::Settings => settings(),
-            View::Updates => updates(),
-            View::Hardware => hardware::report(),
-            View::Store => store::overview(),
+            View::Settings => self.settings(),
+            View::Updates => self.load_content(updates),
+            View::Hardware => self.load_content(|_| hardware::report()),
+            View::Store => self.load_content(store::overview),
             View::Terminal => self.terminal_output.clone(),
-            View::Network => system_output("/usr/sbin/ip", &["-brief", "address"]),
-            View::Services => system_output(
-                "/usr/bin/systemctl",
-                &[
-                    "list-units",
-                    "--type=service",
-                    "--state=running",
-                    "--no-pager",
-                    "--plain",
-                ],
-            ),
-            View::Logs => system_output(
-                "/usr/bin/journalctl",
-                &["--no-pager", "-n", "50", "--output=short"],
-            ),
+            View::Network => self.load_content(|cancel| {
+                system_output("/usr/sbin/ip", &["-brief", "address"], cancel)
+            }),
+            View::Services => self.load_content(|cancel| {
+                system_output(
+                    "/usr/bin/systemctl",
+                    &[
+                        "list-units",
+                        "--type=service",
+                        "--state=running",
+                        "--no-pager",
+                        "--plain",
+                    ],
+                    cancel,
+                )
+            }),
+            View::Logs => self.load_content(|cancel| {
+                system_output(
+                    "/usr/bin/journalctl",
+                    &["--no-pager", "-n", "50", "--output=short"],
+                    cancel,
+                )
+            }),
             View::Help => [
                 "Linos Server commands",
                 "",
@@ -197,6 +261,7 @@ impl App {
                 "clear          Clear PTY output without resetting shell state",
                 "/status       Overview and device health",
                 "/resources    CPU, memory, swap and filesystem capacity",
+                "/tasks        Live tasks; /tasks pause|resume|terminate|kill PID",
                 "/assets       Browse your home directory (read-only)",
                 "/settings     Device settings and About",
                 "/updates      Update policy and installed package status",
@@ -215,6 +280,9 @@ impl App {
                 "Linux commands run in a persistent PTY, including cd and pipelines.",
                 "/home returns from terminal output to your Home workspace.",
                 "Use Up/Down to select, Enter to run, Esc to clear.",
+                "Left/Right, Home/End, Delete and Backspace edit commands.",
+                "Up/Down recall command history. Ctrl+A/E/U/K/W edit input.",
+                "Ctrl+C cancels input or interrupts a command; Ctrl+D sends EOF.",
                 "PageUp/PageDown scroll results. Ctrl+T switches to shell.",
                 "Ctrl+T switches Home/Shell · Ctrl+R fits serial terminal size.",
                 "",
@@ -230,6 +298,7 @@ impl App {
             View::Logs => "Recent system events".into(),
             View::Help => "Quick guide".into(),
             View::Resources => "System resources".into(),
+            View::Tasks => "Live tasks · Up/Down select · /tasks for controls".into(),
             View::Assets => "Assets · home directory".into(),
             View::Settings => "System settings".into(),
             View::Updates => "Update information".into(),
@@ -241,11 +310,13 @@ impl App {
 
     fn apply(&mut self, action: Action) -> Option<Exit> {
         self.input.clear();
+        self.cursor = 0;
         self.highlighted = 0;
         match action {
             Action::Home => self.navigate(View::Home),
             Action::Status => self.navigate(View::Status),
             Action::Resources => self.navigate(View::Resources),
+            Action::Tasks => self.navigate(View::Tasks),
             Action::Assets => {
                 self.assets.refresh().ok();
                 self.navigate(View::Assets);
@@ -261,6 +332,9 @@ impl App {
             Action::Shell => return Some(Exit::Shell),
             Action::Logout => return Some(Exit::Logout),
             Action::Reboot | Action::Shutdown => {
+                if self.view == View::Terminal {
+                    self.navigate(View::Home);
+                }
                 self.confirm = Some(action);
                 self.notice = "Confirm power action: y to proceed, Enter to cancel".into();
             }
@@ -270,15 +344,125 @@ impl App {
 
     fn password_input_active(&self) -> bool {
         // An idle Bash prompt can disable ECHO while readline is active.
-        // Password masking is only meaningful while a submitted command
-        // still owns the pseudo-terminal.
-        self.view == View::Terminal
-            && self.command_pending
-            && pty::Session::password_prompt_visible(&self.terminal_output)
+        // A submitted command with echo disabled owns secret input. Do not
+        // depend on English prompt text, which may be localized or cleared.
+        self.command_pending
             && self
                 .session
                 .as_ref()
-                .is_some_and(|shell| !shell.echo_enabled())
+                .is_some_and(|shell| !shell.is_ready() && !shell.echo_enabled())
+    }
+
+    fn task_rows(&self) -> usize {
+        crossterm::terminal::size()
+            .map(|(_, h)| usize::from(h.saturating_sub(24)).max(1))
+            .unwrap_or(6)
+    }
+
+    fn load_content(
+        &mut self,
+        read: impl FnOnce(&query::Cancellation) -> String + Send + 'static,
+    ) -> String {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let cancel = query::Cancellation::default();
+        let worker_cancel = cancel.clone();
+        std::thread::spawn(move || {
+            let _ = sender.send(read(&worker_cancel));
+        });
+        // Each navigation owns its receiver. Late results from an older view
+        // cannot overwrite the current workspace.
+        self.view_job = Some(ViewJob { receiver, cancel });
+        "Reading system information… You can keep typing or change views.".into()
+    }
+
+    fn poll_content(&mut self) -> bool {
+        let result = self.view_job.as_ref().map(|job| job.receiver.try_recv());
+        match result {
+            Some(Ok(content)) => {
+                self.content = content;
+                self.view_job = None;
+                true
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
+                self.content = "System information could not be read. Try this view again.".into();
+                self.view_job = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn settings(&self) -> String {
+        let timezone = fs::canonicalize("/etc/localtime")
+            .ok()
+            .and_then(|path| {
+                path.strip_prefix("/usr/share/zoneinfo")
+                    .ok()
+                    .map(|zone| zone.display().to_string())
+            })
+            .or_else(|| fs::read_to_string("/etc/timezone").ok())
+            .unwrap_or_else(|| "Unavailable".into());
+        format!(
+            "About\nLinos {} Server, {}\nTime zone: {}\nLanguage: {}\n\nYour preferences (saved immediately)\nDefault at sign-in: {}\nColor: {}\nLive refresh: {} seconds\n\n/settings default home|shell\n/settings color auto|always|never\n/settings refresh 1..10\n\nSystem settings (confirmation and administrator authorization)\n/settings hostname NAME\n/settings timezone AREA/CITY\n\nSign-in stays protected by local PAM. No password is stored by Home.\nLanguage and keyboard configuration remain in system setup.",
+            version(),
+            host(),
+            timezone.trim(),
+            env::var("LANG").unwrap_or_else(|_| "Unset".into()),
+            self.preferences.mode,
+            self.preferences.color,
+            self.preferences.refresh
+        )
+    }
+
+    fn refresh_monitor(&mut self) {
+        let selected = self
+            .monitor
+            .tasks
+            .get(self.task_selected)
+            .map(|t| (t.pid, t.start));
+        self.monitor.sample();
+        self.task_selected = selected
+            .and_then(|identity| {
+                self.monitor
+                    .tasks
+                    .iter()
+                    .position(|t| (t.pid, t.start) == identity)
+            })
+            .unwrap_or(
+                self.task_selected
+                    .min(self.monitor.tasks.len().saturating_sub(1)),
+            );
+        self.content = if self.view == View::Tasks {
+            self.monitor.display(self.task_selected, self.task_rows())
+        } else {
+            self.monitor.resources()
+        };
+    }
+
+    fn paste(&mut self, text: &str) {
+        if self.confirm.is_some()
+            || self.task_confirmation.is_some()
+            || self.setting_confirmation.is_some()
+        {
+            return;
+        }
+        self.cursor = self.cursor.min(self.input.len());
+        while !self.input.is_char_boundary(self.cursor) {
+            self.cursor -= 1;
+        }
+        for c in text.chars() {
+            let c = if matches!(c, '\r' | '\n' | '\t') {
+                ' '
+            } else {
+                c
+            };
+            if !c.is_control() && self.input.len() + c.len_utf8() <= 4096 {
+                self.input.insert(self.cursor, c);
+                self.cursor += c.len_utf8();
+            }
+        }
+        self.highlighted = 0;
+        self.notice = "Pasted into command field. Enter submits.".into();
     }
 
     fn run_native_command(&mut self, command: String) -> io::Result<()> {
@@ -312,20 +496,65 @@ impl App {
     }
 
     fn key(&mut self, key: KeyEvent) -> io::Result<Option<Exit>> {
-        if key.kind != KeyEventKind::Press {
+        if key.kind == KeyEventKind::Release {
+            return Ok(None);
+        }
+        // Keep cursor positions at UTF-8 character boundaries, including
+        // after command submission, history recall and external test input.
+        self.cursor = self.cursor.min(self.input.len());
+        while !self.input.is_char_boundary(self.cursor) {
+            self.cursor -= 1;
+        }
+        // Repeated editing is useful; repeated Enter must never submit twice.
+        if key.kind == KeyEventKind::Repeat && matches!(key.code, KeyCode::Enter | KeyCode::Tab) {
+            return Ok(None);
+        }
+        if self.task_confirmation.is_some() || self.setting_confirmation.is_some() {
+            match key.code {
+                KeyCode::Char('y' | 'Y') if confirms_action(key) => {
+                    if let Some((task, operation)) = self.task_confirmation.take() {
+                        self.notice = match monitor::signal(&task, &operation) {
+                            Ok(()) => format!(
+                                "{operation} signal sent to {} ({}); inspect the next sample",
+                                task.name, task.pid
+                            ),
+                            Err(error) => format!("Task action failed: {error}"),
+                        };
+                        self.refresh_monitor();
+                    }
+                    if let Some((name, value)) = self.setting_confirmation.take() {
+                        match preferences::system_change(&name, &value) {
+                            Ok((program, operation)) => {
+                                // Validation permits only a single tool argument. The PTY
+                                // preserves sudo's normal authorization and secret masking.
+                                self.run_native_command(format!(
+                                    "sudo -- {program} {operation} '{value}'"
+                                ))?;
+                            }
+                            Err(error) => self.notice = error.to_string(),
+                        }
+                    }
+                }
+                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('n' | 'N') => {
+                    self.task_confirmation = None;
+                    self.setting_confirmation = None;
+                    self.notice = "Cancelled. No change made.".into();
+                }
+                _ => {}
+            }
             return Ok(None);
         }
         if let Some(action) = self.confirm {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                KeyCode::Char('y') | KeyCode::Char('Y') if confirms_action(key) => {
                     self.confirm = None;
                     let operation = if action == Action::Reboot {
                         "reboot"
                     } else {
                         "poweroff"
                     };
-                    let outcome = Command::new("/usr/bin/systemctl").arg(operation).status()?;
-                    if outcome.success() {
+                    let outcome = Command::new("/usr/bin/systemctl").arg(operation).output()?;
+                    if outcome.status.success() {
                         return Ok(Some(Exit::Power));
                     }
                     self.notice = "Permission denied. Power request was not accepted.".into();
@@ -337,6 +566,20 @@ impl App {
                 _ => {}
             }
             return Ok(None);
+        }
+        if self.view == View::Tasks && self.input.is_empty() {
+            match key.code {
+                KeyCode::Up => self.task_selected = self.task_selected.saturating_sub(1),
+                KeyCode::Down => {
+                    self.task_selected =
+                        (self.task_selected + 1).min(self.monitor.tasks.len().saturating_sub(1))
+                }
+                _ => {}
+            }
+            if matches!(key.code, KeyCode::Up | KeyCode::Down) {
+                self.content = self.monitor.display(self.task_selected, self.task_rows());
+                return Ok(None);
+            }
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             if key.code == KeyCode::Char('t') {
@@ -351,6 +594,9 @@ impl App {
                 return Ok(None);
             }
             if key.code == KeyCode::Char('c') {
+                self.input.clear();
+                self.cursor = 0;
+                self.history_index = None;
                 if self.view == View::Terminal
                     && let Some(shell) = &mut self.session
                 {
@@ -358,6 +604,34 @@ impl App {
                 }
                 return Ok(None);
             }
+            match key.code {
+                KeyCode::Char('a') => self.cursor = 0,
+                KeyCode::Char('e') => self.cursor = self.input.len(),
+                KeyCode::Char('u') => {
+                    self.input.drain(..self.cursor);
+                    self.cursor = 0;
+                }
+                KeyCode::Char('k') => {
+                    self.input.truncate(self.cursor);
+                }
+                KeyCode::Char('w') => {
+                    let before = &self.input[..self.cursor];
+                    let start = before
+                        .trim_end()
+                        .rfind(char::is_whitespace)
+                        .map(|i| i + before[i..].chars().next().unwrap().len_utf8())
+                        .unwrap_or(0);
+                    self.input.drain(start..self.cursor);
+                    self.cursor = start;
+                }
+                KeyCode::Char('d') if self.view == View::Terminal && self.command_pending => {
+                    if let Some(shell) = &mut self.session {
+                        shell.key(4)?;
+                    }
+                }
+                _ => {}
+            }
+            return Ok(None);
         }
         if self.view == View::Assets && self.input.is_empty() {
             match key.code {
@@ -405,22 +679,73 @@ impl App {
         }
         match key.code {
             KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if self.input.chars().count() < 100 {
-                    self.input.push(c);
+                if !c.is_control() && self.input.len() + c.len_utf8() <= 4096 {
+                    self.input.insert(self.cursor, c);
+                    self.cursor += c.len_utf8();
                     self.highlighted = 0;
                 }
             }
             KeyCode::Backspace => {
-                self.input.pop();
+                if let Some((previous, _)) = self.input[..self.cursor].char_indices().next_back() {
+                    self.input.drain(previous..self.cursor);
+                    self.cursor = previous;
+                }
                 self.highlighted = 0;
             }
+            KeyCode::Delete => {
+                if let Some(c) = self.input[self.cursor..].chars().next() {
+                    self.input.drain(self.cursor..self.cursor + c.len_utf8());
+                }
+            }
+            KeyCode::Left => {
+                self.cursor = self.input[..self.cursor]
+                    .char_indices()
+                    .next_back()
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+            }
+            KeyCode::Right => {
+                self.cursor += self.input[self.cursor..]
+                    .chars()
+                    .next()
+                    .map(char::len_utf8)
+                    .unwrap_or(0);
+            }
+            KeyCode::Home => self.cursor = 0,
+            KeyCode::End => self.cursor = self.input.len(),
             KeyCode::Esc => {
                 self.input.clear();
+                self.cursor = 0;
+                self.history_index = None;
                 self.highlighted = 0;
                 self.notice = "Ready".into();
             }
             KeyCode::Up => {
-                self.highlighted = self.highlighted.saturating_sub(1);
+                if self.input.starts_with('/') {
+                    self.highlighted = self.highlighted.saturating_sub(1);
+                } else if !self.password_input_active() && !self.history.is_empty() {
+                    if self.history_index.is_none() {
+                        self.history_draft.clone_from(&self.input);
+                    }
+                    let index = self
+                        .history_index
+                        .unwrap_or(self.history.len())
+                        .saturating_sub(1);
+                    self.input.clone_from(&self.history[index]);
+                    self.history_index = Some(index);
+                    self.cursor = self.input.len();
+                }
+            }
+            KeyCode::Down if self.history_index.is_some() && !self.password_input_active() => {
+                let index = self.history_index.unwrap() + 1;
+                if index < self.history.len() {
+                    self.input.clone_from(&self.history[index]);
+                    self.history_index = Some(index);
+                } else {
+                    self.input.clone_from(&self.history_draft);
+                    self.history_index = None;
+                }
+                self.cursor = self.input.len();
             }
             KeyCode::Down | KeyCode::Tab => {
                 let total = self.suggestions().len();
@@ -429,37 +754,128 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                if self.input.is_empty() {
+                let waiting_for_secret = self.password_input_active();
+                if self.input.is_empty() && !waiting_for_secret && !self.command_pending {
                     return Ok(None);
                 }
-                let waiting_for_secret = self.password_input_active();
-                let action = if waiting_for_secret {
-                    None
-                } else {
-                    self.suggestions()
-                        .get(self.highlighted)
-                        .map(|item| item.0)
-                        .or_else(|| action_for(&self.input))
-                };
-                if let Some(rest) = self.input.strip_prefix("/store ") {
-                    let parts: Vec<_> = rest.split_whitespace().collect();
-                    let output = match parts.as_slice() {
-                        ["installed"] => store::installed(),
-                        ["search", words @ ..] if !words.is_empty() => store::search(&words.join(" ")),
-                        ["info", package] => store::details(package),
-                        ["install", package] => store::preview("install", package),
-                        ["remove", package] => store::preview("remove", package),
-                        _ => "Usage: /store installed | search QUERY | info PACKAGE | install PACKAGE | remove PACKAGE".into(),
-                    };
+                if waiting_for_secret || (self.view == View::Terminal && self.command_pending) {
+                    let secret = std::mem::take(&mut self.input);
+                    self.cursor = 0;
+                    if let Some(shell) = &mut self.session {
+                        shell.command(&secret)?;
+                    }
+                    return Ok(None);
+                }
+                if let Some(command) = self.input.strip_prefix("/shell ") {
+                    self.native_command = Some(command.to_owned());
                     self.input.clear();
+                    self.cursor = 0;
+                    return Ok(Some(Exit::Shell));
+                }
+                if needs_native_terminal(&self.input) {
+                    self.native_command = Some(std::mem::take(&mut self.input));
+                    self.cursor = 0;
+                    return Ok(Some(Exit::Shell));
+                }
+                if self.input.starts_with("/settings ") {
+                    let input = std::mem::take(&mut self.input);
+                    self.cursor = 0;
+                    let parts: Vec<_> = input.split_whitespace().collect();
+                    self.navigate(View::Settings);
+                    self.notice = match parts.as_slice() {
+                        [_, name @ ("hostname" | "timezone"), value] => {
+                            match preferences::system_change(name, value) {
+                                Ok(_) => {
+                                    self.setting_confirmation =
+                                        Some(((*name).into(), (*value).into()));
+                                    format!(
+                                        "Change {name} to {value}? Y confirm, Enter cancel. Administrator authorization follows."
+                                    )
+                                }
+                                Err(error) => error.to_string(),
+                            }
+                        }
+                        [_, name, value] => match self.preferences.set(name, value) {
+                            Ok(()) => format!(
+                                "Saved {name}: {value}{}",
+                                if *name == "default" {
+                                    ". Effective at next sign-in."
+                                } else {
+                                    ""
+                                }
+                            ),
+                            Err(error) => format!("Settings unchanged: {error}"),
+                        },
+                        _ => {
+                            "Usage: /settings default|color|refresh|hostname|timezone VALUE".into()
+                        }
+                    };
+                    self.content = self.settings();
+                    return Ok(None);
+                }
+                if self.input.starts_with("/tasks ") {
+                    let input = std::mem::take(&mut self.input);
+                    self.cursor = 0;
+                    let parts: Vec<_> = input.split_whitespace().collect();
+                    self.navigate(View::Tasks);
+                    self.notice = match parts.as_slice() {
+                        [
+                            _,
+                            operation @ ("pause" | "resume" | "terminate" | "kill"),
+                            pid,
+                        ] => {
+                            let task = pid
+                                .parse::<i32>()
+                                .ok()
+                                .and_then(|pid| self.monitor.tasks.iter().find(|t| t.pid == pid));
+                            if let Some(task) = task {
+                                self.task_confirmation = Some((task.clone(), (*operation).into()));
+                                format!(
+                                    "{operation} {} (PID {})? {} Y confirm, Enter cancel",
+                                    task.name,
+                                    task.pid,
+                                    if *operation == "kill" {
+                                        "Force kill can lose unsaved work."
+                                    } else {
+                                        ""
+                                    }
+                                )
+                            } else {
+                                "Task not found. It may have exited.".into()
+                            }
+                        }
+                        _ => "Usage: /tasks pause|resume|terminate|kill PID".into(),
+                    };
+                    return Ok(None);
+                }
+                let action = self
+                    .suggestions()
+                    .get(self.highlighted)
+                    .map(|item| item.0)
+                    .or_else(|| action_for(&self.input));
+                if let Some(rest) = self.input.strip_prefix("/store ") {
+                    let query = rest.to_owned();
+                    self.input.clear();
+                    self.cursor = 0;
                     self.navigate(View::Store);
-                    self.content = output;
+                    self.content = self.load_content(move |cancel| {
+                    let parts: Vec<_> = query.split_whitespace().collect();
+                    match parts.as_slice() {
+                        ["installed"] => store::installed(cancel),
+                        ["search", words @ ..] if !words.is_empty() => store::search(&words.join(" "), cancel),
+                        ["info", package] => store::details(package, cancel),
+                        ["install", package] => store::preview("install", package, cancel),
+                        ["remove", package] => store::preview("remove", package, cancel),
+                        _ => "Usage: /store installed | search QUERY | info PACKAGE | install PACKAGE | remove PACKAGE".into(),
+                    }
+                    });
                     return Ok(None);
                 }
                 if let Some(path) = self.input.strip_prefix("/assets/") {
                     let path = std::path::PathBuf::from(format!("/{path}"));
                     let result = self.assets.open(&path);
                     self.input.clear();
+                    self.cursor = 0;
                     match result {
                         Ok(()) => {
                             self.navigate(View::Assets);
@@ -473,6 +889,14 @@ impl App {
                     return Ok(self.apply(action));
                 }
                 let command = std::mem::take(&mut self.input);
+                self.cursor = 0;
+                self.history_index = None;
+                if self.history.last() != Some(&command) {
+                    if self.history.len() == 100 {
+                        self.history.remove(0);
+                    }
+                    self.history.push(command.clone());
+                }
                 if let Err(error) = self.run_native_command(command) {
                     self.notice = format!("Unable to start Linux command: {error}");
                 }
@@ -491,108 +915,18 @@ impl App {
     }
 }
 
-fn system_output(program: &str, args: &[&str]) -> String {
-    match Command::new(program).args(args).output() {
-        Ok(output) => {
-            let raw = if output.status.success() {
-                &output.stdout
-            } else {
-                &output.stderr
-            };
-            let value = String::from_utf8_lossy(raw);
-            value
-                .chars()
-                .filter(|c| *c == '\n' || *c == '\t' || !c.is_control())
-                .take(8000)
-                .collect()
-        }
-        Err(error) => format!("Unable to read system information: {error}"),
-    }
+fn system_output(program: &str, args: &[&str], cancel: &query::Cancellation) -> String {
+    query::text(program, args, cancel)
+        .map(|text| text.chars().take(8000).collect())
+        .unwrap_or_else(|error| format!("Unable to read system information: {error}"))
 }
 
-fn read_mem_field(key: &str) -> Option<u64> {
-    let text = fs::read_to_string("/proc/meminfo").ok()?;
-    text.lines()
-        .find(|line| line.starts_with(key))?
-        .split_whitespace()
-        .nth(1)?
-        .parse::<u64>()
-        .ok()
-}
-
-fn usage_bar(used: u64, total: u64, width: usize) -> String {
-    if total == 0 {
-        return "Not configured".into();
-    }
-    let filled = ((used.min(total) as u128 * width as u128) / total as u128) as usize;
-    let percentage = ((used.min(total) as u128 * 100) / total as u128) as u64;
-    format!(
-        "[{}{}] {percentage:>3}%",
-        "█".repeat(filled),
-        "░".repeat(width - filled)
-    )
-}
-
-fn resources() -> String {
-    let total = read_mem_field("MemTotal:").unwrap_or(0) / 1024;
-    let available = read_mem_field("MemAvailable:").unwrap_or(0) / 1024;
-    let swap_total = read_mem_field("SwapTotal:").unwrap_or(0) / 1024;
-    let swap_free = read_mem_field("SwapFree:").unwrap_or(0) / 1024;
-    let cpu = fs::read_to_string("/proc/stat")
-        .ok()
-        .map(|s| {
-            s.lines()
-                .filter(|l| {
-                    l.starts_with("cpu") && l.chars().nth(3).is_some_and(|c| c.is_ascii_digit())
-                })
-                .count()
-        })
-        .unwrap_or(0);
-    let load = fs::read_to_string("/proc/loadavg")
-        .ok()
-        .map(|s| s.split_whitespace().take(3).collect::<Vec<_>>().join("  "))
-        .unwrap_or_else(|| "Unavailable".into());
-    let memory_used = total.saturating_sub(available);
-    let swap_used = swap_total.saturating_sub(swap_free);
-    let storage = system_output("/usr/bin/df", &["-k", "-P", "/"]);
-    let disk = storage.lines().nth(1).and_then(|line| {
-        let values: Vec<_> = line.split_whitespace().collect();
-        let capacity = values.get(1)?.parse::<u64>().ok()? / 1024;
-        let used = values.get(2)?.parse::<u64>().ok()? / 1024;
-        Some((used, capacity))
-    });
-    let mut output = format!(
-        "System resources\n\nCPU  ·  {cpu} logical processors\nLoad average (1 / 5 / 15 min)\n{load}\n\nMemory\n{}\n{memory_used} / {total} MiB used    {available} MiB available\n\nSwap\n{}\n{swap_used} / {swap_total} MiB used\n\n",
-        usage_bar(memory_used, total, 28),
-        usage_bar(swap_used, swap_total, 28)
+fn updates(cancel: &query::Cancellation) -> String {
+    let version = system_output(
+        "/usr/bin/dpkg-query",
+        &["-W", "-f=${Version}", "linos"],
+        cancel,
     );
-    if let Some((used, capacity)) = disk {
-        output.push_str(&format!(
-            "Storage  ·  Root filesystem\n{}\n{used} / {capacity} MiB used\n",
-            usage_bar(used, capacity, 28),
-        ));
-    } else {
-        output.push_str("Storage\nUsage unavailable\n");
-    }
-    output.push_str(
-        "\nLive memory and disk usage refresh every two seconds. CPU load is not CPU utilization.",
-    );
-    output
-}
-
-fn settings() -> String {
-    let timezone = fs::read_to_string("/etc/timezone").unwrap_or_else(|_| "System default".into());
-    format!(
-        "About\nLinos {} Server\nHostname               {}\n\nPreferences\nTime zone              {}\nLanguage               {}\n\nSecurity\nAuthentication         Local PAM\nCloud account          Optional\n\nSettings are currently read-only. Administrative changes will require explicit confirmation.",
-        version(),
-        host(),
-        timezone.trim(),
-        env::var("LANG").unwrap_or_else(|_| "Unset".into()),
-    )
-}
-
-fn updates() -> String {
-    let version = system_output("/usr/bin/dpkg-query", &["-W", "-f=${Version}", "linos"]);
     format!(
         "Linos updates\nInstalled package      linos {}\n\nUpdate channel         Development\nAutomatic OS updates   Disabled (not configured)\nRollback               Not implemented\n\nSystem packages currently use Debian apt. No update was started.\nA verified update mechanism and rollback policy are required before automatic Linos updates can be enabled.",
         version.trim(),
@@ -603,11 +937,120 @@ fn paragraph_at(frame: &mut Frame, rect: Rect, text: Vec<Line<'_>>) {
     frame.render_widget(Paragraph::new(text), rect);
 }
 
+fn input_window(input: &str, cursor: usize, width: u16, masked: bool) -> (String, u16) {
+    let cursor = cursor.min(input.len());
+    let before = input.get(..cursor).unwrap_or_default();
+    let display = if masked {
+        "*".repeat(input.chars().count())
+    } else {
+        input.to_owned()
+    };
+    let position = if masked {
+        before.chars().count()
+    } else {
+        before.len()
+    };
+    let mut start = 0;
+    while Span::raw(&display[start..position]).width() >= usize::from(width.max(1)) {
+        let Some(c) = display[start..position].chars().next() else {
+            break;
+        };
+        start += c.len_utf8();
+    }
+    let cursor_cells = Span::raw(&display[start..position]).width() as u16;
+    let mut end = start;
+    let mut cells = 0;
+    for c in display[start..].chars() {
+        let size = Span::raw(c.to_string()).width();
+        if cells + size > usize::from(width) {
+            break;
+        }
+        cells += size;
+        end += c.len_utf8();
+    }
+    (display[start..end].to_owned(), cursor_cells)
+}
+
+fn transcript_lines(output: &str, width: u16) -> Vec<Line<'static>> {
+    let width = usize::from(width.max(1));
+    let mut lines = Vec::new();
+    for source in output.split('\n') {
+        let mut row = String::new();
+        let mut cells = 0;
+        for c in source.chars() {
+            let size = if c == '\t' {
+                8 - cells % 8
+            } else {
+                Span::raw(c.to_string()).width()
+            };
+            if cells + size > width && !row.is_empty() {
+                lines.push(Line::raw(std::mem::take(&mut row)));
+                cells = 0;
+            }
+            if c == '\t' {
+                row.push_str(&" ".repeat(size.min(width)));
+            } else {
+                row.push(c);
+            }
+            cells += size;
+        }
+        lines.push(Line::raw(row));
+    }
+    lines
+}
+
 fn draw(frame: &mut Frame, app: &App) {
+    draw_workspace(frame, app);
+    let question = if let Some((task, operation)) = &app.task_confirmation {
+        Some(format!(
+            "{operation} {} (PID {})?\n\n{}\nKernel permissions apply.\n\nY confirms. Enter or Esc cancels.",
+            task.name,
+            task.pid,
+            if operation == "kill" {
+                "Force kill can lose unsaved work."
+            } else {
+                "The process may be running server work."
+            }
+        ))
+    } else if let Some((name, value)) = &app.setting_confirmation {
+        Some(format!(
+            "Change {name} to {value}?\n\nAdministrator authorization follows.\nReview the command result before assuming success.\n\nY confirms. Enter or Esc cancels."
+        ))
+    } else {
+        app.confirm.map(|action| format!("{} server?\n\nActive server work will be interrupted.\n\nY confirms. Enter or Esc cancels.", if action == Action::Reboot { "Restart" } else { "Shut down" }))
+    };
+    if let Some(question) = question {
+        let area = frame.area();
+        let width = area.width.saturating_sub(4).min(76);
+        let height = area.height.saturating_sub(2).min(12);
+        let rect = Rect::new(
+            area.x + (area.width - width) / 2,
+            area.y + (area.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, rect);
+        frame.render_widget(
+            Paragraph::new(question).wrap(Wrap { trim: false }).block(
+                Block::bordered()
+                    .title(" Confirm action ")
+                    .border_style(Style::default().fg(ACCENT)),
+            ),
+            rect,
+        );
+    }
+    if !app.preferences.colors() {
+        for cell in frame.buffer_mut().content.iter_mut() {
+            cell.set_fg(Color::Reset).set_bg(Color::Reset);
+        }
+    }
+}
+
+fn draw_workspace(frame: &mut Frame, app: &App) {
     let area = frame.area();
     if area.width < 36 || area.height < 14 {
         frame.render_widget(
-            Paragraph::new("Linos 13 Server\n\nResize the terminal for the interactive workspace.\nCtrl+C: shell"),
+            Paragraph::new("Linos 13 Server\n\nResize the terminal for the interactive workspace.\nCtrl+T: shell"),
             area,
         );
         return;
@@ -627,22 +1070,15 @@ fn draw(frame: &mut Frame, app: &App) {
                 Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             )],
         );
-        let output = if pty::Session::prompt_ready(&app.terminal_output) {
-            app.terminal_output
-                .rsplit_once('\n')
-                .map(|(prior, _)| prior)
-                .unwrap_or("")
-        } else {
-            app.terminal_output.as_str()
-        };
+        let output = app.terminal_output.as_str();
         let transcript_height = area.height.saturating_sub(6);
-        let transcript_scroll = output
-            .lines()
-            .count()
+        let lines = transcript_lines(output, width);
+        let transcript_scroll = lines
+            .len()
             .saturating_sub(usize::from(transcript_height))
             .min(u16::MAX as usize) as u16;
         frame.render_widget(
-            Paragraph::new(output).wrap(Wrap { trim: false }).scroll((
+            Paragraph::new(lines).scroll((
                 if app.follow_tail {
                     transcript_scroll
                 } else {
@@ -665,11 +1101,24 @@ fn draw(frame: &mut Frame, app: &App) {
                 }
             })
             .unwrap_or_else(|| app.cwd.display().to_string());
-        let prompt = format!(
-            "{}:{}{} ",
-            host(),
-            directory,
-            if app.user == "root" { '#' } else { '$' }
+        let waiting_for_secret = app.password_input_active();
+        let prompt = if waiting_for_secret {
+            "Password (hidden): ".to_owned()
+        } else {
+            format!(
+                "{}:{}{} ",
+                host(),
+                directory,
+                if app.user == "root" { '#' } else { '$' }
+            )
+        };
+        let prompt: String = prompt.chars().take(usize::from(width / 2)).collect();
+        let prompt_width = Span::raw(&prompt).width().min(usize::from(width)) as u16;
+        let (input, cursor_cells) = input_window(
+            &app.input,
+            app.cursor,
+            width.saturating_sub(prompt_width),
+            waiting_for_secret,
         );
         let input_y = area.bottom().saturating_sub(2);
         paragraph_at(
@@ -677,14 +1126,19 @@ fn draw(frame: &mut Frame, app: &App) {
             Rect::new(left, input_y, width, 1),
             vec![Line::from(vec![
                 Span::styled(prompt.clone(), Style::default().fg(ACCENT)),
-                Span::raw(app.input.clone()),
+                Span::raw(input.clone()),
             ])],
         );
         let cursor_x = left
-            .saturating_add(prompt.chars().count().min(u16::MAX as usize) as u16)
-            .saturating_add(app.input.chars().count().min(u16::MAX as usize) as u16)
+            .saturating_add(prompt_width)
+            .saturating_add(cursor_cells)
             .min(left.saturating_add(width.saturating_sub(1)));
         frame.set_cursor_position((cursor_x, input_y));
+        paragraph_at(
+            frame,
+            Rect::new(left, area.bottom().saturating_sub(1), width, 1),
+            vec![Line::styled(&app.notice, Style::default().fg(DIM))],
+        );
         return;
     }
 
@@ -722,7 +1176,7 @@ fn draw(frame: &mut Frame, app: &App) {
                 Line::styled(
                     format!("Welcome back, {}.", app.user),
                     Style::default()
-                        .fg(Color::White)
+                        .fg(Color::Reset)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Line::styled(
@@ -794,6 +1248,7 @@ fn draw(frame: &mut Frame, app: &App) {
             View::Logs => "System logs",
             View::Help => "Help and shortcuts",
             View::Resources => "System resources",
+            View::Tasks => "Tasks",
             View::Assets => "Assets",
             View::Settings => "Settings",
             View::Updates => "Updates",
@@ -807,7 +1262,7 @@ fn draw(frame: &mut Frame, app: &App) {
             vec![Line::styled(
                 title,
                 Style::default()
-                    .fg(Color::White)
+                    .fg(Color::Reset)
                     .add_modifier(Modifier::BOLD),
             )],
         );
@@ -827,13 +1282,19 @@ fn draw(frame: &mut Frame, app: &App) {
             Paragraph::new(app.content.as_str())
                 .wrap(Wrap { trim: false })
                 .scroll((app.scroll, 0))
-                .style(Style::default().fg(Color::White)),
+                .style(Style::default().fg(Color::Reset)),
             Rect::new(left, top + 6, inner_width, suggestion_y - (top + 6)),
         );
     }
 
-    for (index, (_, command, description)) in suggestions.iter().take(count).enumerate() {
-        let active = index == app.highlighted.min(count - 1);
+    let first_suggestion = app.highlighted.saturating_sub(count.saturating_sub(1));
+    for (index, (_, command, description)) in suggestions
+        .iter()
+        .skip(first_suggestion)
+        .take(count)
+        .enumerate()
+    {
+        let active = index + first_suggestion == app.highlighted;
         paragraph_at(
             frame,
             Rect::new(left, suggestion_y + index as u16, inner_width, 1),
@@ -844,7 +1305,7 @@ fn draw(frame: &mut Frame, app: &App) {
                 ),
                 Span::styled(
                     *description,
-                    Style::default().fg(if active { Color::White } else { DIM }),
+                    Style::default().fg(if active { Color::Reset } else { DIM }),
                 ),
             ])],
         );
@@ -881,11 +1342,12 @@ fn draw(frame: &mut Frame, app: &App) {
             })),
         Rect::new(x, composer_y, width, 3),
     );
-    let display_input = if waiting_for_secret {
-        "•".repeat(app.input.chars().count())
-    } else {
-        app.input.clone()
-    };
+    let (display_input, cursor_cells) = input_window(
+        &app.input,
+        app.cursor,
+        inner_width.saturating_sub(2),
+        waiting_for_secret,
+    );
     paragraph_at(
         frame,
         Rect::new(left, composer_y + 1, inner_width, 1),
@@ -904,7 +1366,7 @@ fn draw(frame: &mut Frame, app: &App) {
                 Style::default().fg(if app.input.is_empty() {
                     DIM
                 } else {
-                    Color::White
+                    Color::Reset
                 }),
             ),
         ])],
@@ -912,7 +1374,7 @@ fn draw(frame: &mut Frame, app: &App) {
     // The cursor follows the user input rather than showing a static cursor glyph.
     let cursor_x = left
         .saturating_add(2)
-        .saturating_add(app.input.chars().count() as u16)
+        .saturating_add(cursor_cells)
         .min(x + width.saturating_sub(2));
     frame.set_cursor_position((cursor_x, composer_y + 1));
 
@@ -938,7 +1400,47 @@ fn draw(frame: &mut Frame, app: &App) {
     );
 }
 
-fn interactive_shell() -> io::Result<()> {
+fn needs_native_terminal(command: &str) -> bool {
+    let mut words = command.split_whitespace();
+    let first = words.next().unwrap_or_default();
+    let name = std::path::Path::new(first)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    match name {
+        "top" => !words.any(|s| s == "-b" || s.starts_with("-b")),
+        "vim" | "vi" | "nvim" | "nano" | "emacs" | "less" | "more" | "man" | "htop" | "btop"
+        | "watch" | "ssh" | "tmux" | "screen" | "codex" | "claude" => true,
+        _ => false,
+    }
+}
+
+fn interactive_shell(
+    command: Option<&str>,
+    cwd: &std::path::Path,
+) -> io::Result<std::process::ExitStatus> {
+    struct ForegroundGuard(libc::pid_t);
+    impl Drop for ForegroundGuard {
+        fn drop(&mut self) {
+            if self.0 <= 0 {
+                return;
+            }
+            // A job-controlling child can leave Home in the background when
+            // it exits. Block SIGTTOU only in this thread while restoring our
+            // foreground group, then restore the original signal mask.
+            unsafe {
+                let mut signals: libc::sigset_t = std::mem::zeroed();
+                let mut previous: libc::sigset_t = std::mem::zeroed();
+                libc::sigemptyset(&raw mut signals);
+                libc::sigaddset(&raw mut signals, libc::SIGTTOU);
+                if libc::pthread_sigmask(libc::SIG_BLOCK, &signals, &raw mut previous) == 0 {
+                    libc::tcsetpgrp(libc::STDIN_FILENO, self.0);
+                    libc::pthread_sigmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut());
+                }
+            }
+        }
+    }
+    let foreground = ForegroundGuard(unsafe { libc::tcgetpgrp(libc::STDIN_FILENO) });
     // The Ratatui terminal has already been restored before this child starts.
     // Run the user's genuine interactive shell with normal shell behaviour:
     // cd, sudo, jobs, pipes, SSH and nested TUIs all work normally.
@@ -949,39 +1451,51 @@ fn interactive_shell() -> io::Result<()> {
     let bash = shell.ends_with("/bash")
         && std::path::Path::new("/usr/lib/linos/linos-shell.bashrc").is_file();
     let mut child = Command::new(shell);
-    if bash {
+    if bash && command.is_none() {
         child.args(["--rcfile", "/usr/lib/linos/linos-shell.bashrc"]);
     }
-    let status = child.arg("-i").env("LINOS_NO_WELCOME", "1").status()?;
-    if !status.success() {
-        eprintln!("Shell exited with status {status}");
+    if let Some(command) = command {
+        // Interactive job control gives the child its own foreground process
+        // group. Ctrl+C must interrupt its command without killing Home.
+        child.args(["-i", "-c", command]);
+    } else {
+        child.arg("-i");
     }
-    Ok(())
+    let status = child
+        .current_dir(cwd)
+        .env("LINOS_NO_WELCOME", "1")
+        .status()?;
+    drop(foreground);
+    Ok(status)
 }
 
 pub fn run() -> io::Result<ExitCode> {
     let mut app = App::new();
+    if let Ok((_, typed)) = geometry::negotiate()
+        && !typed.is_empty()
+    {
+        app.paste(&String::from_utf8_lossy(&typed));
+    }
     loop {
         // Ratatui owns the terminal only while Linos Home is active. Leaving
         // this scope restores the real terminal before entering a child shell.
         let result = ratatui::run(|terminal| {
+            struct PasteGuard;
+            impl Drop for PasteGuard {
+                fn drop(&mut self) {
+                    let _ = crossterm::execute!(io::stdout(), event::DisableBracketedPaste);
+                }
+            }
+            crossterm::execute!(io::stdout(), event::EnableBracketedPaste)?;
+            let _paste_guard = PasteGuard;
             let mut last_refresh = Instant::now();
-            let mut last_geometry = Instant::now();
-            let serial_console = geometry::serial_console();
             let mut dirty = true;
             loop {
-                if serial_console
-                    && last_geometry.elapsed() >= Duration::from_secs(4)
-                    && app.input.is_empty()
+                dirty |= app.poll_content();
+                if matches!(app.view, View::Resources | View::Tasks)
+                    && last_refresh.elapsed() >= Duration::from_secs(app.preferences.refresh)
                 {
-                    if geometry::negotiate().unwrap_or(false) {
-                        terminal.autoresize()?;
-                        dirty = true;
-                    }
-                    last_geometry = Instant::now();
-                }
-                if app.view == View::Resources && last_refresh.elapsed() >= Duration::from_secs(2) {
-                    app.content = resources();
+                    app.refresh_monitor();
                     last_refresh = Instant::now();
                     dirty = true;
                 }
@@ -992,14 +1506,18 @@ pub fn run() -> io::Result<ExitCode> {
                         app.cwd = cwd;
                         dirty = true;
                     }
-                    let previous = app.terminal_output.len();
-                    shell.drain(&mut app.terminal_output);
-                    if previous != app.terminal_output.len()
-                        && pty::Session::prompt_ready(&app.terminal_output)
-                    {
+                    let changed = shell.drain(&mut app.terminal_output);
+                    if changed && shell.is_ready() && app.command_pending {
                         app.command_pending = false;
+                        app.notice = match shell.exit_status() {
+                            Some(0) => "Command completed · exit 0 · /home returns to Home".into(),
+                            Some(status) => {
+                                format!("Command failed · exit {status} · /home returns to Home")
+                            }
+                            None => "Command completed · /home returns to Home".into(),
+                        };
                     }
-                    if previous != app.terminal_output.len() && app.view == View::Terminal {
+                    if changed && app.view == View::Terminal {
                         app.content.clone_from(&app.terminal_output);
                         if app.follow_tail {
                             let height = crossterm::terminal::size()
@@ -1016,6 +1534,17 @@ pub fn run() -> io::Result<ExitCode> {
                         dirty = true;
                     }
                 }
+                if app
+                    .session
+                    .as_mut()
+                    .is_some_and(|shell| shell.exited().unwrap_or(false))
+                {
+                    app.session = None;
+                    app.command_pending = false;
+                    app.notice =
+                        "Command session ended. Enter a command to start a new session.".into();
+                    dirty = true;
+                }
                 if dirty {
                     terminal.draw(|frame| draw(frame, &app))?;
                     dirty = false;
@@ -1027,13 +1556,24 @@ pub fn run() -> io::Result<ExitCode> {
                                 && key.code == KeyCode::Char('r')
                                 && key.modifiers.contains(KeyModifiers::CONTROL)
                             {
-                                app.notice = if geometry::negotiate()? {
+                                let (sized, typed) = geometry::negotiate()?;
+                                app.notice = if sized {
                                     "Terminal geometry refreshed".into()
                                 } else {
                                     "Terminal does not support size reporting; use stty rows/cols"
                                         .into()
                                 };
+                                if !typed.is_empty() {
+                                    app.paste(&String::from_utf8_lossy(&typed));
+                                }
                                 terminal.autoresize()?;
+                                let size = terminal.size()?;
+                                if let Some(shell) = &mut app.session {
+                                    shell.resize(
+                                        size.height.saturating_sub(6),
+                                        size.width.saturating_sub(4),
+                                    )?;
+                                }
                                 dirty = true;
                                 continue;
                             }
@@ -1048,17 +1588,39 @@ pub fn run() -> io::Result<ExitCode> {
                             }
                             dirty = true;
                         }
+                        Event::Paste(text) => {
+                            app.paste(&text);
+                            dirty = true;
+                        }
                         _ => {}
                     }
                 }
             }
         })?;
+        app.view_job = None;
         match result {
             Exit::Shell => {
                 // Exiting the nested shell (exit/Ctrl+D) returns here rather
                 // than terminating the Linos Home session.
-                interactive_shell()?;
-                app.navigate(View::Home);
+                let command = app.native_command.take();
+                let return_view = if app.command_pending {
+                    app.view
+                } else {
+                    View::Home
+                };
+                let result = interactive_shell(command.as_deref(), &app.cwd);
+                app.navigate(return_view);
+                app.notice = match result {
+                    Ok(status) if status.success() => {
+                        if return_view == View::Terminal {
+                            "Returned to command session".into()
+                        } else {
+                            "Returned to Home".into()
+                        }
+                    }
+                    Ok(status) => format!("Native command ended: {status}"),
+                    Err(error) => format!("Unable to start native command: {error}"),
+                };
             }
             Exit::Power => return Ok(ExitCode::SUCCESS),
             Exit::Logout => return Ok(ExitCode::from(20)),
@@ -1073,6 +1635,230 @@ mod tests {
 
     fn press(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn held_backspace_edits_the_composer() {
+        let mut app = App::new();
+        for c in "hello".chars() {
+            app.key(press(KeyCode::Char(c))).unwrap();
+        }
+        let mut repeat = press(KeyCode::Backspace);
+        repeat.kind = KeyEventKind::Repeat;
+        app.key(repeat).unwrap();
+        assert_eq!(app.input, "hell");
+    }
+
+    #[test]
+    fn cursor_editing_preserves_unicode() {
+        let mut app = App::new();
+        for c in "a界b".chars() {
+            app.key(press(KeyCode::Char(c))).unwrap();
+        }
+        app.key(press(KeyCode::Left)).unwrap();
+        app.key(press(KeyCode::Backspace)).unwrap();
+        assert_eq!(app.input, "ab");
+        app.key(press(KeyCode::Delete)).unwrap();
+        assert_eq!(app.input, "a");
+    }
+
+    #[test]
+    fn ctrl_c_cancels_unsubmitted_input() {
+        let mut app = App::new();
+        app.input = "unsubmitted command".into();
+        app.key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert!(app.input.is_empty());
+    }
+
+    #[test]
+    fn paste_is_bounded_and_never_executes_commands() {
+        let mut app = App::new();
+        app.paste("printf hello\nreboot\x1b[2J");
+        assert!(!app.input.contains('\n'));
+        assert!(!app.input.contains('\x1b'));
+        assert!(app.session.is_none());
+        assert!(app.confirm.is_none());
+        app.paste(&"界".repeat(5000));
+        assert!(app.input.len() <= 4096);
+        assert!(app.input.is_char_boundary(app.cursor));
+    }
+
+    #[test]
+    fn slow_view_reads_leave_input_usable_and_cannot_overwrite_navigation() {
+        let mut app = App::new();
+        let (release, pending) = std::sync::mpsc::channel();
+        app.content = app.load_content(move |_| {
+            let _ = pending.recv();
+            "Old view result".into()
+        });
+        app.key(press(KeyCode::Char('x'))).unwrap();
+        assert_eq!(app.input, "x");
+        assert!(!app.poll_content());
+        app.navigate(View::Home);
+        let _ = release.send(());
+        assert!(!app.poll_content());
+        assert!(app.content.is_empty());
+    }
+
+    #[test]
+    fn leaving_a_view_cancels_its_query_context() {
+        let mut app = App::new();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        app.content = app.load_content(move |cancel| {
+            sender.send(cancel.clone()).unwrap();
+            String::new()
+        });
+        let cancel = receiver.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(!cancel.is_cancelled());
+        app.navigate(View::Home);
+        assert!(cancel.is_cancelled());
+    }
+
+    #[test]
+    fn control_y_does_not_confirm_a_task_action() {
+        let mut app = App::new();
+        app.monitor.sample();
+        let own = app
+            .monitor
+            .tasks
+            .iter()
+            .find(|task| task.pid == std::process::id() as i32)
+            .unwrap()
+            .clone();
+        // Home's self-protection also makes this a harmless regression probe
+        // before the confirmation shortcut is fixed.
+        app.task_confirmation = Some((own, "terminate".into()));
+        app.key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert!(
+            app.task_confirmation.is_some(),
+            "Ctrl+Y confirmed a destructive action"
+        );
+    }
+
+    #[test]
+    fn confirmation_requires_an_explicit_unmodified_press() {
+        assert!(confirms_action(press(KeyCode::Char('y'))));
+        assert!(confirms_action(KeyEvent::new(
+            KeyCode::Char('Y'),
+            KeyModifiers::SHIFT
+        )));
+        for modifier in [
+            KeyModifiers::CONTROL,
+            KeyModifiers::ALT,
+            KeyModifiers::SUPER,
+            KeyModifiers::META,
+            KeyModifiers::HYPER,
+        ] {
+            assert!(!confirms_action(KeyEvent::new(
+                KeyCode::Char('y'),
+                modifier
+            )));
+        }
+        for kind in [KeyEventKind::Repeat, KeyEventKind::Release] {
+            let mut key = press(KeyCode::Char('y'));
+            key.kind = kind;
+            assert!(!confirms_action(key));
+        }
+    }
+
+    #[test]
+    fn long_unicode_input_keeps_the_cursor_visible_and_masks_secrets() {
+        let input = "abcdef界界界12345";
+        let (visible, cursor) = input_window(input, input.len(), 8, false);
+        assert!(visible.ends_with("12345"));
+        assert!(cursor < 8);
+        assert!(Span::raw(visible).width() <= 8);
+        let (masked, _) = input_window(input, input.len(), 8, true);
+        assert!(masked.chars().all(|c| c == '*'));
+        assert_eq!(transcript_lines("界界界界\n123456789", 4).len(), 5);
+    }
+
+    #[test]
+    fn native_terminal_programs_leave_home_before_running() {
+        for command in ["top", "/usr/bin/vim file", "ssh server", "/shell sudo top"] {
+            let mut app = App::new();
+            app.paste(command);
+            assert_eq!(app.key(press(KeyCode::Enter)).unwrap(), Some(Exit::Shell));
+            assert!(app.native_command.is_some());
+            assert!(app.session.is_none());
+        }
+        assert!(!needs_native_terminal("top -b -n 1"));
+        assert!(!needs_native_terminal("printf top"));
+    }
+
+    #[test]
+    fn system_setting_confirmation_cancels_without_mutation() {
+        let mut app = App::new();
+        app.paste("/settings hostname proposed-name");
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert_eq!(app.view, View::Settings);
+        assert!(app.setting_confirmation.is_some());
+        assert!(app.session.is_none());
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert!(app.setting_confirmation.is_none());
+        assert!(app.session.is_none());
+        assert!(app.notice.contains("No change made"));
+    }
+
+    #[test]
+    fn task_controls_require_confirmation_and_default_to_cancel() {
+        let mut child = Command::new("sleep").arg("30").spawn().unwrap();
+        let mut app = App::new();
+        app.paste(&format!("/tasks terminate {}", child.id()));
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert!(app.task_confirmation.is_some());
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert!(app.task_confirmation.is_none());
+        let still_running = child.try_wait().unwrap().is_none();
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(still_running);
+    }
+
+    #[test]
+    fn palette_scrolls_to_the_action_enter_will_execute() {
+        let mut app = App::new();
+        app.paste("/s");
+        for _ in 0..6 {
+            app.key(press(KeyCode::Down)).unwrap();
+        }
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|frame| draw(frame, &app)).unwrap();
+        let screen: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
+        assert!(screen.contains("› /shutdown"));
+        app.key(press(KeyCode::Enter)).unwrap();
+        assert_eq!(app.confirm, Some(Action::Shutdown));
+    }
+
+    #[test]
+    fn management_views_render_at_small_sizes_without_color() {
+        let mut app = App::new();
+        app.preferences.color = "never".into();
+        for view in [
+            View::Home,
+            View::Resources,
+            View::Tasks,
+            View::Settings,
+            View::Terminal,
+        ] {
+            app.navigate(view);
+            for (width, height) in [(30, 10), (36, 14), (48, 18), (80, 24), (120, 32)] {
+                let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                terminal.draw(|frame| draw(frame, &app)).unwrap();
+                for cell in &terminal.backend().buffer().content {
+                    assert_eq!(cell.fg, Color::Reset);
+                    assert_eq!(cell.bg, Color::Reset);
+                }
+            }
+        }
     }
 
     #[test]
@@ -1146,11 +1932,98 @@ mod tests {
         assert!(!app.password_input_active());
     }
 
+    fn secret_prompt() -> App {
+        let mut app = App::new();
+        app.run_native_command(
+            "stty -echo; printf 'Password: '; read secret; printf '\\nSECRET_ACCEPTED\\n'".into(),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            app.session
+                .as_ref()
+                .unwrap()
+                .drain(&mut app.terminal_output);
+            if app.terminal_output.ends_with("Password: ") && app.password_input_active() {
+                return app;
+            }
+            assert!(Instant::now() < deadline, "Secret prompt did not start");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn compact_terminal_never_renders_secret_input() {
+        let mut app = secret_prompt();
+        app.input = "private-test-secret".into();
+        for (width, height) in [(48, 18), (80, 24), (120, 32)] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| draw(frame, &app)).unwrap();
+            let screen: String = terminal
+                .backend()
+                .buffer()
+                .content()
+                .iter()
+                .map(|cell| cell.symbol().to_owned())
+                .collect();
+            assert!(
+                !screen.contains(&app.input),
+                "Secret exposed at {width}x{height}"
+            );
+            assert!(screen.contains("Password (hidden)"));
+        }
+    }
+
+    #[test]
+    fn secret_input_bypasses_dashboard_routes() {
+        for secret in ["/store installed", "/assets/etc", "/clear", "/shell"] {
+            let mut app = secret_prompt();
+            app.input = secret.into();
+            assert_eq!(app.key(press(KeyCode::Enter)).unwrap(), None);
+            assert_eq!(app.view, View::Terminal);
+            assert!(app.input.is_empty());
+            let deadline = Instant::now() + Duration::from_secs(3);
+            loop {
+                app.session
+                    .as_ref()
+                    .unwrap()
+                    .drain(&mut app.terminal_output);
+                if app.terminal_output.contains("\nSECRET_ACCEPTED\n") {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "Secret was not sent to the PTY");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert!(!app.terminal_output.contains(secret));
+        }
+    }
+
+    #[test]
+    fn secret_masking_survives_cleared_and_localized_prompts() {
+        let mut app = secret_prompt();
+        app.key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert!(
+            app.password_input_active(),
+            "Clearing output exposed secret input"
+        );
+        app.terminal_output = "Mot de passe : ".into();
+        assert!(
+            app.password_input_active(),
+            "Translated prompt exposed secret input"
+        );
+        app.navigate(View::Home);
+        assert!(
+            app.password_input_active(),
+            "Changing views exposed secret input"
+        );
+    }
+
     #[test]
     fn resource_bars_handle_zero_and_percentages() {
-        assert!(usage_bar(0, 0, 12).contains("Not configured"));
-        assert!(usage_bar(5, 10, 10).contains("50%"));
-        assert!(usage_bar(15, 10, 10).contains("100%"));
+        assert!(monitor::bar(0, 0, 12).contains("Not configured"));
+        assert!(monitor::bar(5, 10, 10).contains("50%"));
+        assert!(monitor::bar(15, 10, 10).contains("100%"));
     }
 
     #[test]

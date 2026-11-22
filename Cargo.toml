@@ -72,3 +72,6 @@ debug = 0
 strip = "debuginfo"
 incremental = false
 panic = "abort"
+
+[dev-dependencies]
+vt100 = "0.18.1"

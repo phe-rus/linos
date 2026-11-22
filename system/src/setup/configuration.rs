@@ -71,6 +71,45 @@ pub fn hostname_from_username(username: &str) -> String {
     }
 }
 
+fn hosts_with_hostname(previous: &str, hostname: &str) -> String {
+    let mut found = false;
+    let mut lines: Vec<String> = previous
+        .lines()
+        .map(|line| {
+            let (mapping, comment) = line.split_once('#').unwrap_or((line, ""));
+            let fields: Vec<_> = mapping.split_whitespace().collect();
+            if fields.first() != Some(&"127.0.1.1") {
+                return line.to_owned();
+            }
+            found = true;
+            let mut updated = format!("127.0.1.1\t{hostname}");
+            for alias in fields.iter().skip(2).filter(|alias| **alias != hostname) {
+                updated.push(' ');
+                updated.push_str(alias);
+            }
+            if !comment.is_empty() {
+                updated.push_str(" #");
+                updated.push_str(comment);
+            }
+            updated
+        })
+        .collect();
+    if !found {
+        lines.push(format!("127.0.1.1\t{hostname}"));
+    }
+    format!("{}\n", lines.join("\n"))
+}
+
+fn write_configuration(path: &str, contents: &str) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    file.write_all(contents.as_bytes())?;
+    file.sync_all()?;
+    let parent = Path::new(path)
+        .parent()
+        .ok_or_else(|| io::Error::other("Configuration path has no parent"))?;
+    fs::File::open(parent)?.sync_all()
+}
+
 impl Settings {
     pub fn defaults(hostname: &str) -> Self {
         Self {
@@ -124,16 +163,16 @@ impl Settings {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            fs::write("/etc/locale.gen", format!("{updated}\n"))?;
+            write_configuration("/etc/locale.gen", &format!("{updated}\n"))?;
             let status = Command::new("/usr/sbin/locale-gen").status()?;
             if !status.success() {
                 return Err(io::Error::other("Locale generation failed"));
             }
         }
-        fs::write("/etc/default/locale", format!("LANG={locale}\n"))?;
-        fs::write(
+        write_configuration("/etc/default/locale", &format!("LANG={locale}\n"))?;
+        write_configuration(
             "/etc/default/keyboard",
-            format!("XKBLAYOUT=\"{}\"\nXKBMODEL=\"pc105\"\n", self.keyboard),
+            &format!("XKBLAYOUT=\"{}\"\nXKBMODEL=\"pc105\"\n", self.keyboard),
         )?;
         let zone = Path::new("/usr/share/zoneinfo").join(&self.timezone);
         if !zone.is_file() {
@@ -147,8 +186,14 @@ impl Settings {
             fs::remove_file(localtime)?;
         }
         symlink(zone, localtime)?;
-        fs::write("/etc/timezone", format!("{}\n", self.timezone))?;
-        fs::write("/etc/hostname", format!("{}\n", self.hostname))?;
+        write_configuration("/etc/timezone", &format!("{}\n", self.timezone))?;
+        write_configuration("/etc/hostname", &format!("{}\n", self.hostname))?;
+        let hosts = match fs::read_to_string("/etc/hosts") {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(error),
+        };
+        write_configuration("/etc/hosts", &hosts_with_hostname(&hosts, &self.hostname))?;
         let hostname_status = Command::new("/usr/bin/hostnamectl")
             .args(["set-hostname", &self.hostname])
             .status()?;
@@ -170,6 +215,7 @@ impl Settings {
                 .open(config)?;
             file.write_all(b"[Match]\nName=en* eth*\n\n[Network]\nDHCP=yes\n")?;
             file.sync_all()?;
+            fs::File::open(config.parent().unwrap())?.sync_all()?;
             let enabled = Command::new("/usr/bin/systemctl")
                 .args(["enable", "systemd-networkd.service"])
                 .status()?;
@@ -229,5 +275,24 @@ mod tests {
             ..valid
         };
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn hostname_resolves_locally_without_losing_other_hosts() {
+        let previous = "127.0.0.1 localhost\n::1 localhost ip6-localhost\n192.0.2.7 backup\n";
+        let updated = hosts_with_hostname(previous, "linos-server");
+        assert!(updated.starts_with(previous));
+        assert!(updated.ends_with("127.0.1.1\tlinos-server\n"));
+        assert_eq!(hosts_with_hostname(&updated, "linos-server"), updated);
+    }
+
+    #[test]
+    fn hostname_change_preserves_local_aliases_and_comments() {
+        let previous = "127.0.0.1 localhost\n127.0.1.1 old-host local-alias # local machine\n";
+        let updated = hosts_with_hostname(previous, "linos-server");
+        assert_eq!(
+            updated,
+            "127.0.0.1 localhost\n127.0.1.1\tlinos-server local-alias # local machine\n"
+        );
     }
 }

@@ -130,6 +130,13 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     send -- "grep -q 'Linos 13 Server' /etc/motd && echo LINOS_MOTD_OK\r"
     await {LINOS_MOTD_OK}
 
+    send -- {getent hosts "$(hostname)" >/dev/null && printf '\nLINOS_LOCAL_HOST_OK\n'}
+    send -- "\r"
+    await {[\r\n]+LINOS_LOCAL_HOST_OK[\r\n]+}
+    send -- {test "$(id -u)" -ne 0 && id -nG | grep -qw adm && test -n "$(journalctl -q -b -n 1 2>/dev/null)" && printf '\nLINOS_ADMIN_LOGS_OK\n'}
+    send -- "\r"
+    await {[\r\n]+LINOS_ADMIN_LOGS_OK[\r\n]+}
+
     if {$env(LINOS_ENROLL_REQUIRE_READY) eq "1"} {
         send -- {test "$(cat /sys/kernel/linos/boot_state)" = ready && echo LINOS_KERNEL_READY}
         send -- "\r"

@@ -25,6 +25,8 @@ Linos 13 Server pairs an approachable, personal workspace with the calm precisio
 
 ### Scope and evidence
 
+**23 November interaction continuation:** Home now uses terminal-default foreground text, supports a monochrome preference, accepts repeated editing keys and Unicode cursor movement, and provides measured resource bars, live task controls and working Settings changes. System actions have centered confirmation panels and normal authorization. The 14 November observations below remain a historical snapshot; current behavior and terminal/guest evidence are recorded in [the Server interaction review](docs/reviews/2026-11-23-server-interaction.md).
+
 Captured on 14 November 2026 from `main` at `8cce91d`, with pre-existing local changes restored after the pull. This records source behavior, not a release certification. No UI redesign was performed as part of documentation; source changes during the pull restore local work and reconcile upstream updates.
 
 Product authorities: [PRODUCT.md](PRODUCT.md), [vision](docs/vision.md), [architecture](docs/architecture/overview.md) and [master development plan](docs/plans/linos13-master-plan.md). [Engineering status](docs/architecture/current-status.md) reports earlier VM demonstrations; those screenshots are not committed here and were not independently inspected in this pass. Historical evidence is not proof of the current combined source.
@@ -36,7 +38,7 @@ Implementation authorities: [Home and interaction](system/src/console/tui.rs), [
 | Source observed | Layout arithmetic, styling, event handlers, prompt configuration and read-only operations described below. |
 | Previously reported VM evidence | Setup, sign-in, Home, Assets, Resources, Settings and resizing, as recorded in engineering status. |
 | Source only / unverified here | Hardware, Linus store, newer PTY password handling and the merged working tree. |
-| Current validation blocker | `cargo test --workspace --locked` fails at `system/src/console/pty.rs:147` with an unterminated character literal. The incomplete expression also exists in pulled `main`; no current render, successful test run or rebuilt guest is claimed. |
+| 14 November validation blocker | The snapshot's `cargo test --workspace --locked` failed at `system/src/console/pty.rs:147` with an unterminated character literal. See the 23 November continuation above for current successful validation. |
 
 The frontmatter intentionally has no CSS color, font-size, radius or spacing scales. This native implementation uses ANSI color roles and terminal cells; inventing hex colors or pixel tokens would create a false source of truth. The sidecar records native measurements and clearly labeled browser illustrations, not a new runtime theme.
 

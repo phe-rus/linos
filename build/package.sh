@@ -53,6 +53,8 @@ fi
 # Recovery and hardware experiments are built by their own targets.
 cargo build --release --locked \
     --bin init --bin enroll --bin linos-login --bin linos
+TARGET_DIR="$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+[[ -n "$TARGET_DIR" ]] || { echo "Cargo output directory not found" >&2; exit 2; }
 
 STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linos-package.XXXXXXXX")"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
@@ -62,11 +64,11 @@ cp -a system/release/. "$STAGING_DIR/package/"
 chmod 755 "$STAGING_DIR/package/DEBIAN/postinst" "$STAGING_DIR/package/DEBIAN/postrm"
 
 sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN/control"
-install -m 755 target/release/init "$STAGING_DIR/package/usr/lib/linos/linos-init"
-install -m 755 target/release/enroll "$STAGING_DIR/package/usr/lib/linos/linos-enroll"
-install -m 755 target/release/linos-login "$STAGING_DIR/package/usr/lib/linos/linos-login"
+install -m 755 "$TARGET_DIR/release/init" "$STAGING_DIR/package/usr/lib/linos/linos-init"
+install -m 755 "$TARGET_DIR/release/enroll" "$STAGING_DIR/package/usr/lib/linos/linos-enroll"
+install -m 755 "$TARGET_DIR/release/linos-login" "$STAGING_DIR/package/usr/lib/linos/linos-login"
 mkdir -p "$STAGING_DIR/package/usr/bin"
-install -m 755 target/release/linos "$STAGING_DIR/package/usr/bin/linos"
+install -m 755 "$TARGET_DIR/release/linos" "$STAGING_DIR/package/usr/bin/linos"
 mkdir -p "$STAGING_DIR/package/etc/profile.d"
 install -m 644 system/identity/linos-welcome.sh "$STAGING_DIR/package/etc/profile.d/linos-welcome.sh"
 install -m 644 system/identity/linos-shell.bashrc "$STAGING_DIR/package/usr/lib/linos/linos-shell.bashrc"

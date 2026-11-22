@@ -19,8 +19,10 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-recovery.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 chmod 755 "$WORK"
 
-cargo build --release --bin recovery
-install -m 755 target/release/recovery "$WORK/linos-recovery"
+cargo build --release --locked --bin recovery
+TARGET_DIR="$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+[[ -n "$TARGET_DIR" ]] || { echo "Cargo output directory not found" >&2; exit 2; }
+install -m 755 "$TARGET_DIR/release/recovery" "$WORK/linos-recovery"
 install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.service"
 install -m 644 system/release/usr/lib/linos/release "$WORK/release"
 install -m 644 hardware/profiles/amd64-uefi-server.conf "$WORK/hardware-profile"

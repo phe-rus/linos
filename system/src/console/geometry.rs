@@ -7,26 +7,18 @@ use std::{
     os::fd::AsRawFd,
 };
 
-pub fn serial_console() -> bool {
-    let target = std::fs::read_link("/proc/self/fd/0").ok();
-    target.as_ref().is_some_and(|path| {
-        path.to_string_lossy().starts_with("/dev/ttyS")
-            || path.to_string_lossy().starts_with("/dev/ttyAMA")
-    })
-}
-
-pub fn negotiate() -> io::Result<bool> {
+pub fn negotiate() -> io::Result<(bool, Vec<u8>)> {
     let fd = io::stdin().as_raw_fd();
     // SAFETY: the fd is our own stdin, and libc initializes saved termios.
     let mut saved: libc::termios = unsafe { std::mem::zeroed() };
     if unsafe { libc::tcgetattr(fd, &raw mut saved) } != 0 {
-        return Ok(false);
+        return Ok((false, Vec::new()));
     }
     let mut raw = saved;
     // SAFETY: raw is a local valid termios value.
     unsafe { libc::cfmakeraw(&raw mut raw) };
     if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) } != 0 {
-        return Ok(false);
+        return Ok((false, Vec::new()));
     }
 
     let response = (|| -> io::Result<Vec<u8>> {
@@ -62,8 +54,8 @@ pub fn negotiate() -> io::Result<bool> {
     if restored != 0 {
         return Err(io::Error::last_os_error());
     }
-    let response = response?;
-    if let Some((rows, cols)) = parse_report(&response) {
+    let mut response = response?;
+    if let Some((rows, cols)) = extract_report(&mut response) {
         let win = libc::winsize {
             ws_row: rows,
             ws_col: cols,
@@ -72,10 +64,18 @@ pub fn negotiate() -> io::Result<bool> {
         };
         // SAFETY: win is valid, and TIOCSWINSZ accepts the TTY's window size.
         if unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &win) } == 0 {
-            return Ok(true);
+            return Ok((true, response));
         }
     }
-    Ok(false)
+    Ok((false, response))
+}
+
+fn extract_report(bytes: &mut Vec<u8>) -> Option<(u16, u16)> {
+    let start = bytes.windows(4).position(|s| s == b"\x1b[8;")?;
+    let end = start + bytes[start..].iter().position(|&b| b == b't')? + 1;
+    let size = parse_report(&bytes[start..end])?;
+    bytes.drain(start..end);
+    Some(size)
 }
 
 fn parse_report(bytes: &[u8]) -> Option<(u16, u16)> {
@@ -96,5 +96,15 @@ mod tests {
         assert_eq!(parse_report(b"\x1b[8;42;132t"), Some((42, 132)));
         assert_eq!(parse_report(b"\x1b[8;0;0t"), None);
         assert_eq!(parse_report(b"\x1b[24;80t"), None);
+    }
+
+    #[test]
+    fn size_queries_preserve_keys_typed_around_the_report() {
+        let mut response = b"typed\x1b[8;24;80tcommand".to_vec();
+        assert_eq!(extract_report(&mut response), Some((24, 80)));
+        assert_eq!(response, b"typedcommand");
+        let mut unsupported = b"early input".to_vec();
+        assert_eq!(extract_report(&mut unsupported), None);
+        assert_eq!(unsupported, b"early input");
     }
 }

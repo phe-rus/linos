@@ -10,7 +10,10 @@ use std::{
 mod assets;
 mod geometry;
 mod hardware;
+mod monitor;
+mod preferences;
 mod pty;
+mod query;
 mod store;
 mod tui;
 
@@ -139,6 +142,7 @@ enum Action {
     Updates,
     Hardware,
     Store,
+    Tasks,
 }
 
 fn action_for(value: &str) -> Option<Action> {
@@ -146,6 +150,7 @@ fn action_for(value: &str) -> Option<Action> {
         "/home" | "home" => Some(Action::Home),
         "/status" | "status" => Some(Action::Status),
         "/resources" | "resources" => Some(Action::Resources),
+        "/tasks" | "tasks" => Some(Action::Tasks),
         "/assets" | "assets" => Some(Action::Assets),
         "/settings" | "settings" => Some(Action::Settings),
         "/updates" | "updates" => Some(Action::Updates),
@@ -170,6 +175,7 @@ fn execute(action: Action) -> io::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Action::Resources
+        | Action::Tasks
         | Action::Assets
         | Action::Settings
         | Action::Updates
@@ -215,12 +221,7 @@ fn set_default_mode(mode: &str) -> io::Result<ExitCode> {
             "Choose home or shell",
         ));
     }
-    let home = env::var_os("HOME")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
-    let config_dir = Path::new(&home).join(".config/linos");
-    fs::create_dir_all(&config_dir)?;
-    // A per-user preference, not a privileged system authentication setting.
-    fs::write(config_dir.join("default-mode"), format!("{mode}\n"))?;
+    preferences::Preferences::load().set("default", mode)?;
     println!("Linos default mode: {mode}. Effective at your next sign-in.");
     Ok(ExitCode::SUCCESS)
 }
@@ -228,7 +229,6 @@ fn set_default_mode(mode: &str) -> io::Result<ExitCode> {
 fn home() -> io::Result<ExitCode> {
     // Serial consoles often lack window geometry. Ask the terminal emulator
     // before Ratatui takes over, falling back to the kernel TTY size.
-    let _ = geometry::negotiate();
     tui::run()
 }
 

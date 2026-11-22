@@ -291,7 +291,7 @@ fn enroll() -> io::Result<()> {
         if !account_exists(&username)? {
             run(
                 "/usr/sbin/useradd",
-                &["-m", "-U", "-s", "/bin/bash", "-G", "sudo", &username],
+                &["-m", "-U", "-s", "/bin/bash", "-G", "sudo,adm", &username],
             )?;
         }
     } else {
@@ -304,7 +304,7 @@ fn enroll() -> io::Result<()> {
         create_state("pending-owner", &username)?;
         run(
             "/usr/sbin/useradd",
-            &["-m", "-U", "-s", "/bin/bash", "-G", "sudo", &username],
+            &["-m", "-U", "-s", "/bin/bash", "-G", "sudo,adm", &username],
         )?;
     }
 

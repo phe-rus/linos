@@ -559,7 +559,9 @@ fn efi_filename() -> io::Result<Option<String>> {
         return Err(invalid("Malformed EFI boot count path"));
     }
     let words: Vec<_> = bytes[4..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .collect();
     let path = String::from_utf16(&words).map_err(invalid)?;

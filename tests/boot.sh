@@ -35,10 +35,10 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-uefi-test.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 cp "$VARS" "$WORK/vars.fd"
 : > "$LOG"
-# Legacy fallback getty and the new Cliclack sign-in are both valid boot UIs.
-has_sign_in() {
-    grep -Eq '(^|[[:space:]])[^[:space:]]+[[:space:]]login:' "$LOG" ||
-    grep -Fq 'Linos 13 · Sign in' "$LOG"
+# Fresh media must reach enrollment, not an unusable account sign-in.
+has_setup() {
+    grep -Fq 'Linos 13 · Server setup' "$LOG" &&
+    grep -Fq 'Username' "$LOG"
 }
 echo "UEFI boot-testing Linos 13 Server (amd64)"
 timeout --signal=TERM --kill-after=5s 180s \
@@ -53,7 +53,7 @@ timeout --signal=TERM --kill-after=5s 180s \
     >"$QEMU_LOG" 2>&1 &
 PID=$!
 while kill -0 "$PID" 2>/dev/null; do
-    if has_sign_in &&
+    if has_setup &&
        grep -q 'Provisioning state: unclaimed' "$LOG"; then
         kill -TERM "$PID" 2>/dev/null || true
         break
@@ -61,9 +61,9 @@ while kill -0 "$PID" 2>/dev/null; do
     sleep 2
 done
 wait "$PID" || true
-if has_sign_in &&
+if has_setup &&
    grep -q 'Provisioning state: unclaimed' "$LOG"; then
-    echo "PASS: firmware -> EFI bootloader -> kernel -> Linos identity -> login"
+    echo "PASS: firmware -> EFI bootloader -> kernel -> Linos identity -> administrator setup"
 else
     echo "FAIL: UEFI boot or Linos initialization did not complete" >&2
     tail -n 50 "$LOG" >&2
@@ -74,6 +74,7 @@ fi
 
 recovery() (
 set -Eeuo pipefail
+export PATH="/usr/sbin:/sbin:$PATH"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 BUILD_ID="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"

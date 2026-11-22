@@ -111,7 +111,7 @@ mcopy -i "$ESP" "$INITRAMFS" ::/linos/initramfs
 
 BOOT_PRESENTATION='quiet loglevel=3 systemd.show_status=yes rd.systemd.show_status=yes'
 TITLE='Linos 13 Server'
-KERNEL_OPTIONS='systemd.mask=linos-enroll.service systemd.unit=multi-user.target'
+KERNEL_OPTIONS='systemd.unit=multi-user.target'
 if [[ "$PROFILE" == recovery ]]; then
     TITLE='Linos 13 Recovery (Server CLI)'
     KERNEL_OPTIONS='systemd.mask=serial-getty@ttyS0.service systemd.unit=multi-user.target'
