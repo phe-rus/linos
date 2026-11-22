@@ -1,0 +1,76 @@
+name: Linos Security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'kernel/tools/Cargo.lock'
+      - 'system/**'
+      - 'build/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linos-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-advisories:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Install RustSec auditor
+        run: cargo +stable install cargo-audit --version 0.23.0 --locked
+      - name: Audit application and kernel-tool lockfiles
+        shell: bash
+        run: |
+          mkdir -p security-results
+          audit_status=0
+          cargo audit --file Cargo.lock --json > security-results/application-rustsec.json || audit_status=1
+          cargo audit --file kernel/tools/Cargo.lock --json > security-results/kernel-tools-rustsec.json || audit_status=1
+          exit "$audit_status"
+      - name: Keep advisory reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-security-reports
+          path: security-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  repository-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.2
+      - name: Scan repository secrets and configuration
+        run: |
+          mkdir -p security-results
+          trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL \
+            --exit-code 1 --format json --output security-results/repository.json .
+      - name: Keep repository scan report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repository-security-report
+          path: security-results/
+          if-no-files-found: ignore
+          retention-days: 14

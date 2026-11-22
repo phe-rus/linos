@@ -1,5 +1,7 @@
 # Linos 13: current engineering status
 
+Resume from [the current handoff](current-handoff.md) for the latest workload evidence, CI runs, Server beta gates and Desktop next steps.
+
 Updated: 23 November 2026. Channel: development. Historical interface evidence below is from 14 November; current Server, Recovery and VM qualification is recorded separately below. This is not a production release certification.
 
 ## Verified baseline

@@ -3,6 +3,8 @@ name: Linos Kernel Release
 # Explicit commit markers: kernel:validate runs lightweight Rust tests, kernel:build compiles Linux, kernel:integration reuses qualified binaries, kernel:release publishes after all tests.
 # Kernel build-only runs never create GitHub tags or releases.
 on:
+  # Manual qualification only reuses existing kernels. It never publishes.
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -58,7 +60,7 @@ jobs:
   # Reuse already verified packages instead of compiling them again.
   # Pinned to successful AMD64+ARM64 QEMU qualification 44213747067.
   integration-check:
-    if: ${{ contains(github.event.head_commit.message, 'kernel:integration') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'kernel:integration') }}
     uses: ./.github/workflows/kernel-integration.yml
     with:
       source_run_id: 44213747067

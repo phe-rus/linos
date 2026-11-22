@@ -555,3 +555,82 @@ fn ordinary_administrator_authorization_in_guest() {
         console.pump(Duration::from_millis(100));
     }
 }
+
+#[test]
+#[ignore = "requires a fresh disposable AMD64 image and KVM; run sequentially"]
+fn representative_server_workloads_in_guest() {
+    let mut console = disposable_guest("guest-workloads");
+    console.submit("useradd -m -s /bin/bash -G adm linoswork && printf 'fixture-private\\n' >/root/linos-workload-private && chmod 600 /root/linos-workload-private && printf '%s%s\\n' WORKLOAD_ACCOUNT_ READY");
+    console.wait("WORKLOAD_ACCOUNT_READY");
+    console.submit("systemd-run --unit=linos-workload --property=User=linoswork --property=Type=exec /usr/bin/systemd-socket-activate -l 127.0.0.1:24567 --inetd -a /bin/cat && systemctl is-active --quiet linos-workload && printf 'SERVICE_PID=%s\\n' \"$(systemctl show -p MainPID --value linos-workload)\"");
+    console.wait("SERVICE_PID=");
+    let service_pid: u32 = console
+        .parser
+        .screen()
+        .contents()
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("SERVICE_PID=")
+                .and_then(|s| s.parse().ok())
+        })
+        .expect("Service PID missing");
+    console.submit("stty rows 32 cols 100; runuser -u linoswork -- env TERM=xterm-256color HOME=/home/linoswork USER=linoswork SHELL=/bin/bash /usr/bin/linos");
+    console.wait("Welcome back, linoswork.");
+    console.submit("cd \"$HOME\" && mkdir -p workload/source workload/restore && dd if=/dev/urandom of=workload/source/payload.bin bs=1M count=8 status=none && tar -C workload/source -cf workload/backup.tar . && tar -C workload/restore -xf workload/backup.tar && cmp workload/source/payload.bin workload/restore/payload.bin && sha256sum workload/source/payload.bin >workload/manifest && printf '%s%s\\n' BACKUP_RESTORE_ OK");
+    console.wait("BACKUP_RESTORE_OK");
+    console.submit("if cat /root/linos-workload-private 2>/dev/null; then printf 'ACCESS_BAD\\n'; else printf '%s%s\\n' PRIVATE_ACCESS_ DENIED; fi");
+    console.wait("PRIVATE_ACCESS_DENIED");
+    let tcp = "for linos_request in $(seq 1 20); do exec 3<>/dev/tcp/127.0.0.1/24567 || break; printf 'request-%s\\n' \"$linos_request\" >&3; IFS= read -r -t 2 linos_reply <&3 || break; test \"$linos_reply\" = \"request-$linos_request\" || break; exec 3>&-; done; test \"$linos_request:$linos_reply\" = '20:request-20' && printf '%s%s\\n' TCP_ROUNDTRIPS_ OK";
+    console.submit(tcp);
+    console.wait("TCP_ROUNDTRIPS_OK");
+    console.submit("/services");
+    console.wait("Running services");
+    console.wait_for_loaded_view();
+    console.wait("linos-workload.service");
+    console.snapshot("service-running");
+    for operation in ["pause", "resume"] {
+        console.submit(&format!("/tasks {operation} {service_pid}"));
+        console.wait("Confirm action");
+        console.send(b"y");
+        console.wait(&format!("{operation} signal sent"));
+    }
+    console.submit(tcp);
+    console.wait("TCP_ROUNDTRIPS_OK");
+    console.submit("dd if=/dev/zero of=/dev/shm/linos-workload-pressure bs=1M count=32 status=none && timeout 5s sh -c 'while :; do :; done' >/dev/null 2>&1 & linos_workload_load=$!; printf '%s%s\\n' PRESSURE_ READY");
+    console.wait("PRESSURE_READY");
+    console.submit("/settings refresh 1");
+    console.wait("Saved refresh: 1");
+    console.submit("/resources");
+    console.wait("CPU activity, whole machine");
+    console.pump(Duration::from_millis(1600));
+    let screen = console.parser.screen().contents();
+    let cpu = screen
+        .lines()
+        .skip_while(|line| !line.contains("CPU activity"))
+        .nth(1)
+        .and_then(|line| line.split_whitespace().last())
+        .and_then(|value| value.trim_end_matches('%').parse::<u32>().ok());
+    assert!(
+        cpu.is_some_and(|value| value > 20),
+        "CPU pressure was not reflected in resources\n{screen}"
+    );
+    console.snapshot("resources-under-pressure");
+    console.submit("kill \"$linos_workload_load\" 2>/dev/null; wait \"$linos_workload_load\" 2>/dev/null; rm -f /dev/shm/linos-workload-pressure && printf '%s%s\\n' PRESSURE_CLEANUP_ OK");
+    console.wait("PRESSURE_CLEANUP_OK");
+    console.submit("/logout");
+    console.wait("root@");
+    console.submit("systemctl restart linos-workload && systemctl is-active --quiet linos-workload && journalctl -u linos-workload --no-pager -n 100 | grep -q 'Listening' && printf '%s%s\\n' SERVICE_RESTART_LOGS_ OK");
+    console.wait("SERVICE_RESTART_LOGS_OK");
+    console.submit("runuser -u linoswork -- bash -c 'exec 3<>/dev/tcp/127.0.0.1/24567; printf \"after-restart\\n\" >&3; IFS= read -r -t 2 reply <&3; test \"$reply\" = after-restart' && systemctl stop linos-workload && ! systemctl is-active --quiet linos-workload && printf '%s%s\\n' SERVICE_STOP_ OK");
+    console.wait("SERVICE_STOP_OK");
+    console.submit("runuser -u linoswork -- bash -c 'cd /home/linoswork && sha256sum --check workload/manifest' && printf '%s%s\\n' DATA_INTEGRITY_ OK");
+    console.wait("DATA_INTEGRITY_OK");
+    console.snapshot("workload-results");
+    console.submit("poweroff");
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while console.child.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "Guest did not shut down");
+        console.pump(Duration::from_millis(100));
+    }
+}

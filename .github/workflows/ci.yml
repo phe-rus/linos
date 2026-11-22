@@ -88,6 +88,25 @@ jobs:
           ./build/package.sh
           LINOS_KERNEL_MODE=compat ./build/image.sh
 
+      - name: Install OS vulnerability scanner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.2
+
+      - name: Scan built OS package vulnerabilities
+        id: os_scan
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scan_root="$RUNNER_TEMP/linos-security-rootfs"
+          mkdir -p "$scan_root" security-results
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          tar --extract --file="images/server/builds/${{ matrix.arch }}/$build_id/rootfs.tar" \
+            --directory="$scan_root" --no-same-owner
+          trivy rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+            --format json --output security-results/os-vulnerabilities.json "$scan_root"
+
       - name: Boot smoke test
         run: ./tests/server.sh smoke ${{ matrix.arch }}
 
@@ -114,6 +133,21 @@ jobs:
       - name: Simulate installation and firmware boot on disposable GPT disk
         if: matrix.arch == 'amd64'
         run: ./tests/installation.sh simulation
+
+      - name: Keep OS vulnerability report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: os-security-${{ matrix.arch }}
+          path: security-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Enforce OS vulnerability gate after functional checks
+        if: ${{ always() && steps.os_scan.outcome == 'failure' }}
+        run: |
+          echo "OS vulnerability scan found blocking issues or could not complete; inspect its report."
+          exit 1
 
       - name: Upload boot diagnostics on failure
         if: failure()
