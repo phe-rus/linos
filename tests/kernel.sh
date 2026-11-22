@@ -12,7 +12,7 @@ ARCH="$(cat "$DEST/architecture")"
 case "$ARCH" in
   amd64)
     command -v qemu-system-x86_64 >/dev/null || exit 2
-    QEMU=(qemu-system-x86_64 -machine pc,accel=tcg -cpu qemu64)
+    QEMU=(qemu-system-x86_64 -machine "pc,accel=${LINOS_QEMU_ACCEL:-tcg}" -cpu qemu64)
     DEVICE=virtio-blk-pci
     SERIAL=ttyS0
     ;;
@@ -33,7 +33,7 @@ LOG="$DEST/server-smoke.log"
 QLOG="$DEST/server-qemu.log"
 : > "$LOG"
 timeout --signal=TERM --kill-after=5s 240s \
-  "${QEMU[@]}" -smp 2 -m 2048 \
+  "${QEMU[@]}" -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}" \
   -display none -monitor none -no-reboot -snapshot -net none \
   -chardev "file,id=serial,path=$LOG" -serial chardev:serial \
   -kernel "$DEST/kernel" -initrd "$DEST/initramfs" \

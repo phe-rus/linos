@@ -34,6 +34,14 @@ Only the AMD64 UEFI recovery image is supported at this stage. Physical ARM
 boards require device-specific firmware, DTBs and validation; Desktop Recovery
 will use a graphical frontend when that edition exists.
 
+For qualification with Server's verified kernel, set `LINOS_KERNEL_PACKAGE` to
+the same architecture-specific Linos `.deb` when building Recovery. The builder
+checks its package metadata and compares the kernel extracted from the resulting
+root filesystem with the package bytes. It reuses the package without compiling
+Linux. When that input is absent, the legacy diagnostic image uses Debian's
+`linux-image-amd64`; distinguish that compatibility boot from native Linos kernel
+qualification. Installed-kernel CI tests Recovery with its qualified Linos package.
+
 ## Safety
 
 Neither builder opens, partitions or formats a physical disk. Every output is

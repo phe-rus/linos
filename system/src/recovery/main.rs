@@ -1,9 +1,8 @@
 mod layout;
 mod payload;
 mod planner;
-mod update;
-#[path = "../platform/edition.rs"]
-mod edition;
+
+use linos::{platform::edition, recovery::update};
 
 use std::{
     fs,
@@ -78,7 +77,7 @@ fn interactive() -> io::Result<()> {
         println!("  4. Repair or restore (not available yet)");
         println!("  5. Verify offline payload");
         println!("  6. Inspect A/B update and rollback policy");
-    println!("  7. Exit");
+        println!("  7. Exit");
         print!("Select an option: ");
         io::stdout().flush()?;
         let mut input = String::new();
@@ -153,7 +152,7 @@ fn run(args: &[String]) -> io::Result<()> {
         [command] if command == "payload" => payload::verify(),
         [command] if command == "updates" => {
             update::inspect_journal(Path::new("/var/lib/linos/update-state"))
-        },
+        }
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,

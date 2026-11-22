@@ -2,8 +2,7 @@
 //! This temporary X11/XWayland adapter targets ChromeOS Crostini development.
 //! It is NOT a compositor, a final Linos UI toolkit or a bootable Desktop edition.
 //! Requires the system X11 runtime library (libX11.so.6).
-#[path = "../platform/edition.rs"]
-mod edition;
+use linos::platform::edition;
 
 use std::{
     env,
@@ -53,9 +52,15 @@ unsafe extern "C" {
     fn XBlackPixel(display: *mut Display, screen: c_int) -> c_ulong;
     fn XWhitePixel(display: *mut Display, screen: c_int) -> c_ulong;
     fn XCreateSimpleWindow(
-        display: *mut Display, parent: Window, x: c_int, y: c_int,
-        width: c_uint, height: c_uint, border_width: c_uint,
-        border: c_ulong, background: c_ulong,
+        display: *mut Display,
+        parent: Window,
+        x: c_int,
+        y: c_int,
+        width: c_uint,
+        height: c_uint,
+        border_width: c_uint,
+        border: c_ulong,
+        background: c_ulong,
     ) -> Window;
     fn XStoreName(display: *mut Display, window: Window, name: *const c_char) -> c_int;
     fn XSelectInput(display: *mut Display, window: Window, mask: c_long) -> c_int;
@@ -67,18 +72,35 @@ unsafe extern "C" {
     fn XFreeGC(display: *mut Display, gc: Gc) -> c_int;
     fn XSetForeground(display: *mut Display, gc: Gc, pixel: c_ulong) -> c_int;
     fn XFillRectangle(
-        display: *mut Display, window: Window, gc: Gc,
-        x: c_int, y: c_int, width: c_uint, height: c_uint,
+        display: *mut Display,
+        window: Window,
+        gc: Gc,
+        x: c_int,
+        y: c_int,
+        width: c_uint,
+        height: c_uint,
     ) -> c_int;
     fn XDrawString(
-        display: *mut Display, window: Window, gc: Gc,
-        x: c_int, y: c_int, string: *const c_char, length: c_int,
+        display: *mut Display,
+        window: Window,
+        gc: Gc,
+        x: c_int,
+        y: c_int,
+        string: *const c_char,
+        length: c_int,
     ) -> c_int;
     fn XGetWindowAttributes(
-        display: *mut Display, window: Window, attrs: *mut WindowAttributes,
+        display: *mut Display,
+        window: Window,
+        attrs: *mut WindowAttributes,
     ) -> c_int;
     fn XInternAtom(display: *mut Display, name: *const c_char, only_if_exists: c_int) -> c_ulong;
-    fn XSetWMProtocols(display: *mut Display, window: Window, atoms: *mut c_ulong, count: c_int) -> c_int;
+    fn XSetWMProtocols(
+        display: *mut Display,
+        window: Window,
+        atoms: *mut c_ulong,
+        count: c_int,
+    ) -> c_int;
 }
 
 fn fill(display: *mut Display, window: Window, gc: Gc, color: c_ulong, rect: (i32, i32, u32, u32)) {
@@ -89,12 +111,28 @@ fn fill(display: *mut Display, window: Window, gc: Gc, color: c_ulong, rect: (i3
     }
 }
 
-fn text(display: *mut Display, window: Window, gc: Gc, x: i32, y: i32, color: c_ulong, message: &str) {
+fn text(
+    display: *mut Display,
+    window: Window,
+    gc: Gc,
+    x: i32,
+    y: i32,
+    color: c_ulong,
+    message: &str,
+) {
     let bytes = message.as_bytes();
     // SAFETY: XDrawString reads exactly bytes.len() bytes and does not retain the pointer.
     unsafe {
         XSetForeground(display, gc, color);
-        XDrawString(display, window, gc, x, y, bytes.as_ptr().cast(), bytes.len() as c_int);
+        XDrawString(
+            display,
+            window,
+            gc,
+            x,
+            y,
+            bytes.as_ptr().cast(),
+            bytes.len() as c_int,
+        );
     }
 }
 
@@ -116,25 +154,86 @@ fn paint(display: *mut Display, window: Window, gc: Gc, clicks: u32) {
     fill(display, window, gc, CANVAS, (0, 0, width, height));
     fill(display, window, gc, PANEL, (0, 0, width, 64));
     fill(display, window, gc, ACCENT, (28, 23, 14, 14));
-    text(display, window, gc, 54, 33, TEXT, "Linos 13 | Native graphics experiment");
+    text(
+        display,
+        window,
+        gc,
+        54,
+        33,
+        TEXT,
+        "Linos 13 | Native graphics experiment",
+    );
     text(display, window, gc, 28, 108, TEXT, "Made to feel at home.");
-    text(display, window, gc, 28, 143, MUTED, "Native Linux window, not HTML, not the final desktop.");
-    text(display, window, gc, 28, 174, MUTED, "Resize the window, click anywhere, or press a key.");
-    fill(display, window, gc, PANEL, (28, 208, width.saturating_sub(56), 105));
+    text(
+        display,
+        window,
+        gc,
+        28,
+        143,
+        MUTED,
+        "Native Linux window, not HTML, not the final desktop.",
+    );
+    text(
+        display,
+        window,
+        gc,
+        28,
+        174,
+        MUTED,
+        "Resize the window, click anywhere, or press a key.",
+    );
+    fill(
+        display,
+        window,
+        gc,
+        PANEL,
+        (28, 208, width.saturating_sub(56), 105),
+    );
     text(display, window, gc, 46, 242, ACCENT, "Display and input");
-    text(display, window, gc, 46, 267, TEXT, &format!("Surface: {width} x {height} px"));
-    text(display, window, gc, 46, 291, TEXT, &format!("Mouse clicks: {clicks}"));
+    text(
+        display,
+        window,
+        gc,
+        46,
+        267,
+        TEXT,
+        &format!("Surface: {width} x {height} px"),
+    );
+    text(
+        display,
+        window,
+        gc,
+        46,
+        291,
+        TEXT,
+        &format!("Mouse clicks: {clicks}"),
+    );
     if height > 350 {
-        text(display, window, gc, 28, height as i32 - 26, MUTED, "Esc or window close to exit. X11 adapter via ChromeOS.");
+        text(
+            display,
+            window,
+            gc,
+            28,
+            height as i32 - 26,
+            MUTED,
+            "Esc or window close to exit. X11 adapter via ChromeOS.",
+        );
     }
     // SAFETY: X display remains alive for the entirety of paint.
-    unsafe { XFlush(display); }
+    unsafe {
+        XFlush(display);
+    }
 }
 
 fn run() -> Result<(), String> {
-    if env::args().skip(1).any(|arg| arg == "--help" || arg == "-h") {
+    if env::args()
+        .skip(1)
+        .any(|arg| arg == "--help" || arg == "-h")
+    {
         println!("linos-graphics: first native graphical window for Linos 13 Desktop development");
-        println!("Run from ChromeOS Linux with DISPLAY set; press Esc or close the window to exit.");
+        println!(
+            "Run from ChromeOS Linux with DISPLAY set; press Esc or close the window to exit."
+        );
         return Ok(());
     }
     if env::var_os("DISPLAY").is_none() {
@@ -149,20 +248,35 @@ fn run() -> Result<(), String> {
         }
         let screen = XDefaultScreen(display);
         let window = XCreateSimpleWindow(
-            display, XRootWindow(display, screen), 80, 80, 760, 480, 0,
-            XBlackPixel(display, screen), XWhitePixel(display, screen),
+            display,
+            XRootWindow(display, screen),
+            80,
+            80,
+            760,
+            480,
+            0,
+            XBlackPixel(display, screen),
+            XWhitePixel(display, screen),
         );
         if window == 0 {
             XCloseDisplay(display);
             return Err("Could not create native window".into());
         }
-        let title = CString::new(format!("Linos 13 {} - Graphics laboratory", edition::Edition::Desktop.as_str())).map_err(|e| e.to_string())?;
+        let title = CString::new(format!(
+            "Linos 13 {} - Graphics laboratory",
+            edition::Edition::Desktop.as_str()
+        ))
+        .map_err(|e| e.to_string())?;
         XStoreName(display, window, title.as_ptr());
         const KEY_PRESS: c_long = 1;
         const BUTTON_PRESS: c_long = 1 << 2;
         const EXPOSURE: c_long = 1 << 15;
         const STRUCTURE: c_long = 1 << 17;
-        XSelectInput(display, window, KEY_PRESS | BUTTON_PRESS | EXPOSURE | STRUCTURE);
+        XSelectInput(
+            display,
+            window,
+            KEY_PRESS | BUTTON_PRESS | EXPOSURE | STRUCTURE,
+        );
         let atom = CString::new("WM_DELETE_WINDOW").map_err(|e| e.to_string())?;
         let mut close_atom = XInternAtom(display, atom.as_ptr(), 0);
         XSetWMProtocols(display, window, &mut close_atom, 1);
@@ -180,7 +294,8 @@ fn run() -> Result<(), String> {
             XNextEvent(display, event.as_mut_ptr().cast());
             match event[0] as c_int {
                 12 | 22 => paint(display, window, gc, clicks), // Expose, ConfigureNotify
-                4 => { // ButtonPress
+                4 => {
+                    // ButtonPress
                     clicks = clicks.saturating_add(1);
                     paint(display, window, gc, clicks);
                 }

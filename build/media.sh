@@ -76,7 +76,7 @@ if [[ -e "$OUTPUT" ]]; then
     exit 1
 fi
 
-WORK="$(mktemp -d /tmp/linos-uefi.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-uefi.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 ESP="$WORK/esp.fat"
 DISK="$WORK/disk.raw"

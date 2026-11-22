@@ -54,7 +54,7 @@ fi
 cargo build --release --locked \
     --bin init --bin enroll --bin linos-login --bin linos
 
-STAGING_DIR="$(mktemp -d /tmp/linos-package.XXXXXXXX)"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linos-package.XXXXXXXX")"
 trap 'rm -rf -- "$STAGING_DIR"' EXIT
 mkdir -p "$STAGING_DIR/package"
 cp -a system/release/. "$STAGING_DIR/package/"

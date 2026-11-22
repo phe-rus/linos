@@ -58,8 +58,14 @@ mod tests {
 
     #[test]
     fn recovery_is_available_without_a_graphical_stack() {
-        assert_eq!(Edition::Server.primary_interface(), PrimaryInterface::Console);
-        assert_eq!(Edition::Desktop.primary_interface(), PrimaryInterface::Graphical);
+        assert_eq!(
+            Edition::Server.primary_interface(),
+            PrimaryInterface::Console
+        );
+        assert_eq!(
+            Edition::Desktop.primary_interface(),
+            PrimaryInterface::Graphical
+        );
         assert!(Edition::Desktop.recovery_accessible_without_graphics());
         assert!(Edition::Server.recovery_accessible_without_graphics());
     }

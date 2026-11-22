@@ -15,7 +15,7 @@ OUT="images/recovery/builds/$ARCH/$BUILD_ID"
 [[ ! -e "$OUT" ]] || { echo "Recovery build exists: $OUT" >&2; exit 1; }
 command -v fakeroot >/dev/null || { echo "fakeroot is required" >&2; exit 2; }
 mkdir -p "$OUT/boot"
-WORK="$(mktemp -d /tmp/linos-recovery.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-recovery.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 chmod 755 "$WORK"
 
@@ -25,6 +25,25 @@ install -m 644 system/services/linos-recovery.service "$WORK/linos-recovery.serv
 install -m 644 system/release/usr/lib/linos/release "$WORK/release"
 install -m 644 hardware/profiles/amd64-uefi-server.conf "$WORK/hardware-profile"
 install -m 644 system/identity/os-release "$WORK/os-release"
+
+# Reuse the same qualified package as Server without rebuilding Linux.
+# The legacy diagnostic build keeps its explicit Debian package input.
+KERNEL_INPUT=linux-image-amd64
+EXPECTED_KERNEL=""
+if [[ -n "${LINOS_KERNEL_PACKAGE:-}" ]]; then
+    source kernel/source.conf
+    [[ -s "$LINOS_KERNEL_PACKAGE" &&
+       "$(dpkg-deb -f "$LINOS_KERNEL_PACKAGE" Package)" == linos-kernel &&
+       "$(dpkg-deb -f "$LINOS_KERNEL_PACKAGE" Architecture)" == "$ARCH" &&
+       "$(dpkg-deb -f "$LINOS_KERNEL_PACKAGE" Version)" == "$LINOS_KERNEL_VERSION" ]] || {
+        echo "Recovery kernel package metadata mismatch" >&2; exit 2;
+    }
+    MEMBER="$(dpkg-deb --fsys-tarfile "$LINOS_KERNEL_PACKAGE" | tar -tf - | grep -E '^\./boot/vmlinuz-[^/]+-linos$' || true)"
+    [[ -n "$MEMBER" && "$(wc -l <<<"$MEMBER")" -eq 1 ]] || { echo "Expected one Linos kernel" >&2; exit 2; }
+    EXPECTED_KERNEL="${MEMBER#./boot/vmlinuz-}"
+    KERNEL_INPUT="$WORK/$(basename "$LINOS_KERNEL_PACKAGE")"
+    install -m 644 "$LINOS_KERNEL_PACKAGE" "$KERNEL_INPUT"
+fi
 
 KEYRING_ARGS=()
 if [[ -n "${LINOS_KEYRING:-}" ]]; then
@@ -83,7 +102,9 @@ mmdebstrap \
     "${KEYRING_ARGS[@]}" \
     --variant=minbase \
     --architectures="$ARCH" \
-    --include=systemd-sysv,dbus,udev,iproute2,procps,ca-certificates,initramfs-tools,e2fsprogs,linux-image-amd64,openssl \
+    --hook-dir=/usr/share/mmdebstrap/hooks/file-mirror-automount \
+    --include=systemd-sysv,dbus,udev,iproute2,procps,ca-certificates,initramfs-tools,e2fsprogs,openssl \
+    --include="$KERNEL_INPUT" \
     --customize-hook='mkdir -p "$1/usr/lib/linos" "$1/etc/systemd/system/multi-user.target.wants"' \
     --customize-hook="copy-in $WORK/linos-recovery /usr/lib/linos/" \
     --customize-hook="copy-in $WORK/release /usr/lib/linos/" \
@@ -98,6 +119,12 @@ mmdebstrap \
 KERNEL_MEMBER="$(tar -tf "$OUT/rootfs.tar" | awk '/^\.\/boot\/vmlinuz-[^/]+$/ && !found { print; found=1 }')"
 [[ -n "$KERNEL_MEMBER" ]] || { echo "Recovery kernel not found" >&2; exit 1; }
 VERSION="${KERNEL_MEMBER#./boot/vmlinuz-}"
+if [[ -n "$EXPECTED_KERNEL" ]]; then
+    [[ "$VERSION" == "$EXPECTED_KERNEL" ]] || { echo "Recovery selected wrong kernel" >&2; exit 1; }
+    package_hash="$(dpkg-deb --fsys-tarfile "$LINOS_KERNEL_PACKAGE" | tar -xOf - "$KERNEL_MEMBER" | sha256sum | cut -d' ' -f1)"
+    rootfs_hash="$(tar -xOf "$OUT/rootfs.tar" "$KERNEL_MEMBER" | sha256sum | cut -d' ' -f1)"
+    [[ "$package_hash" == "$rootfs_hash" ]] || { echo "Recovery kernel differs from package" >&2; exit 1; }
+fi
 tar -xOf "$OUT/rootfs.tar" "$KERNEL_MEMBER" > "$OUT/boot/kernel"
 tar -xOf "$OUT/rootfs.tar" "./boot/initrd.img-$VERSION" > "$OUT/boot/initramfs"
 

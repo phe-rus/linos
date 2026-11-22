@@ -703,17 +703,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
-name = "linos"
-version = "0.1.0"
-dependencies = [
- "cliclack",
- "crossterm",
- "libc",
- "ratatui",
- "rustix",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,6 +721,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e752191d037c44ad111a8caa762921926658402f01cc1253f7bef2020ece4f5e"
 dependencies = [
  "bitflags 2.13.2",
+]
+
+[[package]]
+name = "linos"
+version = "0.1.0"
+dependencies = [
+ "cliclack",
+ "crossterm",
+ "libc",
+ "ratatui",
+ "rustix",
 ]
 
 [[package]]

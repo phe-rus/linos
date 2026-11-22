@@ -31,7 +31,7 @@ for candidate in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd; d
 done
 [[ -n "$CODE" && -n "$VARS" ]] || { echo "OVMF firmware not found (install ovmf)" >&2; exit 2; }
 
-WORK="$(mktemp -d /tmp/linos-uefi-test.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-uefi-test.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 cp "$VARS" "$WORK/vars.fd"
 : > "$LOG"
@@ -43,7 +43,7 @@ has_sign_in() {
 echo "UEFI boot-testing Linos 13 Server (amd64)"
 timeout --signal=TERM --kill-after=5s 180s \
     qemu-system-x86_64 \
-    -machine q35,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+    -machine "q35,accel=${LINOS_QEMU_ACCEL:-tcg}" -cpu qemu64 -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}" \
     -display none -no-reboot -monitor none -net none -snapshot \
     -drive "if=pflash,format=raw,readonly=on,file=$CODE" \
     -drive "if=pflash,format=raw,file=$WORK/vars.fd" \
@@ -95,12 +95,12 @@ for item in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd; do
     [[ -r "$item" ]] && { VARS="$item"; break; }
 done
 [[ -n "$CODE" && -n "$VARS" ]] || { echo "OVMF firmware missing" >&2; exit 2; }
-WORK="$(mktemp -d /tmp/linos-recovery-smoke.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-recovery-smoke.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 cp "$VARS" "$WORK/vars.fd"
 : > "$LOG"
 timeout --signal=TERM --kill-after=5s 180s qemu-system-x86_64 \
-    -machine q35,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+    -machine "q35,accel=${LINOS_QEMU_ACCEL:-tcg}" -cpu qemu64 -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}" \
     -display none -no-reboot -monitor none -net none -snapshot \
     -drive "if=pflash,format=raw,readonly=on,file=$CODE" \
     -drive "if=pflash,format=raw,file=$WORK/vars.fd" \

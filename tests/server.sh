@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export PATH="/usr/sbin:/sbin:$PATH"
 
 smoke() (
 set -Eeuo pipefail
@@ -73,7 +74,7 @@ fi
 if [[ "$ARCH" == amd64 ]]; then
     COMMAND=(
         qemu-system-x86_64
-        -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048
+        -machine "pc,accel=${LINOS_QEMU_ACCEL:-tcg}" -cpu qemu64 -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}"
         -display none -no-reboot -monitor none
         -chardev "file,id=linos_serial,path=$LOG" -serial chardev:linos_serial
         -kernel "$KERNEL" -initrd "$INITRAMFS"
@@ -84,7 +85,7 @@ if [[ "$ARCH" == amd64 ]]; then
 else
     COMMAND=(
         qemu-system-aarch64
-        -machine virt -cpu cortex-a76 -smp 2 -m 2048
+        -machine virt -cpu cortex-a76 -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}"
         -display none -no-reboot -monitor none
         -chardev "file,id=linos_serial,path=$LOG" -serial chardev:linos_serial
         -kernel "$KERNEL" -initrd "$INITRAMFS"
@@ -163,7 +164,7 @@ if [[ ! -f "$SOURCE" ]]; then
     exit 2
 fi
 
-TEST_DIR="$(mktemp -d /tmp/linos-persistence.XXXXXXXX)"
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linos-persistence.XXXXXXXX")"
 cleanup() {
     local status=$?
     if (( status != 0 )); then

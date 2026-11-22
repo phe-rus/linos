@@ -25,7 +25,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal
       - name: Validate recovery and Desktop graphics compilation
         run: |
-          cargo +stable test --locked --bin init --bin recovery
+          cargo +stable test --locked --lib --bin init --bin recovery --bin linos-update-image --bin linos-update-health --test update_image
           cargo +stable check --locked --bin linos-graphics
       - name: Measure shipped Server Rust binaries
         shell: bash

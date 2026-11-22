@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export PATH="/usr/sbin:/sbin:$PATH"
 
 # Test the real console enrollment flow on a private copy of a server image.
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +23,7 @@ for path in "$BUILD_DIR/disk.ext4" "$BUILD_DIR/boot/kernel" "$BUILD_DIR/boot/ini
     [[ -f "$path" ]] || { printf 'Missing image artifact: %s\n' "$path" >&2; exit 2; }
 done
 
-TEST_DIR="$(mktemp -d /tmp/linos-enrollment.XXXXXXXX)"
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linos-enrollment.XXXXXXXX")"
 cleanup() {
     local status=$?
     if (( status != 0 )); then
@@ -30,7 +31,11 @@ cleanup() {
             [[ -f "$log" ]] && cp -- "$log" "$BUILD_DIR/enrollment-$(basename "$log")"
         done
     fi
-    rm -r -- "$TEST_DIR"
+    if [[ "${LINOS_KEEP_ENROLL_TEST:-0}" == 1 ]]; then
+        echo "Enrollment test artifacts: $TEST_DIR"
+    else
+        rm -r -- "$TEST_DIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -42,6 +47,10 @@ export LINOS_ENROLL_DISK="$TEST_DISK"
 export LINOS_ENROLL_KERNEL="$ROOT/$BUILD_DIR/boot/kernel"
 export LINOS_ENROLL_INITRAMFS="$ROOT/$BUILD_DIR/boot/initramfs"
 export LINOS_ENROLL_SSH_PORT=42222
+export LINOS_ENROLL_REQUIRE_READY=0
+if [[ -f "$BUILD_DIR/kernel-manifest" ]] && grep -qx mode=linos "$BUILD_DIR/kernel-manifest"; then
+    export LINOS_ENROLL_REQUIRE_READY=1
+fi
 # Ephemeral, test-only password. Never written into the source or disk image.
 export LINOS_ENROLL_PASSWORD="$(tr -d '-' </proc/sys/kernel/random/uuid)"
 
@@ -69,6 +78,9 @@ run_phase() {
         return 1
     fi
     grep 'PASS: enrollment phase' "$TEST_DIR/expect-$1.log"
+    if [[ "$1" == verify ]]; then
+        grep -E 'LINOS_METRIC |^LINOS_KERNEL_READY|^LINOS_PRESSURE_OK' "$TEST_DIR/expect-$1.log"
+    fi
     recover_journal "$1"
 }
 

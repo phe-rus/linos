@@ -32,7 +32,7 @@ for utility in sgdisk truncate stat; do
     command -v "$utility" >/dev/null || { echo "Missing $utility" >&2; exit 2; }
 done
 
-WORK="$(mktemp -d /tmp/linos-layout-test.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-layout-test.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 DISK="$WORK/server-layout.raw"
 truncate -s 16G "$DISK"
@@ -93,7 +93,7 @@ done
 grep -qx 'edition=server' "$PAYLOAD/manifest"
 grep -qx 'architecture=amd64' "$PAYLOAD/manifest"
 
-WORK="$(mktemp -d /tmp/linos-install-simulation.XXXXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/linos-install-simulation.XXXXXXXX")"
 trap 'rm -r -- "$WORK"' EXIT
 DISK="$WORK/installed.raw"
 ESP="$WORK/efi.fat"
@@ -163,7 +163,7 @@ LOG="$WORK/serial.log"
 : > "$LOG"
 echo "Booting simulated Linos Server installation from System A"
 timeout --signal=TERM --kill-after=5s 180s qemu-system-x86_64 \
-    -machine q35,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+    -machine "q35,accel=${LINOS_QEMU_ACCEL:-tcg}" -cpu qemu64 -smp "${LINOS_QEMU_CPUS:-2}" -m "${LINOS_QEMU_MEMORY:-2048}" \
     -display none -no-reboot -monitor none -net none -snapshot \
     -drive "if=pflash,format=raw,readonly=on,file=$CODE" \
     -drive "if=pflash,format=raw,file=$WORK/vars.fd" \

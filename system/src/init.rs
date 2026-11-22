@@ -176,6 +176,12 @@ fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device>
     let hostname = read_existing(etc.as_ref(), "hostname")?;
     let id = read_existing(state_dir.as_ref(), "device-id")?;
     let state = read_existing(state_dir.as_ref(), "provisioning-state")?;
+    let managed = root.join("usr/lib/linos/update-layout").try_exists()?;
+    let saved_hostname = if managed {
+        read_existing(state_dir.as_ref(), "hostname")?
+    } else {
+        None
+    };
 
     if let Some(ref existing) = id
         && !valid_uuid(existing)
@@ -195,7 +201,8 @@ fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device>
         ));
     }
 
-    let hostname = match hostname {
+    let local_hostname = hostname.clone();
+    let hostname = match saved_hostname.clone().or(hostname) {
         Some(existing) => existing,
         None => {
             let directory = open_directory(&root_fd, &["etc"], true)?
@@ -205,6 +212,32 @@ fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device>
             value
         }
     };
+
+    if managed {
+        let directory = open_directory(&root_fd, &["var", "lib", "linos"], true)?
+            .ok_or_else(|| io::Error::other("Missing persistent identity directory"))?;
+        if saved_hostname.is_none() {
+            write_new(&directory, "hostname", &hostname, 0o600)?;
+        }
+        if local_hostname
+            .as_ref()
+            .is_some_and(|local| local != &hostname)
+        {
+            let etc = open_directory(&root_fd, &["etc"], false)?
+                .ok_or_else(|| io::Error::other("Missing etc directory"))?;
+            let temporary = format!(".hostname.{}.tmp", random_uuid()?);
+            write_new(&etc, &temporary, &hostname, 0o644)?;
+            let result =
+                rfs::renameat(&etc, temporary.as_str(), &etc, "hostname").map_err(filesystem_error);
+            let _ = rfs::unlinkat(&etc, temporary.as_str(), AtFlags::empty());
+            result?;
+            rfs::fsync(&etc).map_err(filesystem_error)?;
+        } else if local_hostname.is_none() && saved_hostname.is_some() {
+            let etc = open_directory(&root_fd, &["etc"], true)?
+                .ok_or_else(|| io::Error::other("Missing etc directory"))?;
+            write_new(&etc, "hostname", &hostname, 0o644)?;
+        }
+    }
 
     let id = match id {
         Some(existing) => existing,
@@ -251,9 +284,12 @@ fn initialize_live() -> io::Result<Device> {
             "Live initialization is restricted to an installed Linos system",
         ));
     }
-    initialize_for_root(Path::new("/"), true)
+    let device = initialize_for_root(Path::new("/"), true)?;
+    if Path::new("/usr/lib/linos/update-layout").try_exists()? {
+        rustix::system::sethostname(device.hostname.as_bytes())?;
+    }
+    Ok(device)
 }
-
 
 // The userspace/kernel readiness contract is deliberately separate from
 // "the kernel booted". Never acknowledge a device that is unclaimed or whose
@@ -287,7 +323,8 @@ fn acknowledge_ready(root: &Path, kernel_state: &Path) -> io::Result<()> {
             "The Linos device has not completed enrollment",
         ));
     }
-    if value("setup-complete")? != "ready" {
+    let setup_dir = open_directory(&root_fd, &["etc", "linos"], false)?;
+    if read_existing(setup_dir.as_ref(), "setup-complete")?.as_deref() != Some("ready") {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Linos setup completion has not been recorded",
@@ -296,8 +333,10 @@ fn acknowledge_ready(root: &Path, kernel_state: &Path) -> io::Result<()> {
     let owner = value("owner")?;
     let mut lines = owner.lines();
     let username = lines.next().and_then(|line| line.strip_prefix("username="));
-    let bound_device = lines.next().and_then(|line| line.strip_prefix("device-id="));
-    if !username.is_some_and(|name| !name.is_empty())
+    let bound_device = lines
+        .next()
+        .and_then(|line| line.strip_prefix("device-id="));
+    if username.is_none_or(|name| name.is_empty())
         || bound_device != Some(device_id.as_str())
         || lines.next().is_some()
     {
@@ -330,10 +369,7 @@ fn acknowledge_ready_live() -> io::Result<()> {
             "Kernel readiness acknowledgement requires root",
         ));
     }
-    acknowledge_ready(
-        Path::new("/"),
-        Path::new("/sys/kernel/linos/boot_state"),
-    )
+    acknowledge_ready(Path::new("/"), Path::new("/sys/kernel/linos/boot_state"))
 }
 
 fn main() -> io::Result<()> {
@@ -415,6 +451,47 @@ mod tests {
         ));
         assert!(!is_linos_release("ID=debian\n"));
         assert!(!is_linos_release("ID=linos-extra\n"));
+    }
+
+    #[test]
+    fn managed_hostname_survives_missing_and_stale_slot_files() {
+        let root = test_root();
+        fs::create_dir_all(root.join("usr/lib/linos")).unwrap();
+        fs::write(root.join("usr/lib/linos/update-layout"), "managed image\n").unwrap();
+        let first = initialize(&root).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("var/lib/linos/hostname"))
+                .unwrap()
+                .trim(),
+            first.hostname
+        );
+        fs::remove_file(root.join("etc/hostname")).unwrap();
+        assert_eq!(initialize(&root).unwrap(), first);
+        fs::write(root.join("etc/hostname"), "stale-slot-name\n").unwrap();
+        assert_eq!(initialize(&root).unwrap(), first);
+        assert_eq!(
+            fs::read_to_string(root.join("etc/hostname"))
+                .unwrap()
+                .trim(),
+            first.hostname
+        );
+        cleanup(root);
+    }
+
+    #[test]
+    fn managed_hostname_rejects_symlinked_persistent_state() {
+        let root = test_root();
+        fs::create_dir_all(root.join("usr/lib/linos")).unwrap();
+        fs::write(root.join("usr/lib/linos/update-layout"), "managed image\n").unwrap();
+        initialize(&root).unwrap();
+        fs::remove_file(root.join("var/lib/linos/hostname")).unwrap();
+        std::os::unix::fs::symlink(
+            root.join("etc/hostname"),
+            root.join("var/lib/linos/hostname"),
+        )
+        .unwrap();
+        assert!(initialize(&root).is_err());
+        cleanup(root);
     }
 
     #[test]
@@ -533,11 +610,13 @@ mod tests {
         assert!(acknowledge_ready(&root, &state).is_err());
         let data = root.join("var/lib/linos");
         fs::write(data.join("provisioning-state"), "provisioned\n").unwrap();
-        fs::write(data.join("setup-complete"), "ready\n").unwrap();
+        fs::create_dir_all(root.join("etc/linos")).unwrap();
+        fs::write(root.join("etc/linos/setup-complete"), "ready\n").unwrap();
         fs::write(
             data.join("owner"),
             format!("username=linosadmin\ndevice-id={}\n", device.id),
-        ).unwrap();
+        )
+        .unwrap();
         acknowledge_ready(&root, &state).unwrap();
         assert_eq!(fs::read_to_string(&state).unwrap(), "ready\n");
         // Repeating the acknowledgement is safe.
@@ -558,9 +637,13 @@ mod tests {
         fs::write(root.join("usr/lib/linos/release"), "ID=linos\n").unwrap();
         let data = root.join("var/lib/linos");
         fs::write(data.join("provisioning-state"), "provisioned\n").unwrap();
-        fs::write(data.join("setup-complete"), "ready\n").unwrap();
-        fs::write(data.join("owner"),
-            format!("username=admin\ndevice-id={}\n", device.id)).unwrap();
+        fs::create_dir_all(root.join("etc/linos")).unwrap();
+        fs::write(root.join("etc/linos/setup-complete"), "ready\n").unwrap();
+        fs::write(
+            data.join("owner"),
+            format!("username=admin\ndevice-id={}\n", device.id),
+        )
+        .unwrap();
         fs::write(&state, "invalid\n").unwrap();
         assert!(acknowledge_ready(&root, &state).is_err());
         cleanup(root);

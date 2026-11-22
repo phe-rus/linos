@@ -1,0 +1,19 @@
+[Unit]
+Description=Reconcile managed Linos development image boot health
+ConditionPathExists=/usr/lib/linos/update-layout
+Requires=linos-first-boot.service serial-getty@ttyS0.service
+After=linos-first-boot.service linos-ready.service serial-getty@ttyS0.service
+RequiresMountsFor=/var/lib/linos /efi
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-update-health
+User=root
+Group=root
+NoNewPrivileges=yes
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

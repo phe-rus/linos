@@ -642,9 +642,14 @@ fn draw(frame: &mut Frame, app: &App) {
             .saturating_sub(usize::from(transcript_height))
             .min(u16::MAX as usize) as u16;
         frame.render_widget(
-            Paragraph::new(output)
-                .wrap(Wrap { trim: false })
-                .scroll((if app.follow_tail { transcript_scroll } else { app.scroll }, 0)),
+            Paragraph::new(output).wrap(Wrap { trim: false }).scroll((
+                if app.follow_tail {
+                    transcript_scroll
+                } else {
+                    app.scroll
+                },
+                0,
+            )),
             Rect::new(left, area.y.saturating_add(3), width, transcript_height),
         );
         let home = env::var("HOME").unwrap_or_default();

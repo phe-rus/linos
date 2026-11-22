@@ -35,7 +35,11 @@ The target isn't a collection of fashionable optimization flags. Linos needs a s
 5. Preserve kernel security, ABI/driver compatibility, recovery paths and support windows; require benchmarks and regression tests before switching policy.
 6. Record per-edition and per-device validation. A server, laptop, television and handheld can share platform principles without sharing an identical configuration.
 
-The **current** build installs a Debian kernel. These kernel profiles and upgrade enforcement are planned, not implemented. The goal of consistent responsiveness is an acceptance target, not a measured current result.
+The current Server builder requires a prebuilt Linos kernel package by default.
+Source-controlled profiles, Linos overlays, provenance validation and AMD64/ARM64
+QEMU qualification exist. Explicit compatibility builds still use Debian kernels.
+Production upgrade policy and consistent responsiveness remain acceptance targets,
+not measured guarantees. See [current status](current-status.md).
 
 ## Native application model and development experience
 
@@ -50,7 +54,7 @@ The long-term Linus store acts as a discovery, permissions, distribution, update
 ## Layers and boundaries
 
 1. **Hardware and firmware**: discover CPU architecture, platform model, memory, boot method, block devices, and supported capabilities. Detection does not imply a compatible bootloader or available driver.
-2. **Linux kernel**: use a supported kernel and platform-specific configuration, firmware and device trees when needed. The current QEMU image uses Debian's kernel package. The Orange Pi host currently runs an Armbian vendor kernel; this is separate from the guest.
+2. **Linux kernel**: use a supported kernel and platform-specific configuration, firmware and device trees when needed. Normal Server images use the packaged Linos kernel; older compatibility images use Debian kernels. A development host's kernel is separate from the guest and does not establish device compatibility.
 3. **Early boot and services**: initramfs mounts the root filesystem, then systemd manages the userspace and services. The Rust tool called `init` is **not PID 1** and does not replace systemd.
 4. **System base**: Debian packages via `apt` plus Linos-owned packages, release metadata, defaults and eventual system policy.
 5. **Device services**: future first-boot provisioning, ownership, system updates, recovery and resource policies. These should be independently testable, with short internal names.

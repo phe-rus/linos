@@ -99,7 +99,7 @@ fi
 # mmdebstrap may run in an unshared user namespace. ChromeOS home
 # directories are not always traversable from that namespace, so stage
 # local inputs under /tmp with read/traverse access.
-STAGING_DIR="$(mktemp -d /tmp/linos-image.XXXXXXXX)"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linos-image.XXXXXXXX")"
 STAGED_PACKAGE="$STAGING_DIR/$(basename "$PACKAGE")"
 STAGED_ISSUE="$STAGING_DIR/issue"
 STAGED_MOTD="$STAGING_DIR/motd"
@@ -134,7 +134,14 @@ if [[ -n "${LINOS_KEYRING:-}" ]]; then
     KEYRING_ARGS+=(--keyring="$STAGING_DIR/debian-keyring.gpg")
 fi
 
+BOOT_PACKAGES=()
+if [[ "$ARCH" == amd64 ]]; then
+    # Native blessing helper for opt-in managed UEFI development images.
+    BOOT_PACKAGES+=(--include=systemd-boot)
+fi
+
 mmdebstrap \
+    "${BOOT_PACKAGES[@]}" \
     "${KEYRING_ARGS[@]}" \
     --variant=minbase \
     --architectures="$ARCH" \

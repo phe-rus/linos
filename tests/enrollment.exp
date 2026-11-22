@@ -11,10 +11,16 @@ set initramfs $env(LINOS_ENROLL_INITRAMFS)
 set logfile $env(LINOS_ENROLL_LOG)
 set sshport $env(LINOS_ENROLL_SSH_PORT)
 set username linosadmin
+set memory 2048
+set cpus 2
+set accel tcg
+if {[info exists env(LINOS_QEMU_MEMORY)]} { set memory $env(LINOS_QEMU_MEMORY) }
+if {[info exists env(LINOS_QEMU_CPUS)]} { set cpus $env(LINOS_QEMU_CPUS) }
+if {[info exists env(LINOS_QEMU_ACCEL)]} { set accel $env(LINOS_QEMU_ACCEL) }
 
 if {$arch eq "amd64"} {
     set command [list qemu-system-x86_64 \
-        -machine pc,accel=tcg -cpu qemu64 -smp 2 -m 2048 \
+        -machine "pc,accel=$accel" -cpu qemu64 -smp $cpus -m $memory \
         -display none -no-reboot -monitor none -serial stdio \
         -kernel $kernel -initrd $initramfs \
         -drive "file=$disk,if=none,format=raw,id=rootfs" \
@@ -24,7 +30,7 @@ if {$arch eq "amd64"} {
         -device virtio-net-pci,netdev=net0]
 } elseif {$arch eq "arm64"} {
     set command [list qemu-system-aarch64 \
-        -machine virt -cpu cortex-a76 -smp 2 -m 2048 \
+        -machine virt -cpu cortex-a76 -smp $cpus -m $memory \
         -display none -no-reboot -monitor none -serial stdio \
         -kernel $kernel -initrd $initramfs \
         -drive "file=$disk,if=none,format=raw,id=rootfs" \
@@ -111,9 +117,9 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     # Bash shell. Do not race terminal initialization by typing /shell.
     await {Type / for commands}
     send -- "\024"
-    await {❯ }
+    await {[$#] }
     send -- "stty -echo\r"
-    await {❯ }
+    await {[$#] }
 
     # Confirm the packaged Linos UI command runs inside the real guest.
     # No shell startup file or prompt customization is required.
@@ -123,6 +129,20 @@ if {$phase eq "interrupt" || $phase eq "complete"} {
     await {LINOS_HOSTNAME_OK}
     send -- "grep -q 'Linos 13 Server' /etc/motd && echo LINOS_MOTD_OK\r"
     await {LINOS_MOTD_OK}
+
+    if {$env(LINOS_ENROLL_REQUIRE_READY) eq "1"} {
+        send -- {test "$(cat /sys/kernel/linos/boot_state)" = ready && echo LINOS_KERNEL_READY}
+        send -- "\r"
+        await {LINOS_KERNEL_READY}
+    }
+    send -- {awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/ {print "LINOS_METRIC " $0}' /proc/meminfo}
+    send -- "\r"
+    await {LINOS_METRIC SwapFree:}
+    # A bounded tmpfs allocation checks basic command viability under added
+    # memory pressure. It is not a latency benchmark or an OOM qualification.
+    send -- {sh -c 'pressure=$(mktemp /dev/shm/linos-pressure.XXXXXX) || exit; trap '\''rm -f "$pressure"'\'' EXIT; dd if=/dev/zero of="$pressure" bs=1M count=128 status=none && linos status >/dev/null && echo LINOS_PRESSURE_OK'}
+    send -- "\r"
+    await {LINOS_PRESSURE_OK}
 
     # The guest gets test-only networking; Linos's image defaults stay unchanged.
     send -- "sudo -S -p 'LINOS_SUDO:' sh -c 'dev=\$(ls /sys/class/net | grep -v lo | head -1); ip link set \"\$dev\" up; ip addr add 10.0.2.15/24 dev \"\$dev\"'; echo LINOS_NETWORK_READY\r"

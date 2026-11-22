@@ -149,8 +149,8 @@ jobs:
       - name: Check recovery crate
         run: |
           cargo +stable fmt --all -- --check
-          cargo +stable clippy -p linos --bin recovery --locked -- -D warnings
-          cargo +stable test -p linos --bin recovery --locked
+          cargo +stable clippy -p linos --lib --bin recovery --bin linos-update-image --bin linos-update-health --test update_image --locked -- -D warnings
+          cargo +stable test -p linos --lib --bin recovery --bin linos-update-image --bin linos-update-health --test update_image --locked
 
       - name: Install recovery-build dependencies
         run: |
@@ -254,6 +254,9 @@ jobs:
           LINOS_KERNEL_MODE=compat ./build/image.sh
           ./build/recovery.sh payload amd64
 
+      - name: Qualify signed image updates and firmware fallback
+        run: ./tests/update.sh
+
       - name: Sign payload with disposable CI-only Ed25519 key
         run: |
           openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/linos-ci-test-private.pem"
@@ -295,6 +298,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: installer-media-logs
-          path: images/recovery/builds/**/*.log
+          path: |
+            images/recovery/builds/**/*.log
+            target/update-test-logs/**/*.log
           if-no-files-found: ignore
           retention-days: 7
