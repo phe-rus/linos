@@ -80,4 +80,20 @@ Do not run multiple local VMs concurrently, place large images on RAM-backed sto
 
 ## Dispatched CI
 
-Pending dispatch after the workload/security checkpoint is pushed. Refresh the exact run status before making release claims.
+Qualification source commit: `a682af89e8327d5a17f29a55dde7c2ac2b56c015`, pushed after the local workload pass. Subsequent handoff-only commits do not change the tested application or CI configuration.
+
+| Run | Observed status at handoff | Link |
+| --- | --- | --- |
+| RustSec and repository security | In progress | [45086107423](https://github.com/phe-rus/linos/actions/runs/45086107423) |
+| Full AMD64/ARM64 Rust, image, OS CVE and boot checks | Queued / AMD64 job starting | [45086107602](https://github.com/phe-rus/linos/actions/runs/45086107602) |
+| Native-kernel installed-system qualification | In progress | [45086107465](https://github.com/phe-rus/linos/actions/runs/45086107465) |
+
+Refresh these exact runs before making release claims. CI success has not been asserted. The workflow named “Linos Kernel Release” is taking its qualification-only integration path for this commit, not its publishing path.
+
+```sh
+gh run view 45086107423
+gh run view 45086107602
+gh run view 45086107465
+```
+
+If generic `git fetch origin` fails because this checkout retains a deleted `kernel` refspec, use `git fetch origin refs/heads/main:refs/remotes/origin/main`. That explicit main fetch and both source pushes succeeded in this session; repository fetch configuration was left intact.
