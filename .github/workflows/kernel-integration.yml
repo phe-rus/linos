@@ -118,7 +118,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          export TMPDIR="$RUNNER_TEMP"
+          # mmdebstrap's unshared user cannot traverse GitHub's private _temp.
+          # /var/tmp is traversable and disk backed, including for large images.
+          export TMPDIR=/var/tmp
           export LINOS_QEMU_MEMORY=1024
           export LINOS_QEMU_CPUS=1
           LINOS_KEEP_ENROLL_TEST=1 bash tests/enrollment.sh amd64 | tee "$RUNNER_TEMP/enrollment-result.txt"

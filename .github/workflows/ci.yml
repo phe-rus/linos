@@ -103,7 +103,8 @@ jobs:
           mkdir -p "$scan_root" security-results
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           tar --extract --file="images/server/builds/${{ matrix.arch }}/$build_id/rootfs.tar" \
-            --directory="$scan_root" --no-same-owner
+            --directory="$scan_root" --no-same-owner \
+            --exclude='./dev/*' --exclude='./proc/*' --exclude='./sys/*' --exclude='./run/*'
           trivy rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
             --format json --output security-results/os-vulnerabilities.json "$scan_root"
 
