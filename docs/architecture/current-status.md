@@ -2,6 +2,8 @@
 
 Resume from [the current handoff](current-handoff.md) for the latest workload evidence, CI runs, Server beta gates and Desktop next steps.
 
+24 November update: Server assessment, 135 local Rust tests, repeated guest checks, measured interaction improvements and the unresolved OS vulnerability gate are recorded in [the latest assessment](../reviews/2026-11-24-server-baseline.md) and [security triage](../reviews/2026-11-24-server-security-triage.md). Desktop and broader Assets/Store work are deferred. The detailed 23 November records below remain historical evidence, not final-candidate qualification.
+
 Updated: 23 November 2026. Channel: development. Historical interface evidence below is from 14 November; current Server, Recovery and VM qualification is recorded separately below. This is not a production release certification.
 
 ## Verified baseline

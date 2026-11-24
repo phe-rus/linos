@@ -48,13 +48,15 @@ The old full scan failed while tar attempted unprivileged device-node extraction
 | --- | --- |
 | [45476639614](https://github.com/phe-rus/linos/actions/runs/45476639614), native installed kernel at `307defd` | Both AMD64 and ARM64 passed, including AMD64 Recovery |
 | [45477917782](https://github.com/phe-rus/linos/actions/runs/45477917782), repository security at `d54889c` | Passed |
-| [45476628685](https://github.com/phe-rus/linos/actions/runs/45476628685), full compatibility image CI at `307defd` | AMD64 functional checks passed; OS vulnerability gate failed. Refresh ARM64/final run status |
+| [45476628685](https://github.com/phe-rus/linos/actions/runs/45476628685), full compatibility image CI at `307defd` | Both architectures completed functional checks and failed the OS vulnerability gate; downstream Recovery/installer media jobs were skipped |
+| [45479117710](https://github.com/phe-rus/linos/actions/runs/45479117710), final full compatibility image CI at `3996db4` | Dispatched, refresh before claiming its outcome |
+| [45479141286](https://github.com/phe-rus/linos/actions/runs/45479141286), final native image and package-security qualification at `3996db4` | Dispatched, includes the newly added native OS scan; refresh before claiming its outcome |
 
 The repaired AMD64 scan produced 85 package/CVE matches, 82 HIGH and three CRITICAL rows, covering 26 unique identifiers. All lack a fixed stable package version in the report. The three CRITICAL rows are the same OpenSSH source advisory, not three independent remotely exploitable server flaws. Exact binary reachability needs review. The image already includes stable updates and security repositories; this is not solved by adding the missing security repository.
 
 Raw report: `target/server-benchmark/ci-security-amd64/os-vulnerabilities.json`, SHA-256 `35ef43f1902364710782ddfee358e9ea4059d7d4c5afea3d3073a521d1243668`. `security-findings.psv` holds the per-row summary. Use [the vendor triage](../reviews/2026-11-24-server-security-triage.md) and [the proposed maintenance decision](../specs/0004-server-security-maintenance.md). Normal stable refresh cannot currently clear this strict gate. No advisory was suppressed, no ignore-unfixed option was added and no base distribution was changed.
 
-Native-kernel image qualification is also being given the same OS package scan and retained reports, since full CI scans explicit compatibility images. This closes a coverage gap; it does not establish advisory coverage of the custom kernel itself. Functional tests still run after vulnerability findings, then the gate fails.
+Native-kernel image qualification now includes the same OS package scan and retained reports, since full CI scans explicit compatibility images. This closes a coverage gap in configuration; the final run must prove it executes. It does not establish advisory coverage of the custom kernel itself. Functional tests still run after vulnerability findings, then the gate fails.
 
 ## Remaining work
 
