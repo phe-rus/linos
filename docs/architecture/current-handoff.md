@@ -1,99 +1,67 @@
 # Linos current handoff
 
-Updated 23 November 2026. Start here, then check git status and current GitHub Actions results. This supersedes the earlier interaction-only checkpoint for resuming work.
+Updated 24 November 2026. Start here and check the exact CI runs before making a release claim. This supersedes the 23 November handoff.
 
-## Owner direction
+## Owner direction and sequence
 
-Finish Server qualification toward a beta while beginning Desktop work in the next session. Keep Linos's “Made to feel at home” philosophy. Server's “The Familiar Workbench” is an edition-specific expression, not a Desktop UI specification. Do not call Server beta ready until the release gates below have evidence.
+Server only. First assess Linos against its product promise, Apple's published quality principles and established server platforms, then improve the demonstrated gaps. Run security and image qualification in CI, fix and rerun. Only after those gates pass, qualify a fresh native image locally, complete the beta support/recovery gates and publish an explicitly supported Server beta. Desktop and broader Assets/Store work are deferred until afterward.
 
-The owner requested committing/pushing first, representative real VM workloads next, then CI vulnerability checks. The existing combined console/setup/recovery work was committed and pushed as `b86ee19eee63865a41d3d193afe96a6329614ec1` before new VM testing. No production deployment or beta publication was performed. Existing user VMs were preserved.
+The owner wants physical PCs, homelab machines, servers, Raspberry Pi and Orange Pi families as well as VMs. No exact physical test configuration has been provided or qualified. Do not silently narrow the requested beta to VM only or call an arbitrary ARM board supported because ARM64 QEMU boots.
 
-## Current implementation
+## Assessment and implementation
 
-- Reliable Home editing, bounded paste, history, Unicode cursor movement and native terminal handoff with interruption recovery.
-- Explicit shell readiness and exit status, password masking and safe routing across view changes.
-- Measured resource bars and task controls with kernel authorization, process identity protection and deliberate confirmation.
-- Saved preferences, real sudo-authorized hostname/timezone settings and local hostname resolution through the declared `libnss-myhostname` package dependency.
-- Cancellable inspection subprocesses with five-second deadlines, combined four-MiB output budgets, process-group cleanup and accurate Store inventory errors.
+- [Measured Server baseline and gaps](../reviews/2026-11-24-server-baseline.md): footprint, interaction timing, architecture, hardware awareness and audience suitability.
+- [Primary source platform comparison](../reviews/2026-11-24-server-platform-comparison.md): Apple principles and Debian/Ubuntu/RHEL/Proxmox/TrueNAS reference points. This is not a measured competitor performance ranking.
+- [Support matrix](server-support-matrix.md): exact qualification limits and required physical evidence.
+- [Status and response spec](../specs/0003-server-status-response.md): bounded input batching, faster polling only while work is pending, and shared CLI/Home status checks.
 
-Details: [interaction review](../reviews/2026-11-23-server-interaction.md), [authorization review](../reviews/2026-11-23-server-authorization.md), [current status](current-status.md), and [console contract](server-console.md).
+The implementation preserves the existing visual direction, shell compatibility and authorization. Status now reports memory/root headroom, CPU/memory/I/O pressure and failed services, marking unavailable checks. A neutral Home greeting replaces the unconditional readiness claim. Advice does not mutate resources or claim failure prediction. Hardware identification remains distinct from qualification.
 
-## Verified locally
+One 1 vCPU, 1024 MiB native AMD64 guest baseline showed Home idle RSS about 3.2 MiB and no idle Home CPU-counter change over the sample window. Installed root use was about 290 MiB; the sparse base image is logically 3 GiB. The improved package used about 3.35 MiB idle RSS. In the two observed runs, loaded Services navigation tail fell from 5.4 seconds to 217 ms, and idle simple-command median from 254 to 108 ms. Typing tail did not improve and single startup was slower. These are small serial-terminal samples, not physical display, minimum-RAM, production or comparative OS guarantees.
 
-The Rust workspace passed 133 tests. Formatting, strict all-target Clippy and diff whitespace checks pass. The new workload test is intentionally ignored in ordinary workspace runs, like the two earlier explicit guest checks.
+## Local evidence
 
-Three explicit AMD64 guest cases have passed against the rebuilt development package and native `6.18.63-linos` base:
+Application checkpoint `d54889c12421cea7f0c312687b7238b6eac3e400` is committed and pushed. CI repair checkpoint is `307defdc4abcbeefc2d98683fcbf18e4720903ce`.
 
-1. Full Home navigation, editing/history, masked input, task signals, modified-key confirmation rejection, native command interruption/return and logout.
-2. Ordinary administrator sudo authentication, cancellation without mutation, successful settings changes, denial of cross-user task signals and local hostname resolution after renaming.
-3. Representative server workloads, added in `tests/console.rs::representative_server_workloads_in_guest`:
-   - An unprivileged user creates an 8 MiB random file, archives/extracts it and checks byte-for-byte equality and SHA-256 integrity.
-   - A systemd-managed loopback TCP echo service runs as that user and handles 20 request/reply connections, then another batch after task pause/resume.
-   - The administrator restarts the service, verifies journal evidence and confirms request handling afterward, then stops it.
-   - A private root-owned file remains unreadable to the workload user.
-   - A bounded five-second CPU load and 32 MiB tmpfs allocation run while Home's resource view refreshes. The captured CPU bar reports 100% on the single-vCPU guest. Pressure data is cleaned up afterward.
-   - The guest shuts down normally.
+- Workspace: 135 passing Rust tests, four explicit guest/benchmark cases ignored in the ordinary run.
+- Formatting, strict all-target Clippy and shell syntax checks pass.
+- The rebuilt application passed the full Home interaction, ordinary administrator authorization and representative workload guest tests, each against a fresh disposable copy of native `20261123.4`.
+- A separate repeat benchmark detected a deliberately failed systemd service through the new status CLI running as an ordinary user.
+- All local VMs ran sequentially with one vCPU, 1024 MiB and guest loopback/no external network. Copies remain under disk-backed `target/`. Existing user VMs were preserved. No Python was used.
 
-All local VM runs are sequential, one vCPU and 1024 MiB RAM. Large copies are disk-backed under `target/`. Networking is limited to guest loopback, with no external network configured. Root debug shells are fixture setup only; these tests do not requalify normal enrollment/login PAM or SSH. These are functional foundation tests, not a database/container certification, a sustained latency benchmark or storage power-loss qualification.
+Artifacts: `target/server-benchmark/`, `target/console-qualification/guest-benchmark/`, and the three guest snapshot directories. Original benchmark snapshots are archived at `target/server-benchmark/baseline-evidence/`. The original timing data has summary distributions; the improved run also retains individual timing samples. `host-manifest.txt` records host/tool details after the runs. Unexposed host cgroup limits were not established.
 
-Artifacts:
+The development package was rebuilt after selecting new build identity `20261124.1`, but a fresh native candidate image has not been assembled or qualified. Keep the owner's CI-first ordering.
 
-- `target/console-qualification/guest-workloads/`: assembled terminal snapshots, pressure readings, results and terminal output.
-- `target/console-qualification/guest-authorization/`: ordinary-user authorization evidence with credential redaction.
-- `target/console-qualification/guest/`: full interaction evidence.
-- `target/console-qualification/workspace-tests.log`: 133-test baseline.
-- `target/server-workload-qualification/disk.ext4`: disposable workload test image.
-- `system/dist/linos13_dev_v1.0.0.deb`: local development package, not an immutable release image.
+| Prepared artifact | SHA-256 |
+| --- | --- |
+| `target/release/linos` | `b10fc363fc116bee513361106f512ddaf9156a2342362f840c8788729ec1ff6a` |
+| `system/dist/linos13_dev_v1.0.0.deb` | `47097fa4486036c077dfe6373b90cac7d8b9ff11e67842d625e0101ff0d8ba8d` |
 
-Console SHA-256: `70ecf9f7be76dce87bbdc11a2e6ec6fc21caa212c2665e3ccc2eebbd2f4389bb`.
-Package SHA-256: `b5914109643ed970048646f8407f43e7db1aeb52185a4fc4b3dd8438335e2a47`.
+These are local development artifacts, not immutable release certification. Package version remains development 1.0.0, so use the build identity and hashes.
 
-## CI security and image gates
+## CI repair and security blocker
 
-`.github/workflows/security.yml` adds RustSec advisory checks for both Cargo lockfiles, plus Trivy repository secret and misconfiguration checks. It runs on relevant pushes, pull requests, manual dispatch and weekly. Audit tools are version-pinned; the Trivy setup action is commit-pinned. Findings are retained as reports. RustSec failures and HIGH/CRITICAL repository findings fail their jobs.
+The old full scan failed while tar attempted unprivileged device-node extraction; Trivy had not run. Extraction now excludes virtual runtime trees while preserving OS/package metadata. Native AMD64 qualification had passed enrollment, firmware boot and six update/fallback boots, then failed Recovery assembly because an unshared user could not traverse GitHub's private temporary directory. Its temporary storage now uses disk-backed `/var/tmp`.
 
-The manual full `Linos CI` now scans the actual built AMD64/ARM64 root filesystems with Trivy. HIGH/CRITICAL OS package findings, including unfixed ones, block the job. Functional checks still run after a scan failure so the scan does not hide boot/enrollment results. Scanner errors also block the gate. Reports are retained for 14 days.
+| Run | Verified result |
+| --- | --- |
+| [45476639614](https://github.com/phe-rus/linos/actions/runs/45476639614), native installed kernel at `307defd` | Both AMD64 and ARM64 passed, including AMD64 Recovery |
+| [45477917782](https://github.com/phe-rus/linos/actions/runs/45477917782), repository security at `d54889c` | Passed |
+| [45476628685](https://github.com/phe-rus/linos/actions/runs/45476628685), full compatibility image CI at `307defd` | AMD64 functional checks passed; OS vulnerability gate failed. Refresh ARM64/final run status |
 
-`Linos Kernel Release` now permits manual qualification that reuses the existing qualified kernel artifacts from run `44213747067`. Both architecture artifacts were confirmed present and unexpired before dispatch. Manual qualification does not publish. Never use the `kernel:release` marker merely to run tests; that path can publish after its gates.
+The repaired AMD64 scan produced 85 package/CVE matches, 82 HIGH and three CRITICAL rows, covering 26 unique identifiers. All lack a fixed stable package version in the report. The three CRITICAL rows are the same OpenSSH source advisory, not three independent remotely exploitable server flaws. Exact binary reachability needs review. The image already includes stable updates and security repositories; this is not solved by adding the missing security repository.
 
-The previous full CI failure at `40ac0c2` was Clippy's constant-size `chunks_exact` lint on both architectures. The first pushed checkpoint includes the `as_chunks` fix. New CI results must be checked; older failures or local passes are not evidence of the new run's outcome.
+Raw report: `target/server-benchmark/ci-security-amd64/os-vulnerabilities.json`, SHA-256 `35ef43f1902364710782ddfee358e9ea4059d7d4c5afea3d3073a521d1243668`. `security-findings.psv` holds the per-row summary. Use [the vendor triage](../reviews/2026-11-24-server-security-triage.md) and [the proposed maintenance decision](../specs/0004-server-security-maintenance.md). Normal stable refresh cannot currently clear this strict gate. No advisory was suppressed, no ignore-unfixed option was added and no base distribution was changed.
 
-Run links and current outcomes are recorded below after dispatch. A clean scanner result covers known advisories and configured scanner rules only. Custom kernel vulnerability coverage and production hardening still need explicit review. Native GitHub secret scanning was disabled when inspected; repository scanning here is provided by the new workflow.
+Native-kernel image qualification is also being given the same OS package scan and retained reports, since full CI scans explicit compatibility images. This closes a coverage gap; it does not establish advisory coverage of the custom kernel itself. Functional tests still run after vulnerability findings, then the gate fails.
 
-## Next session: Server beta and Desktop
+## Remaining work
 
-1. Read the exact CI runs below, triage every failure and advisory, and preserve the distinction between scanner failure and confirmed vulnerability. Do not suppress findings simply to obtain a green badge.
-2. Complete a fresh immutable native Server image with the new package/dependency set and a new build identity. Qualify enrollment/login, SSH, reboot persistence, installation/recovery and updates on the final beta candidate. Current local testing installed the package into disposable copies of an older native image.
-3. Record remaining hardware/platform support and known limitations. Production signed updates, data migration, recovery/install safety, sustained workloads and physical hardware are not established by the tests above. Release Server beta only against an explicit candidate and supported test matrix.
-4. Begin Desktop from `PRODUCT.md`, `DESIGN.md`, `docs/architecture/desktop-platform.md`, and `system/src/graphics/`. Desktop remains an X11 graphics experiment; it is not a qualified Desktop operating system. Settle the Desktop composition, session/input model, toolkit and supported hardware scope before expanding implementation. Keep Server regression and security CI running during Desktop development.
+1. Settle security maintenance: reviewed reproducible backports and candidate-specific applicability evidence, or wait for stable vendor fixes. The maintenance spec is Proposed. Do not silently start owning a new package supply chain or relax the gate.
+2. Rerun CI at the final source and triage every finding/error. The qualification path must never use the `kernel:release` publication marker just to run tests.
+3. After the security gates are satisfied, build fresh native `20261124.1` with its new package/dependency set. Qualify actual enrollment/PAM login, SSH and noninteractive SSH behavior, reboot persistence, Recovery and signed development update/data preservation against that exact candidate. Existing mutable package tests cannot replace it.
+4. Qualify actual named physical configurations and remaining installer/data/recovery guarantees. Physical installation remains disabled. Production signing, account/service-data migration, power-loss testing, sustained workloads and support lifecycle are not established by this turn.
+5. Release beta only with a supported matrix and explicit candidate evidence. Desktop and broader Assets/Store work remain outside this scope.
 
-Reproduce the workload test with a fresh copied disk and the two staged `.deb` files described in the authorization review:
-
-```sh
-LINOS_CONSOLE_GUEST_DIR=target/server-workload-qualification \
-LINOS_CONSOLE_BOOT_DIR=images/server/builds/amd64/20261123.4 \
-CARGO_BUILD_JOBS=2 cargo test --locked --test console representative_server_workloads_in_guest \
-  -- --ignored --nocapture --test-threads=1
-```
-
-Do not run multiple local VMs concurrently, place large images on RAM-backed storage, use Python automation, reset user VM disks, or assume a package installation test is a newly built image qualification.
-
-## Dispatched CI
-
-Qualification source commit: `a682af89e8327d5a17f29a55dde7c2ac2b56c015`, pushed after the local workload pass. Subsequent handoff-only commits do not change the tested application or CI configuration.
-
-| Run | Observed status at handoff | Link |
-| --- | --- | --- |
-| RustSec and repository security | In progress | [45086107423](https://github.com/phe-rus/linos/actions/runs/45086107423) |
-| Full AMD64/ARM64 Rust, image, OS CVE and boot checks | Queued / AMD64 job starting | [45086107602](https://github.com/phe-rus/linos/actions/runs/45086107602) |
-| Native-kernel installed-system qualification | In progress | [45086107465](https://github.com/phe-rus/linos/actions/runs/45086107465) |
-
-Refresh these exact runs before making release claims. CI success has not been asserted. The workflow named “Linos Kernel Release” is taking its qualification-only integration path for this commit, not its publishing path.
-
-```sh
-gh run view 45086107423
-gh run view 45086107602
-gh run view 45086107465
-```
-
-If generic `git fetch origin` fails because this checkout retains a deleted `kernel` refspec, use `git fetch origin refs/heads/main:refs/remotes/origin/main`. That explicit main fetch and both source pushes succeeded in this session; repository fetch configuration was left intact.
+The owner has pending questions about physical test-machine availability and the security-maintenance path. A target family is not an available device. Neither elapsed time nor no response grants a new maintenance-policy decision.
