@@ -10,6 +10,7 @@ use std::{
 mod assets;
 mod geometry;
 mod hardware;
+mod health;
 mod monitor;
 mod preferences;
 mod pty;
@@ -97,6 +98,7 @@ fn overview() -> String {
 
 fn status() {
     println!("{}", overview());
+    println!("\n{}", health::report(&query::Cancellation::default()));
 }
 
 fn valid_unit(name: &str) -> bool {

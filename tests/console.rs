@@ -321,6 +321,9 @@ impl Drop for Console {
     }
 }
 
+#[path = "support/server_benchmark.rs"]
+mod server_benchmark;
+
 #[test]
 fn home_through_real_terminal() {
     let home = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(

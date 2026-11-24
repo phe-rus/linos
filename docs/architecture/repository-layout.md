@@ -38,7 +38,7 @@ linos/
   README.md
 ```
 
-We do not create empty directories for hypothetical features. A directory represents a stable responsibility, not a Rust package or separate product. The one root Cargo manifest builds six executable targets: `linos`, `detect`, `enroll`, `linos-login`, `recovery`, and `init`. Explicit binary entry points preserve installation paths and privilege separation; source files are organized by related functionality.
+We do not create empty directories for hypothetical features. A directory represents a stable responsibility, not a Rust package or separate product. The one root Cargo manifest builds nine executable targets: `linos`, `detect`, `enroll`, `linos-login`, `recovery`, `linos-update-image`, `linos-update-health`, `init`, and the experimental `linos-graphics`. The Server package builds only its four installed binaries. Explicit binary entry points preserve installation paths and privilege separation; source files are organized by related functionality.
 
 The existing `system/release/` directory is **packaging input**, not the directory installed as the OS root. `build/*.sh` scripts produce artifacts in ignored output locations. The proposed removable PC installation media has `EFI/` and `linos.pherus.org/` at its root, distinct from this repository; the copy-to-USB experience is not production-ready.
 

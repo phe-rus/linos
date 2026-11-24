@@ -240,7 +240,7 @@ pub fn bar(used: u64, total: u64, width: usize) -> String {
     )
 }
 
-fn disk_usage() -> io::Result<(u64, u64, u64)> {
+pub(super) fn disk_usage() -> io::Result<(u64, u64, u64)> {
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
     // SAFETY: the path is NUL terminated and stat points to writable storage.
     if unsafe { libc::statvfs(c"/".as_ptr(), &raw mut stat) } != 0 {

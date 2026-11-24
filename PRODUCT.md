@@ -51,24 +51,25 @@ Stable upstream repositories initially supply software, **not the Linos product 
 
 ## Capabilities and Constraints
 
-**Demonstrated in supplied development evidence:**
+**Demonstrated in development evidence (see the current handoff for exact artifacts):**
 
 - amd64/arm64 QEMU Server boot paths.
 - Cliclack first-boot setup, local enrollment and PAM-backed login.
 - Rust/Ratatui Home, slash navigation, native Shell switching, read-only Assets browsing and system resource displays.
 - Terminal resizing in the observed amd64 development environment.
-- The last reported full workspace quality check passed 54 Rust tests at commit `4db71a0`; that does **not** validate later source changes.
+- The 24 November local workspace check passed 135 Rust tests. Separate AMD64 guest checks cover interaction, ordinary-user authorization and representative workloads. These do **not** certify a later candidate image or physical hardware.
+- Source-built Linos kernels and native AMD64/ARM64 QEMU qualification exist. Physical-device and production qualification remain open.
 
 **Partly implemented or source-only:**
 
-- Persistent PTY command composer, with a reported false `Password (hidden)` state that makes ordinary commands unusable in some sessions.
-- Read-only hardware reporting and dpkg/APT-backed Linus store inventories, search and simulated operations in newer source, not yet verified in a newly booted guest.
-- Settings are mostly informational; safe editable preferences need a proper authorization/confirmation model.
+- Persistent PTY commands, secret masking, editing/history and native terminal handoff have regression and AMD64 guest coverage. Embedded output remains a text preview; full-screen applications use native Shell mode.
+- Read-only hardware reporting and dpkg/APT-backed Linus store inventories, search and simulated operations have AMD64 development guest evidence. Real package transactions remain unimplemented.
+- Saved preferences and sudo-authorized hostname/timezone changes have ordinary-user guest coverage. Other Settings controls remain limited.
 - The initial independent Recovery and installer work is not a verified production-safe physical installation workflow.
 
 **Architectural constraints and open decisions:**
 
-- The current development images depend on Debian packages and Debian-packaged kernels. Linos-owned kernel source/configuration, stable release policy and native application contracts are targets, not achieved facts.
+- Current development images use Debian packages as a bootstrap and can use the source-built Linos kernel. Explicit compatibility images retain Debian kernels. Stable production release policy and native application contracts remain targets.
 - Rust is the preferred language for Linos-owned system components and the intended first-class native application platform.
 - A simple single-file Rust compile-and-run workflow is planned, with explicit compilation, caching, dependency and trust rules. Rust source is not an interpreted format.
 - Motion, input, graphics, scheduler, memory and I/O policies must be tested together; kernel tuning alone cannot deliver fluid visual behaviour.
@@ -93,9 +94,9 @@ Stable upstream repositories initially supply software, **not the Linos product 
 - [Architecture](docs/architecture/overview.md) and [roadmap](docs/architecture/roadmap.md) record the technical reality and long-term platform targets.
 - [Engineering status](docs/architecture/current-status.md) distinguishes demonstrated features from source-only features and known blockers.
 - The supplied 14 November 2026 QEMU screenshots demonstrate first-boot setup, sign-in, Home, Assets, Settings, Resources and adaptive terminal geometry. **Those screenshots have not yet been committed as a GitHub-native showcase.**
-- User-supplied Rust build logs show the 54-test baseline passed at `4db71a0`.
-- The latest observed in-guest command session still displayed a false password state during ordinary shell use.
-- No demonstrated production release, native graphical app framework, independent Linos kernel configuration pipeline, developer store publishing workflow or validated physical-device matrix exists yet.
+- [Current handoff](docs/architecture/current-handoff.md) records the newer tests, artifact identities, guest evidence and exact CI runs; historical screenshots and logs do not certify later changes.
+- [Server assessment](docs/reviews/2026-11-24-server-baseline.md) records measured footprint, interaction delays, first improvements and remaining gaps.
+- No demonstrated production release, native graphical app framework, developer store publishing workflow or validated physical-device matrix exists yet. A Linos kernel configuration/source build pipeline does exist.
 
 ## Product Principles
 

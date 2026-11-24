@@ -16,8 +16,8 @@ use ratatui::{
 };
 
 use super::{
-    Action, action_for, assets::Browser, geometry, hardware, host, memory, monitor, ownership,
-    preferences, pty, query, store, uptime, version,
+    Action, action_for, assets::Browser, geometry, hardware, health, host, memory, monitor,
+    ownership, preferences, pty, query, store, uptime, version,
 };
 
 const ACCENT: Color = Color::Cyan;
@@ -206,15 +206,9 @@ impl App {
         self.scroll = 0;
         self.content = match view {
             View::Home => String::new(),
-            View::Status => format!(
-                "Linos {} Server\n\nDevice      {}\nSession     {}\nUptime      {}\nMemory      {}\nSetup       {}",
-                version(),
-                host(),
-                self.user,
-                uptime().unwrap_or_else(|| "Unavailable".into()),
-                memory().unwrap_or_else(|| "Unavailable".into()),
-                ownership(),
-            ),
+            View::Status => self.load_content(|cancel| {
+                format!("{}\n\n{}", super::overview(), health::report(cancel))
+            }),
             View::Resources => {
                 if self.monitor.tasks.is_empty() {
                     self.monitor.sample();
@@ -1180,7 +1174,7 @@ fn draw_workspace(frame: &mut Frame, app: &App) {
                         .add_modifier(Modifier::BOLD),
                 ),
                 Line::styled(
-                    "Your server is ready. What would you like to do?",
+                    "What would you like to do? /status shows current checks.",
                     Style::default().fg(DIM),
                 ),
             ],
@@ -1490,7 +1484,7 @@ pub fn run() -> io::Result<ExitCode> {
             let _paste_guard = PasteGuard;
             let mut last_refresh = Instant::now();
             let mut dirty = true;
-            loop {
+            'workspace: loop {
                 dirty |= app.poll_content();
                 if matches!(app.view, View::Resources | View::Tasks)
                     && last_refresh.elapsed() >= Duration::from_secs(app.preferences.refresh)
@@ -1549,7 +1543,19 @@ pub fn run() -> io::Result<ExitCode> {
                     terminal.draw(|frame| draw(frame, &app))?;
                     dirty = false;
                 }
-                if event::poll(Duration::from_millis(100))? {
+                // Preserve event order while avoiding a frame for every key
+                // already queued by a serial terminal or a pasted command.
+                for event_index in 0..32 {
+                    let wait = if event_index > 0 {
+                        Duration::ZERO
+                    } else if app.command_pending || app.view_job.is_some() {
+                        Duration::from_millis(20)
+                    } else {
+                        Duration::from_millis(100)
+                    };
+                    if !event::poll(wait)? {
+                        break;
+                    }
                     match event::read()? {
                         Event::Key(key) => {
                             if key.kind == KeyEventKind::Press
@@ -1578,7 +1584,7 @@ pub fn run() -> io::Result<ExitCode> {
                                 continue;
                             }
                             if let Some(exit) = app.key(key)? {
-                                break Ok::<Exit, io::Error>(exit);
+                                break 'workspace Ok::<Exit, io::Error>(exit);
                             }
                             dirty = true;
                         }
