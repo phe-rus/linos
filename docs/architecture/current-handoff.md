@@ -43,6 +43,18 @@ success despite that invalid operation. The fixture now selects a real free bloc
 asserts native checker exit 4 and exercises both 1 KiB and 4 KiB block sizes.
 Production filesystem verification remains strict and unchanged.
 
+Native health/configuration checkpoint `a65e0bb` and authentication policy
+refinement `8553fb9` are committed and pushed to `layout2-vm`. Run
+[45685260719](https://github.com/phe-rus/linos/actions/runs/45685260719) passed
+userspace checks, retained base restoration and native package compilation, then
+failed the generic image guard. The retained base has an empty `/root/.ssh`
+directory, with no owner/setup marker or home contents. Generic preflight now
+removes only a verified empty SSH directory through `rmdir`; contents, symlinks,
+special objects, enrollment records and linked parent directories still refuse.
+Its disposable shell regression fixtures pass and are included in CI. Run
+`45685923462` at `8553fb9` predates this guard correction and is superseded by
+the next development candidate run. No layout 2 VM has booted.
+
 Early boot now calls candidate configuration preparation while holding the volume
 journal lock, before attaching the candidate root. It authenticates the selected
 source and candidate, verifies source creation receipts, mounts vendor roots through

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, layout2-vm]
-    paths: ['system/**', 'build/layout2-deployment.sh', '.github/workflows/layout2.yml', 'Cargo.toml']
+    paths: ['system/**', 'build/layout2-*.sh', 'tests/layout2-preflight.sh', '.github/workflows/layout2.yml', 'Cargo.toml']
 permissions:
   contents: read
   actions: read
@@ -22,6 +22,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gdisk e2fsprogs util-linux openssl initramfs-tools dpkg-dev
       - name: Check userspace before image construction
         run: |
+          bash tests/layout2-preflight.sh
           cargo fmt --all -- --check
           cargo clippy --locked --lib --bin init --bin recovery --bin linos-layout2 --tests -- -D warnings
           cargo test --locked --lib --bin init --bin recovery --test update_image

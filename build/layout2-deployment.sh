@@ -25,8 +25,7 @@ STAGE="$WORK/root"
 mkdir -p "$STAGE" "$WORK/deployment"
 tar --extract --same-owner --preserve-permissions --file="$BASE/rootfs.tar" --directory="$STAGE" \
     --exclude='./dev/*' --exclude='./proc/*' --exclude='./sys/*' --exclude='./run/*'
-[[ ! -e "$STAGE/var/lib/linos/owner" && ! -e "$STAGE/etc/linos/setup-complete" && ! -d "$STAGE/root/.ssh" ]] || { echo 'An enrolled root cannot become a generic deployment.' >&2; exit 2; }
-[[ -z "$(find "$STAGE/home" -mindepth 1 -maxdepth 1 -print -quit)" ]] || exit 2
+bash build/layout2-preflight.sh "$STAGE"
 openssl pkey -in "$SIGNING_KEY" -pubout -out "$WORK/deployment.pem"
 install -m 644 "$WORK/deployment.pem" "$OUTPUT/trust/deployment.pem"
 install -d -m 755 "$STAGE/usr/lib/linos/trust"
