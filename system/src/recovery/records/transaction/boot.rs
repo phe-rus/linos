@@ -40,13 +40,16 @@ impl Selectors {
         }
         let text = std::str::from_utf8(bytes).map_err(invalid)?;
         let text = text.strip_suffix('\n').unwrap_or(text);
-        if text.contains(['\n', '"', '\'', '\\']) {
+        if text.contains(['\n', '"', '\'']) {
             return Err(invalid("Ambiguous kernel command line quoting"));
         }
         let mut fields = BTreeMap::new();
         let mut readonly = false;
         let mut masked = false;
         for word in text.split(' ').filter(|word| !word.is_empty()) {
+            if word.contains('\\') && !word.starts_with("initrd=") {
+                return Err(invalid("Backslash outside the firmware initramfs selector"));
+            }
             if word == "ro" {
                 if readonly {
                     return Err(invalid("Duplicate root access mode"));
@@ -61,7 +64,9 @@ impl Selectors {
                 masked = true;
             } else {
                 let (key, value) = word.split_once('=').unwrap_or((word, ""));
-                if !(key.starts_with("linos.") || matches!(key, "root" | "rootflags" | "panic")) {
+                if !(key.starts_with("linos.")
+                    || matches!(key, "root" | "rootflags" | "panic" | "initrd"))
+                {
                     continue;
                 }
                 if !matches!(
@@ -73,6 +78,7 @@ impl Selectors {
                         | "root"
                         | "rootflags"
                         | "panic"
+                        | "initrd"
                 ) || value.is_empty()
                     || fields.insert(key, value).is_some()
                 {
@@ -96,12 +102,21 @@ impl Selectors {
         {
             return Err(invalid("Invalid managed loop root selectors"));
         }
+        let entry = Entry::new(
+            get("linos.deployment")?,
+            positive(get("linos.transaction")?)?,
+        )?;
+        if let Some(initrd) = fields.get("initrd") {
+            let expected = format!("/EFI/Linos/deployments/{}/initramfs", entry.deployment_id());
+            if **initrd != expected && initrd.replace('\\', "/") != expected {
+                return Err(invalid(
+                    "Firmware initramfs selector differs from the deployment",
+                ));
+            }
+        }
         Ok(Self {
             volume_partuuid: uuid(get("linos.volume")?)?,
-            entry: Entry::new(
-                get("linos.deployment")?,
-                positive(get("linos.transaction")?)?,
-            )?,
+            entry,
             blessing_masked: masked,
         })
     }

@@ -86,6 +86,13 @@ fn selectors_require_unique_plain_readonly_loop_contract() {
     let parsed = Selectors::parse(cmdline.as_bytes()).unwrap();
     assert_eq!(parsed.entry, entry);
     assert!(parsed.blessing_masked);
+    let firmware = format!(
+        "initrd=\\EFI\\Linos\\deployments\\{}\\initramfs {cmdline}",
+        entry.deployment_id()
+    );
+    assert_eq!(Selectors::parse(firmware.as_bytes()).unwrap(), parsed);
+    assert!(Selectors::parse(firmware.replace("\\initramfs", "\\other").as_bytes()).is_err());
+    assert!(Selectors::parse(format!("{firmware} initrd=/another").as_bytes()).is_err());
     for bad in [
         format!("{cmdline} rw"),
         format!("{cmdline} ro"),
