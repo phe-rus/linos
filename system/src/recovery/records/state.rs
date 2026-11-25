@@ -44,6 +44,30 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    pub fn selected(
+        generation: u64,
+        deployment_id: &str,
+        parent: Option<u64>,
+        schema: u32,
+        receipt: &str,
+    ) -> io::Result<Self> {
+        let parent = parent.map_or_else(|| "none".into(), |value| value.to_string());
+        Self::parse(format!("kind=linos-configuration\nformat=1\ngeneration={generation}\ndeployment_id={deployment_id}\nparent_generation={parent}\nschema={schema}\nmerge_receipt_sha256={receipt}\nphase=selected\n").as_bytes())
+    }
+    pub fn encode(&self) -> String {
+        let parent = self
+            .parent_generation
+            .map_or_else(|| "none".into(), |value| value.to_string());
+        let phase = match self.phase {
+            ConfigurationPhase::Prepared => "prepared",
+            ConfigurationPhase::Selected => "selected",
+            ConfigurationPhase::Retired => "retired",
+        };
+        format!(
+            "kind=linos-configuration\nformat=1\ngeneration={}\ndeployment_id={}\nparent_generation={parent}\nschema={}\nmerge_receipt_sha256={}\nphase={phase}\n",
+            self.generation, self.deployment_id, self.schema, self.merge_receipt_sha256
+        )
+    }
     pub fn parse(bytes: &[u8]) -> io::Result<Self> {
         let f = ordered(
             bytes,

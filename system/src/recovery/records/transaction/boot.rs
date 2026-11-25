@@ -239,7 +239,9 @@ fn efi_text(bytes: &[u8]) -> io::Result<String> {
         return Err(invalid("Malformed loader EFI variable"));
     }
     let mut words: Vec<_> = bytes[4..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| u16::from_le_bytes([b[0], b[1]]))
         .collect();
     if words.pop() != Some(0) || words.contains(&0) {

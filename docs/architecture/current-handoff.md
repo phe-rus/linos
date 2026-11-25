@@ -71,6 +71,16 @@ tests, formatting, shell syntax and Actionlint. No VM or new OS build ran locall
 CI deployment construction is the next execution step, not VM readiness or a
 completed USB/disposable target installer. Keep working toward that owner request.
 
+Development source checkpoint `163a0e4` was committed and pushed to `layout2-vm`.
+Its first CI run [45620611338](https://github.com/phe-rus/linos/actions/runs/45620611338)
+failed before image construction: runner Clippy 1.100 requires `as_chunks` for two
+constant UTF16 chunk iterators that local Clippy 1.96 accepted. Both were corrected
+without changing the bounded decoding rules. Prepared configuration tree/receipt
+publication now has a real filesystem test proving source preservation, durable
+publication without premature journal selection, idempotent retry and stale writer
+refusal. It passed locally. Candidate/fallback top-level boot coordination still
+needs to call this new publication API; no local VM qualification is implied.
+
 Current additions: strict signed account/service list parsers and authenticated
 metadata reads; native passwd/shadow/group/gshadow cross checks; collision and
 reserved identity planning; offline native groupadd/useradd creation with locked

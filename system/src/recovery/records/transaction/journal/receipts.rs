@@ -62,6 +62,14 @@ fn read(directory: &File, name: &str) -> io::Result<Vec<u8>> {
 }
 
 impl Journal {
+    pub(crate) fn persist_receipt(
+        &self,
+        expected: &Transaction,
+        bytes: &[u8],
+    ) -> io::Result<String> {
+        self.require_current(expected)?;
+        self.store_receipt(expected.transaction(), bytes)
+    }
     /// The new configuration tree and merge receipt are already synced and
     /// compatible. Failure leaves the authoritative source selection untouched.
     pub fn record_fallback_intent(
