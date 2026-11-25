@@ -137,6 +137,12 @@ this execution policy. Stage only documentation for review. Do not start impleme
 
 ### Stage 1: candidate provenance and execution routing
 
+25 November execution review: the development artifact/execution gate passed at
+`717b450`, native run `45553431687`, with downstream media boot and verified local
+AMD64 download/smoke evidence. The overall run failed unchanged OS vulnerability
+gates on both architectures. See [the candidate execution record](../architecture/candidate-artifacts.md)
+for exact identities, tests and boundaries. This is not release qualification.
+
 Define and then implement artifact handoff across kernel, OS, Recovery, tests and local download.
 Replace the implicit hardcoded reuse decision with an explicit verified candidate/kernel identity.
 Determine which artifacts are retained for development and which are promoted as releases.

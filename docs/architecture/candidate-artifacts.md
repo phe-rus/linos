@@ -2,7 +2,10 @@
 
 Stage 1 implementation record, 25 November 2026. The governing direction is the
 [platform execution plan](../plans/2026-11-25-platform-contracts-and-execution.md).
-Local checks pass. The changed workflows have not run in GitHub Actions yet.
+The Stage 1 development execution gate passed. Native qualification at commit
+`717b450` completed in [run 45553431687](https://github.com/phe-rus/linos/actions/runs/45553431687).
+The overall run failed the unchanged OS security gate; artifact and functional
+execution evidence below does not qualify a release.
 
 ## Kernel selection
 
@@ -126,8 +129,49 @@ At base source `c1d0c0607a3f63935928379f18ffca90771c6f82`, local checks verified
   Actionlint 1.7.12 passed for all workflows, with its ShellCheck integration
   disabled because ShellCheck is unavailable locally.
 
-Stage 1 remains in progress until CI runs the changed routing at its committed
-source, demonstrates the downstream media handoff, and produces a native candidate
-for a verified local download and focused VM boot. No OS build, VM boot, workflow
-dispatch, commit, push or publication occurred in this implementation turn.
-Security policy and physical qualification remain open. Storage is Stage 2.
+## CI and local execution review
+
+Source `717b45066d47c7509e1054f2b2d232e5aff5ceac` was committed, pushed and manually
+qualified in run `45553431687`. No kernel compilation or publication job ran.
+Both native architecture jobs verified the selected kernel run and package inputs,
+built Server once and captured clean source candidates before tests.
+
+| Gate | Result |
+| --- | --- |
+| Kernel candidate selection and package reuse | Passed both architectures, kernel run `44213747067` |
+| AMD64 functional qualification | Smoke, two boot identity persistence, interrupted/resumed enrollment, firmware boot, six update/fallback boots, Data sentinel preservation and independent Recovery passed |
+| ARM64 functional qualification | Smoke and two boot identity persistence passed; AMD64 only tests are not ARM64 evidence |
+| Downstream AMD64 handoff | Original archive restored on a new runner, offline payload and UEFI media built without rebuilding Server, OVMF reached Server setup |
+| Local AMD64 artifact consumption | API digest, archive and all internal hashes passed; one vCPU/1024 MiB/no external network smoke reached sign-in and first-boot identity |
+| OS vulnerability enforcement | Failed both architectures, overall workflow failed |
+| Repository security run `45553413542` | Passed, separate from OS vulnerability enforcement |
+
+The retained development candidate is build `20261124.1`, edition Server. The
+AMD64 artifact ID is `14994900723`, ZIP digest
+`e3985e5aff59fb53801f23838d888e5497920e36fabd3ea136389e77ef27417a`.
+Its `candidate.tar.gz` digest is
+`63b6ec2d2a96c7a496344beea2a17fcaafd1127df65d5d8930a980308900d1d3`.
+Its candidate manifest digest is
+`c53cab72163c244be9b9f15c06bf737a3d66c1f16c82ef009828cd8a667140d7`,
+matching the parent digest recorded in the downstream payload manifest.
+The ARM64 artifact ID is `14993584717`, ZIP digest
+`0a90c5c0a85153d964499e5d26a796343c42b428878405b885445fc2abd6eafa`.
+Both manifests report `source_dirty=false` and the exact kernel source recorded above.
+
+Fresh package scans reported 85 AMD64 rows (82 HIGH, three CRITICAL) and 83 ARM64
+rows (80 HIGH, three CRITICAL), covering the same 26 advisory IDs as the earlier
+report, with no fixed package versions. Trivy was `0.76.2`, advisory database schema
+version 2, updated `2026-11-25T01:10:40.560736298Z`. Reports are retained under
+`target/stage1-ci/security-amd64/` and `security-arm64/` and in the run artifacts.
+The AMD64 report digest is
+`6f823c0387420baf8a0b52c86ae85c76e51e67625dff9a38b52ad1f26fd32e25`;
+ARM64 is `1adec0948bf79d3f69e82adf0a4426db5ebf82490402379bff33c6d24778846c`.
+
+Local logs and downloaded artifacts are in `target/stage1-ci/`; the restored AMD64
+candidate is in `images/server/builds/amd64/20261124.1/`. The smoke launcher used
+QEMU snapshot mode and the original candidate hashes were checked again afterward.
+This establishes the Stage 1 artifact/execution mechanism, not final interactive
+local enrollment or immutable release acceptance. Full compatibility CI was not
+rerun in parallel, and the older installer Recovery embedding path was not newly
+qualified by the native media handoff. Security policy and physical qualification
+remain open. Stage 2 must specify storage/recovery before layout implementation.

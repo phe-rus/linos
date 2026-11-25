@@ -20,11 +20,11 @@ The owner currently has no physical test machine. Continue VM development while 
 physical qualification boundary. Start next with artifact provenance/reuse and execution routing,
 then the storage/recovery contract, following the staged plan. Server remains the first edition.
 
-## Stage 1 implementation checkpoint
+## Stage 1 execution gate passed, security gate remains open
 
-Stage 1 is in progress. See [candidate artifacts and execution](candidate-artifacts.md)
-for the implemented identity, archive, download and retention contract, exact local
-evidence, and remaining CI gate. Kernel selection now uses `kernel/candidate.conf`
+Stage 1 artifact provenance and execution routing passed its development review.
+See [candidate artifacts and execution](candidate-artifacts.md) for the implemented
+contract, exact candidate identities and evidence. Kernel selection uses `kernel/candidate.conf`
 or an explicit manual run/source pair, with successful boot and artifact digest
 verification. Server candidates are captured before tests. Installer media consumes
 the captured OS archive instead of rebuilding Server. Compiler and VM caps are explicit.
@@ -32,10 +32,28 @@ the captured OS archive instead of rebuilding Server. Compiler and VM caps are e
 Local archive/API rejection tests, shell syntax, Actionlint, six kernel tooling tests
 and 42 library/Recovery tests pass. A real AMD64 kernel download passed artifact and
 package checksums and the existing provenance verifier against this checkout.
-The changed workflows still need a committed source and CI execution, followed by
-native candidate download/VM evidence. No full OS or kernel build, VM boot, workflow
-dispatch, commit, push or release was performed. The earlier planning documents
-remain staged; Stage 1 changes are unstaged. Storage and security policy are unchanged.
+Implementation and planning documents are committed and pushed at
+`717b45066d47c7509e1054f2b2d232e5aff5ceac`. Native run
+[45553431687](https://github.com/phe-rus/linos/actions/runs/45553431687) completed:
+both architectures passed functional checks and failed only final OS vulnerability
+enforcement. AMD64 passed enrollment, firmware boot, six update/fallback boots and
+independent Recovery. The separate downstream development job restored the original
+AMD64 archive, built its offline payload and UEFI media without rebuilding Server,
+and booted it to setup. The overall run remains failed. Kernel compilation and
+publication were skipped. Repository security run
+[45553413542](https://github.com/phe-rus/linos/actions/runs/45553413542) passed.
+
+The AMD64 archive was downloaded using repository/run/source/API digest verification,
+restored with all internal hashes checked, and smoke booted locally with one vCPU,
+1024 MiB and no external network. This passed sign-in/first-boot identity checks.
+Artifacts and logs are in `target/stage1-ci/`; restored bytes are under
+`images/server/builds/amd64/20261124.1/`. This is development execution evidence,
+not final security, interactive local enrollment or physical qualification.
+
+Fresh scans retain the same 26 advisory IDs: AMD64 has 85 package matches (82 HIGH,
+three CRITICAL), ARM64 83 (80 HIGH, three CRITICAL). No fixed package versions are
+reported. The existing security maintenance decision remains unresolved; no gate
+was relaxed. Stage 2 storage/recovery design is next, before any layout changes.
 
 ## Owner direction and sequence
 
