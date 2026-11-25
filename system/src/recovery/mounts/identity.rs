@@ -360,5 +360,39 @@ pub(super) fn inspect(layout: &Layout) -> io::Result<Identity> {
     Ok(identity)
 }
 
+pub(super) fn open_partition(partuuid: &str) -> io::Result<File> {
+    uuid(partuuid)?;
+    let before = names()?;
+    let mut selected = None;
+    for name in &before {
+        let sys = fs::canonicalize(PathBuf::from("/sys/class/block").join(name))?;
+        if !sys.join("partition").is_file() {
+            continue;
+        }
+        let number = device(&sys)?;
+        let file = node(name, number)?;
+        let tags = probe(&file)?;
+        if tags
+            .get("PART_ENTRY_UUID")
+            .is_some_and(|id| id.eq_ignore_ascii_case(partuuid))
+        {
+            if selected.is_some()
+                || tags.get("PART_ENTRY_SCHEME").map(String::as_str) != Some("gpt")
+            {
+                return Err(invalid(
+                    "Partition UUID is duplicated or not a GPT partition",
+                ));
+            }
+            selected = Some((file, tags));
+        }
+    }
+    let (file, tags) =
+        selected.ok_or_else(|| invalid("Partition UUID was not observed in native inventory"))?;
+    if names()? != before || probe(&file)? != tags {
+        return Err(invalid("Partition identity changed during bootstrap"));
+    }
+    Ok(file)
+}
+
 #[cfg(test)]
 mod tests;

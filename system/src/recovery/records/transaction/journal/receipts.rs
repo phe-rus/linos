@@ -6,7 +6,7 @@ use crate::recovery::records::{
     hash,
     transaction::{
         BootDecision, boot,
-        receipts::{HealthIntent, Publication},
+        receipts::{FallbackReceipt, HealthIntent, Publication},
     },
 };
 
@@ -62,6 +62,92 @@ fn read(directory: &File, name: &str) -> io::Result<Vec<u8>> {
 }
 
 impl Journal {
+    /// The new configuration tree and merge receipt are already synced and
+    /// compatible. Failure leaves the authoritative source selection untouched.
+    pub fn record_fallback_intent(
+        &self,
+        expected: &Transaction,
+        layout: &Layout,
+        failed: &OfficialManifest,
+        target: &OfficialManifest,
+        configuration: &crate::recovery::records::state::Configuration,
+        receipt: &FallbackReceipt,
+    ) -> io::Result<Transaction> {
+        self.require_current(expected)?;
+        let publication = self.publication(expected)?;
+        publication.verify(expected, layout, failed)?;
+        if expected.health_receipt_sha256() == Some(receipt.digest()?.as_str()) {
+            receipt.verify_committed(expected, &publication, configuration, target)?;
+            return Ok(expected.clone());
+        }
+        receipt.verify_before_intent(expected, &publication, configuration, target)?;
+        let digest = self.store_receipt(expected.transaction(), receipt.encode().as_bytes())?;
+        self.apply(expected, Event::FallbackIntent { receipt: &digest })
+    }
+
+    pub fn resume_fallback(
+        &self,
+        expected: &Transaction,
+        layout: &Layout,
+        failed: &OfficialManifest,
+        target: &OfficialManifest,
+        configuration: &crate::recovery::records::state::Configuration,
+    ) -> io::Result<Transaction> {
+        self.require_current(expected)?;
+        let publication = self.publication(expected)?;
+        let digest = expected
+            .health_receipt_sha256()
+            .ok_or_else(|| invalid("Missing durable fallback intent"))?;
+        let receipt = FallbackReceipt::parse(&self.load_receipt(expected.transaction(), digest)?)?;
+        if expected.phase() == super::super::Phase::Healthy {
+            boot::retire_failed(
+                layout,
+                expected,
+                failed,
+                target,
+                &publication,
+                &receipt,
+                configuration,
+            )?;
+            return Ok(expected.clone());
+        }
+        boot::inspect_fallback(
+            layout,
+            expected,
+            failed,
+            target,
+            &publication,
+            &receipt,
+            configuration,
+        )?;
+        boot::sync_entries()?;
+        boot::inspect_fallback(
+            layout,
+            expected,
+            failed,
+            target,
+            &publication,
+            &receipt,
+            configuration,
+        )?;
+        let completed = self.apply(
+            expected,
+            Event::Fallback {
+                configuration,
+                receipt: digest,
+            },
+        )?;
+        boot::retire_failed(
+            layout,
+            &completed,
+            failed,
+            target,
+            &publication,
+            &receipt,
+            configuration,
+        )?;
+        Ok(completed)
+    }
     fn receipt_directory(&self, transaction: u64, create: bool) -> io::Result<File> {
         let receipts = child(&self.directory, "receipts", create)?;
         child(&receipts, &transaction.to_string(), create)

@@ -1,6 +1,11 @@
 //! Strict versioned storage metadata. Parsing alone does not authenticate media
 //! or inspect mounts.
 pub mod deployment;
+pub mod metadata;
+pub mod offline;
+pub mod recovery;
+#[cfg(test)]
+mod signing_fixture;
 pub mod state;
 pub mod transaction;
 

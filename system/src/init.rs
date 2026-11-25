@@ -146,6 +146,18 @@ fn initialize(root: &Path) -> io::Result<Device> {
     initialize_for_root(root, false)
 }
 
+fn layout2(root: &Path) -> io::Result<bool> {
+    match fs::read(root.join("usr/lib/linos/storage-layout")) {
+        Ok(bytes) if bytes == b"layout=2\n" => Ok(true),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Unknown Linos storage capability marker",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device> {
     if fs::symlink_metadata(root)?.file_type().is_symlink() {
         return Err(io::Error::new(
@@ -176,7 +188,7 @@ fn initialize_for_root(root: &Path, allow_live_root: bool) -> io::Result<Device>
     let hostname = read_existing(etc.as_ref(), "hostname")?;
     let id = read_existing(state_dir.as_ref(), "device-id")?;
     let state = read_existing(state_dir.as_ref(), "provisioning-state")?;
-    let managed = root.join("usr/lib/linos/update-layout").try_exists()?;
+    let managed = root.join("usr/lib/linos/update-layout").try_exists()? || layout2(&root)?;
     let saved_hostname = if managed {
         read_existing(state_dir.as_ref(), "hostname")?
     } else {
@@ -284,8 +296,12 @@ fn initialize_live() -> io::Result<Device> {
             "Live initialization is restricted to an installed Linos system",
         ));
     }
+    let is_layout2 = layout2(Path::new("/"))?;
+    if is_layout2 {
+        linos::recovery::boot::verify_running()?;
+    }
     let device = initialize_for_root(Path::new("/"), true)?;
-    if Path::new("/usr/lib/linos/update-layout").try_exists()? {
+    if Path::new("/usr/lib/linos/update-layout").try_exists()? || is_layout2 {
         rustix::system::sethostname(device.hostname.as_bytes())?;
     }
     Ok(device)

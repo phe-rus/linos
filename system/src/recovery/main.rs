@@ -154,6 +154,36 @@ fn run(args: &[String]) -> io::Result<()> {
             update::inspect_journal(Path::new("/var/lib/linos/update-state"))
         }
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
+        [command, directory] if command == "accounts-v1" => {
+            use linos::recovery::{
+                records::{
+                    deployment::source,
+                    metadata::accounts::{Contract, NativeAccounts},
+                },
+                update::journal::open_directory,
+            };
+            let directory = open_directory(Path::new(directory))?;
+            let mut files = Vec::new();
+            for name in ["passwd", "shadow", "group", "gshadow"] {
+                files.push(source::read_at(&directory, name, 16 * 1024 * 1024)?);
+            }
+            let native = NativeAccounts::parse(&files[0], &files[1], &files[2], &files[3])?;
+            let baseline = Contract::baseline(&native)?;
+            let encoded = baseline.encode();
+            Contract::parse(encoded.as_bytes())?;
+            print!("{encoded}");
+            Ok(())
+        }
+        [command, directory, key] if command == "check-deployment-v3" => {
+            use linos::recovery::records::deployment::source::{Loaded, trusted_key};
+            let loaded = Loaded::open(Path::new(directory), &trusted_key(Path::new(key))?)?;
+            println!("Authenticated deployment: {}", loaded.manifest().id());
+            println!("Artifacts, immutable ext4 and account/service metadata passed inspection.");
+            println!(
+                "Boot, current configuration, service data and installation have not been qualified."
+            );
+            Ok(())
+        }
         [command, directory] if command == "check-transaction-v3" => {
             let record =
                 linos::recovery::records::transaction::journal::inspect(Path::new(directory))?

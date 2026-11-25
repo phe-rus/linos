@@ -1,6 +1,7 @@
 //! Format 3 parsing and official manifest authentication, without activation.
 //! Artifact bytes, filesystem integrity and device ancestry are checked separately.
 pub mod artifacts;
+pub mod source;
 
 use super::{MAX_RECORD_BYTES, hash, invalid, ordered};
 use rustix::fs::{MemfdFlags, SealFlags, fcntl_add_seals, memfd_create};
@@ -335,7 +336,7 @@ pub(crate) fn sha256_file(input: &File) -> io::Result<String> {
     Ok(output.stdout.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn verify_signature(message: &[u8], signature: &[u8], key: &[u8]) -> io::Result<()> {
+pub(crate) fn verify_signature(message: &[u8], signature: &[u8], key: &[u8]) -> io::Result<()> {
     let input = snapshot(message)?;
     let signature = snapshot(signature)?;
     let key = snapshot(key)?;

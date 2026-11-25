@@ -32,6 +32,79 @@ qualification stay separate. No push was requested for this commit checkpoint.
 
 ## Planning checkpoint for the next conversation
 
+### Active implementation continuation after commit 7730bc1
+
+The owner explicitly requested completing the four prerequisites for local layout
+2 VM qualification, not merely another planning/status pass. Work after the
+commit is ongoing and uncommitted. Keep building toward that journey, with
+bounded focused checks while building and broader checks at integration.
+
+Current continuation has reached a compilable native early boot helper and CI
+generic deployment builder. `linos-layout2` implements fixed-path local-top
+partition/layout/signature preflight, exact read only loop attachment,
+local-bottom persistent binds and real-init receipt/mount verification. The
+package installs conditional initramfs hooks and a sysinit gate; a legacy image
+without the explicit layout marker/trust key keeps its existing path. A candidate
+needing a new configuration selection or fallback reconciliation still refuses
+in the top-level helper; the generation/publication coordinator is unfinished.
+Do not call those integration paths implemented just because the libraries exist.
+
+Recovery and offline signing-role authenticators and bounded sequential chunk
+reconstruction now compile; real ephemeral Ed25519 tests reject substituted
+domains/keys and malformed signed metadata. New native service registry loading
+checks retained signed source metadata, exact descriptor hashes and observed path
+ownership. Prepared generation composition joins merge/account planning and native
+offline account creation, but durable tree/record publication remains to be wired.
+
+`build/layout2-deployment.sh` runs OS construction only in CI. It restores the
+verified native base at source `717b45066d47c7509e1054f2b2d232e5aff5ceac`, installs
+the current userspace package, provisions only an independent development public
+key, regenerates initramfs, removes factory machine/SSH/TLS secrets, seals/signs a
+format 3 image and authenticates its metadata and ext4 bytes. No device private key
+or installed machine state is put into this generic artifact. New workflow
+`layout2.yml` supports development branch `layout2-vm` with marker `layout2:vm`;
+it preserves the strict OS vulnerability gate after retaining development bytes.
+The source archive is still available, API digest
+`sha256:e3985e5aff59fb53801f23838d888e5497920e36fabd3ea136389e77ef27417a`.
+Local checks passed 142 library/init/Recovery/update tests, strict Clippy including
+tests, formatting, shell syntax and Actionlint. No VM or new OS build ran locally.
+CI deployment construction is the next execution step, not VM readiness or a
+completed USB/disposable target installer. Keep working toward that owner request.
+
+Current additions: strict signed account/service list parsers and authenticated
+metadata reads; native passwd/shadow/group/gshadow cross checks; collision and
+reserved identity planning; offline native groupadd/useradd creation with locked
+new service credentials; three input configuration merge and a descriptor based
+private tree writer preserving current credentials, keys, metadata and deletions.
+Seven focused metadata/merge tests passed. Unsupported ACLs/xattrs/special files
+refuse rather than disappear during copying. Native account tool calls have not
+been exercised in a guest. The root directory mode is included in tree snapshots,
+so a selected /etc does not inherit the private workspace's mode 0700.
+
+Fallback receipt, durable fallback intent, native verification, commit and
+exhausted-entry retirement/retry APIs now compile. Their new integration cases
+still need focused tests. Approval also needs receipt backed retirement of the
+older previous entry after a subsequent successful trial; otherwise the strict
+boot inspector would encounter an unreferenced managed entry. Resolve this before
+claiming repeated update/boot readiness. These helpers remain disconnected from
+live boot/installation services.
+
+Actual retained candidate evidence supersedes the scout's config-only concern:
+`images/server/builds/amd64/20261124.1/rootfs.tar` contains
+`boot/config-6.18.63-linos` with `CONFIG_BLK_DEV_LOOP=y`, ext4, FAT/VFAT and EFI stub
+built in. Loop is inherited from defconfig, not explicitly listed in the overlay.
+Do not rebuild Linux solely for missing overlay text. Existing candidate/source
+and package provenance still must be verified when reusing artifacts in CI.
+
+Next implementation dependencies: prepared configuration generation publication;
+native boot/health coordination and initial installation receipts; Rust helper
+with initramfs local-top/local-bottom hooks; generic layout marker and real-init
+mount verification; Recovery/transport format 3 signing, verification/chunking;
+CI assembly plus disposable target installer and local sequential QEMU journey.
+Debian's retained `/usr/share/initramfs-tools/init` already moves `/run` and its
+child mounts into the real root after local-bottom, which can preserve the volume.
+Use native operations/Rust policy, shell orchestration only, and no Python.
+
 Read [the platform review and staged execution plan](../plans/2026-11-25-platform-contracts-and-execution.md)
 before implementation. The owner requested review, planning and staging, then a conversation clear.
 The agreed direction is USB `EFI/` plus `recovery.pherus.org/`, and installed `EFI`, `Recovery`,

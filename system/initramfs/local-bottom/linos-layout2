@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+PREREQ=""
+case "${1:-}" in prereqs) echo "$PREREQ"; exit 0;; esac
+case " $(cat /proc/cmdline) " in *" linos.layout=2 "*) ;; *) exit 0;; esac
+if [ "${rootmnt:-/root}" != /root ] || ! /usr/lib/linos/linos-layout2 mount-state; then
+    echo 'Linos requires Recovery: persistent mount setup failed.' >&2
+    reboot -f
+    exit 1
+fi

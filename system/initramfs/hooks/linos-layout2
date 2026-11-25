@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+PREREQ=""
+case "${1:-}" in prereqs) echo "$PREREQ"; exit 0;; esac
+# A legacy image has no provisioned layout 2 trust key and keeps its old initrd.
+[ -r /usr/lib/linos/trust/deployment.pem ] || exit 0
+. /usr/share/initramfs-tools/hook-functions
+for program in /usr/lib/linos/linos-layout2 /usr/bin/openssl /usr/sbin/blkid /usr/sbin/sgdisk /usr/sbin/dumpe2fs /usr/sbin/e2fsck; do
+    copy_exec "$program"
+done
+copy_file config /usr/lib/linos/trust/deployment.pem
+manual_add_modules loop
+manual_add_modules ext4
+manual_add_modules vfat

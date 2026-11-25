@@ -35,6 +35,10 @@ name = "recovery"
 path = "system/src/recovery/main.rs"
 
 [[bin]]
+name = "linos-layout2"
+path = "system/src/layout2.rs"
+
+[[bin]]
 name = "linos-update-image"
 path = "system/src/update_image.rs"
 

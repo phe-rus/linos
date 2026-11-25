@@ -1,0 +1,83 @@
+name: Linos layout 2 development candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, layout2-vm]
+    paths: ['system/**', 'build/layout2-deployment.sh', '.github/workflows/layout2.yml', 'Cargo.toml']
+permissions:
+  contents: read
+  actions: read
+env:
+  CARGO_BUILD_JOBS: 1
+  RUST_TEST_THREADS: 1
+  TMPDIR: /var/tmp
+jobs:
+  deployment:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'layout2:vm') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install bounded image and verification tools
+        run: sudo apt-get update && sudo apt-get install -y gdisk e2fsprogs util-linux openssl initramfs-tools dpkg-dev
+      - name: Check userspace before image construction
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --lib --bin init --bin recovery --bin linos-layout2 --tests -- -D warnings
+          cargo test --locked --lib --bin init --bin recovery --test update_image
+      - name: Fetch the retained native development base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash build/candidate.sh download-development 45553431687 amd64 717b45066d47c7509e1054f2b2d232e5aff5ceac target/base-download
+          bash build/candidate.sh restore target/base-download amd64 717b45066d47c7509e1054f2b2d232e5aff5ceac target/base-image
+      - name: Build native userspace and ephemeral development signing key
+        run: |
+          bash build/package.sh
+          cargo build --release --locked --bin recovery
+          mkdir -m 700 "$RUNNER_TEMP/layout2-keys"
+          openssl genpkey -algorithm ED25519 -out "$RUNNER_TEMP/layout2-keys/private.pem"
+          chmod 600 "$RUNNER_TEMP/layout2-keys/private.pem"
+      - name: Assemble and authenticate format 3 without rebuilding Linux
+        run: |
+          export LINOS_TARGET_DIR="$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
+          sudo --preserve-env=GITHUB_ACTIONS,GITHUB_SHA,RUNNER_TEMP,LINOS_TARGET_DIR,PATH \
+            bash build/layout2-deployment.sh target/base-image 717b45066d47c7509e1054f2b2d232e5aff5ceac target/layout2-candidate "$RUNNER_TEMP/layout2-keys/private.pem"
+      - name: Archive generic deployment only, never private keys or device state
+        run: |
+          sudo tar --sparse -czf target/layout2-candidate.tar.gz -C target/layout2-candidate .
+          (cd target && sha256sum layout2-candidate.tar.gz > layout2-candidate.tar.gz.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: layout2-deployment-amd64
+          path: |
+            target/layout2-candidate.tar.gz
+            target/layout2-candidate.tar.gz.sha256
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+      - name: Install native image vulnerability scanner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+        with:
+          version: v0.76.2
+      - name: Enforce OS package vulnerability gate
+        id: os_scan
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/layout2-scan" target/layout2-security
+          tar --extract --file=target/layout2-scan-rootfs.tar --directory="$RUNNER_TEMP/layout2-scan" --no-same-owner \
+            --exclude='./dev/*' --exclude='./proc/*' --exclude='./sys/*' --exclude='./run/*'
+          trivy rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+            --format json --output target/layout2-security/os-vulnerabilities.json "$RUNNER_TEMP/layout2-scan"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: layout2-os-security
+          path: target/layout2-security/
+          if-no-files-found: ignore
+      - name: Retain failed enforcement result
+        if: steps.os_scan.outcome != 'success'
+        run: exit 1
+      - name: Remove ephemeral private key
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/layout2-keys"

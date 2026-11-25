@@ -61,7 +61,7 @@ impl Selectors {
                 masked = true;
             } else {
                 let (key, value) = word.split_once('=').unwrap_or((word, ""));
-                if !(key.starts_with("linos.") || matches!(key, "root" | "rootflags")) {
+                if !(key.starts_with("linos.") || matches!(key, "root" | "rootflags" | "panic")) {
                     continue;
                 }
                 if !matches!(
@@ -72,6 +72,7 @@ impl Selectors {
                         | "linos.transaction"
                         | "root"
                         | "rootflags"
+                        | "panic"
                 ) || value.is_empty()
                     || fields.insert(key, value).is_some()
                 {
@@ -85,6 +86,9 @@ impl Selectors {
                 .copied()
                 .ok_or_else(|| invalid("Missing managed selector"))
         };
+        if fields.get("panic").is_some_and(|value| *value != "10") {
+            return Err(invalid("Managed kernel panic delay must be ten seconds"));
+        }
         if !readonly
             || get("root")? != "/dev/linos-system"
             || get("rootflags")? != "noload"
@@ -160,7 +164,7 @@ pub(super) fn parse_filename(name: &str) -> io::Result<(Entry, Counter)> {
 pub fn render(layout: &Layout, entry: &Entry, trial: bool) -> String {
     let asset = format!("/EFI/Linos/deployments/{}/", entry.deployment_id());
     format!(
-        "title Linos Server\nsort-key linos\nversion {}\nlinux {asset}kernel\ninitrd {asset}initramfs\noptions root=/dev/linos-system ro rootflags=noload linos.layout=2 linos.volume={} linos.deployment={} linos.transaction={}{}\n",
+        "title Linos Server\nsort-key linos\nversion {}\nlinux {asset}kernel\ninitrd {asset}initramfs\noptions root=/dev/linos-system ro rootflags=noload panic=10 linos.layout=2 linos.volume={} linos.deployment={} linos.transaction={}{}\n",
         entry.transaction(),
         layout.linos_partuuid(),
         entry.deployment_id(),
@@ -552,7 +556,7 @@ pub fn inspect_approval(
     Ok(observation)
 }
 
-fn verify_efi_artifacts(
+pub(crate) fn verify_efi_artifacts(
     manifest: &crate::recovery::records::deployment::OfficialManifest,
 ) -> io::Result<()> {
     let directory = open_directory(std::path::Path::new(&format!(
@@ -582,6 +586,83 @@ fn verify_efi_artifacts(
             ));
         }
     }
+    Ok(())
+}
+
+pub fn inspect_fallback(
+    layout: &Layout,
+    journal: &Transaction,
+    failed: &crate::recovery::records::deployment::OfficialManifest,
+    target: &crate::recovery::records::deployment::OfficialManifest,
+    publication: &super::receipts::Publication,
+    receipt: &super::receipts::FallbackReceipt,
+    configuration: &crate::recovery::records::state::Configuration,
+) -> io::Result<Observation> {
+    publication.verify(journal, layout, failed)?;
+    receipt.verify_committed(journal, publication, configuration, target)?;
+    verify_efi_artifacts(target)?;
+    let observed = inspect(layout, journal)?;
+    if observed.decision() != BootDecision::MergeFallback
+        || &observed.selectors().entry != receipt.healthy()
+        || observed.entry_sha256() != receipt.entry_sha256()
+    {
+        return Err(invalid(
+            "Fallback boot differs from durable reconciliation intent",
+        ));
+    }
+    verify_efi_artifacts(target)?;
+    Ok(observed)
+}
+
+pub(super) fn sync_entries() -> io::Result<()> {
+    open_directory(std::path::Path::new(ENTRIES))?.sync_all()
+}
+
+/// Retire only the failed exhausted entry named by a completed fallback receipt.
+/// A retry after the journal commit accepts its absence, never recreates trials.
+pub(super) fn retire_failed(
+    layout: &Layout,
+    journal: &Transaction,
+    failed: &crate::recovery::records::deployment::OfficialManifest,
+    target: &crate::recovery::records::deployment::OfficialManifest,
+    publication: &super::receipts::Publication,
+    receipt: &super::receipts::FallbackReceipt,
+    configuration: &crate::recovery::records::state::Configuration,
+) -> io::Result<()> {
+    receipt.verify_completed(journal, publication, configuration, target)?;
+    publication.verify_software(layout, failed)?;
+    verify_efi_artifacts(target)?;
+    let directory = open_directory(std::path::Path::new(ENTRIES))?;
+    let mut entries = inventory(&directory)?;
+    let name = filename(receipt.failed(), Counter::Last);
+    let retired = entries.remove(&name);
+    if retired.as_ref().is_some_and(|bytes| {
+        crate::recovery::records::deployment::sha256(bytes)
+            .ok()
+            .as_deref()
+            != Some(publication.entry_sha256())
+    }) {
+        return Err(invalid("Exhausted entry changed before retirement"));
+    }
+    let cmdline = native_file("/proc/cmdline", MAX_TEXT)?;
+    let before = firmware()?;
+    let observation = reconcile(layout, journal, &cmdline, &before, &entries)?;
+    if observation.decision() != BootDecision::Healthy
+        || observation.entry_sha256() != receipt.entry_sha256()
+    {
+        return Err(invalid(
+            "Completed fallback no longer boots its approved healthy entry",
+        ));
+    }
+    if retired.is_some() {
+        let current = inventory(&directory)?;
+        if current.get(&name) != retired.as_ref() || firmware()? != before {
+            return Err(invalid("EFI changed during exhausted entry retirement"));
+        }
+        fs::unlinkat(&directory, name.as_str(), fs::AtFlags::empty())?;
+    }
+    directory.sync_all()?;
+    inspect(layout, journal)?;
     Ok(())
 }
 

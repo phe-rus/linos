@@ -4,7 +4,7 @@ use super::{ARTIFACT_NAMES, Artifact, OfficialManifest, descriptor_path, invalid
 use rustix::fs::{Mode, OFlags, openat};
 use std::{
     fs::File,
-    io,
+    io::{self, Read},
     os::unix::fs::MetadataExt,
     process::{Command, Stdio},
 };
@@ -57,6 +57,27 @@ impl OfficialManifest {
 }
 
 impl VerifiedArtifacts {
+    /// Read only fixed signed metadata names through the retained descriptor.
+    /// Rehash the returned bytes, so a stale earlier verification cannot silently
+    /// authorize modified account/service data.
+    pub fn metadata(&self, name: &str) -> io::Result<Vec<u8>> {
+        let index = ARTIFACT_NAMES
+            .iter()
+            .position(|candidate| *candidate == name)
+            .filter(|index| *index >= 3)
+            .ok_or_else(|| invalid("Not a fixed deployment metadata artifact"))?;
+        let expected = &self.expected[index];
+        let file = &self.files[index];
+        regular(file)?;
+        let mut bytes = Vec::new();
+        File::open(descriptor_path(file))?
+            .take(expected.bytes + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() as u64 != expected.bytes || super::sha256(&bytes)? != expected.sha256 {
+            return Err(invalid("Metadata bytes changed after authentication"));
+        }
+        Ok(bytes)
+    }
     pub fn deployment_id(&self) -> &str {
         &self.deployment_id
     }

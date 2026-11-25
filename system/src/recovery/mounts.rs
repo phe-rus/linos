@@ -17,6 +17,17 @@ const VOLUME: &str = "/run/linos/volume";
 const MAX_MOUNTINFO: usize = 1024 * 1024;
 const MAX_MOUNTS: usize = 4096;
 
+/// Bootstrap resolves an exact partition UUID through native probes. Validate
+/// the complete layout before exposing any writable configuration or user data.
+pub fn open_partition(partuuid: &str) -> io::Result<File> {
+    identity::open_partition(partuuid)
+}
+
+pub fn inspect_volume(layout: &Layout) -> io::Result<(Device, Device)> {
+    let identity = identity::inspect(layout)?;
+    Ok((identity.volume, identity.esp))
+}
+
 fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }

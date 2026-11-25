@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify Linos layout 2 before system initialization
+DefaultDependencies=no
+ConditionPathExists=/usr/lib/linos/storage-layout
+After=systemd-remount-fs.service
+Before=local-fs.target sysinit.target linos-first-boot.service
+FailureAction=reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-layout2 verify
+User=root
+Group=root
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console

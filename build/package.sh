@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -52,7 +53,7 @@ fi
 # Only build binaries installed by the Server package. Desktop graphics,
 # Recovery and hardware experiments are built by their own targets.
 cargo build --release --locked \
-    --bin init --bin enroll --bin linos-login --bin linos
+    --bin init --bin enroll --bin linos-login --bin linos --bin linos-layout2
 TARGET_DIR="$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')"
 [[ -n "$TARGET_DIR" ]] || { echo "Cargo output directory not found" >&2; exit 2; }
 
@@ -67,6 +68,13 @@ sed -i "s/^Architecture: all$/Architecture: $ARCH/" "$STAGING_DIR/package/DEBIAN
 install -m 755 "$TARGET_DIR/release/init" "$STAGING_DIR/package/usr/lib/linos/linos-init"
 install -m 755 "$TARGET_DIR/release/enroll" "$STAGING_DIR/package/usr/lib/linos/linos-enroll"
 install -m 755 "$TARGET_DIR/release/linos-login" "$STAGING_DIR/package/usr/lib/linos/linos-login"
+install -m 755 "$TARGET_DIR/release/linos-layout2" "$STAGING_DIR/package/usr/lib/linos/linos-layout2"
+mkdir -p "$STAGING_DIR/package/usr/share/initramfs-tools/hooks" \
+    "$STAGING_DIR/package/usr/share/initramfs-tools/scripts/local-top" \
+    "$STAGING_DIR/package/usr/share/initramfs-tools/scripts/local-bottom"
+install -m 755 system/initramfs/hooks/linos-layout2 "$STAGING_DIR/package/usr/share/initramfs-tools/hooks/linos-layout2"
+install -m 755 system/initramfs/local-top/linos-layout2 "$STAGING_DIR/package/usr/share/initramfs-tools/scripts/local-top/linos-layout2"
+install -m 755 system/initramfs/local-bottom/linos-layout2 "$STAGING_DIR/package/usr/share/initramfs-tools/scripts/local-bottom/linos-layout2"
 mkdir -p "$STAGING_DIR/package/usr/bin"
 install -m 755 "$TARGET_DIR/release/linos" "$STAGING_DIR/package/usr/bin/linos"
 mkdir -p "$STAGING_DIR/package/etc/profile.d"
@@ -79,6 +87,9 @@ mkdir -p "$UNIT_DIR" "$WANTS_DIR"
 install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-boot.service"
 install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
 install -m 644 system/services/linos-ready.service "$UNIT_DIR/linos-ready.service"
+install -m 644 system/services/linos-layout2-verify.service "$UNIT_DIR/linos-layout2-verify.service"
+mkdir -p "$UNIT_DIR/sysinit.target.d"
+install -m 644 system/services/linos-layout2-sysinit.conf "$UNIT_DIR/sysinit.target.d/linos-layout2.conf"
 
 # SSH remains unavailable until local enrollment creates an owner record.
 for unit in ssh.service ssh.socket; do

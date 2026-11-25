@@ -535,6 +535,26 @@ impl Transaction {
         self.next(Phase::RollbackRequired)
     }
 
+    /// A verified exhausted fallback may supersede this trial's earlier health
+    /// intent. The coordinator validates the exact source/entry/config bindings.
+    pub fn fallback_intent(&self, receipt: &str) -> io::Result<Self> {
+        if self.phase != Phase::RollbackRequired
+            || self.candidate.is_none()
+            || self.publication_receipt_sha256.is_none()
+        {
+            return Err(invalid(
+                "Fallback intent requires an exhausted published trial",
+            ));
+        }
+        let digest = hash(receipt)?;
+        if self.health_receipt_sha256.as_ref() == Some(&digest) {
+            return Ok(self.clone());
+        }
+        let mut next = self.next(self.phase)?;
+        next.health_receipt_sha256 = Some(digest);
+        Ok(next)
+    }
+
     /// Preserve healthy and its previous fallback while selecting a newly merged
     /// current configuration. No old configuration or service data is restored.
     pub fn fallback(
@@ -701,6 +721,9 @@ pub enum Event<'a> {
     HealthIntent {
         receipt: &'a str,
     },
+    FallbackIntent {
+        receipt: &'a str,
+    },
     Approve {
         observed: &'a Entry,
         receipt: &'a str,
@@ -727,6 +750,7 @@ impl Transaction {
             Event::Published { receipt } => self.published(receipt),
             Event::SelectCandidate { configuration } => self.select_candidate(configuration),
             Event::HealthIntent { receipt } => self.health_intent(receipt),
+            Event::FallbackIntent { receipt } => self.fallback_intent(receipt),
             Event::Approve { observed, receipt } => self.approve(observed, receipt),
             Event::Exhausted => self.exhausted(),
             Event::Fallback {
