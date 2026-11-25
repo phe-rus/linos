@@ -5,5 +5,7 @@ pub mod platform {
 }
 
 pub mod recovery {
+    pub mod mounts;
+    pub mod records;
     pub mod update;
 }

@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_BUILD_JOBS: 1
+  RUST_TEST_THREADS: 1
   LINOS_QEMU_MEMORY: 1024
   LINOS_QEMU_CPUS: 1
   TMPDIR: /var/tmp
@@ -47,8 +48,8 @@ jobs:
       - name: Set up stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
 
-      - name: Install native graphics runtime for linker checks
-        run: sudo apt-get update && sudo apt-get install -y libx11-6
+      - name: Install native graphics runtime and storage fixture tools
+        run: sudo apt-get update && sudo apt-get install -y libx11-6 e2fsprogs util-linux openssl gdisk
 
       - name: Rust formatting, linting and tests
         run: |

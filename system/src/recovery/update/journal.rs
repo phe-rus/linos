@@ -131,7 +131,7 @@ pub fn inspect(path: &Path) -> io::Result<Option<Snapshot>> {
     read_at(&journal.directory, name)
 }
 
-pub(super) fn open_directory(path: &Path) -> io::Result<File> {
+pub(crate) fn open_directory(path: &Path) -> io::Result<File> {
     if !path.is_absolute() {
         return Err(invalid("Journal directory must be absolute"));
     }

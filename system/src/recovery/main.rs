@@ -138,7 +138,7 @@ fn run(args: &[String]) -> io::Result<()> {
         [] => interactive(),
         [flag] if flag == "--help" || flag == "-h" => {
             println!(
-                "Usage: linos-recovery [status|disks|profile|payload|updates|plan /dev/DEVICE|plan-v2 DISK_BYTES SECTOR_BYTES|--help]"
+                "Usage: linos-recovery [status|disks|profile|payload|updates|plan /dev/DEVICE|plan-v2 DISK_BYTES SECTOR_BYTES|check-layout-v2 RECORD|check-transaction-v3 DIRECTORY|--help]"
             );
             println!("Linos Server recovery console. All commands are read-only.");
             Ok(())
@@ -154,6 +154,31 @@ fn run(args: &[String]) -> io::Result<()> {
             update::inspect_journal(Path::new("/var/lib/linos/update-state"))
         }
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
+        [command, directory] if command == "check-transaction-v3" => {
+            let record =
+                linos::recovery::records::transaction::journal::inspect(Path::new(directory))?
+                    .ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::InvalidData, "No format 3 journal")
+                    })?;
+            print!("{}", record.encode());
+            println!("Transaction syntax and field consistency are valid.");
+            println!(
+                "Receipts, deployment contents, firmware and mount ancestry have not been verified."
+            );
+            println!("Installation status: DISABLED");
+            Ok(())
+        }
+        [command, record] if command == "check-layout-v2" => {
+            let layout = linos::recovery::records::read_layout(Path::new(record))?;
+            layout.require_plain()?;
+            print!("{}", layout.encode());
+            println!(
+                "Layout 2 syntax is valid. This record is consistency metadata, not authentication."
+            );
+            println!("Disk identity, the EFI copy and mount ancestry have not been verified.");
+            println!("Installation status: DISABLED");
+            Ok(())
+        }
         [command, bytes, sector] if command == "plan-v2" => {
             let number = |value: &str| {
                 value.parse::<u64>().map_err(|_| {
