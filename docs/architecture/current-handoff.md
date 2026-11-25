@@ -52,8 +52,30 @@ directory, with no owner/setup marker or home contents. Generic preflight now
 removes only a verified empty SSH directory through `rmdir`; contents, symlinks,
 special objects, enrollment records and linked parent directories still refuse.
 Its disposable shell regression fixtures pass and are included in CI. Run
-`45685923462` at `8553fb9` predates this guard correction and is superseded by
-the next development candidate run. No layout 2 VM has booted.
+`45685923462` at `8553fb9` was cancelled after the guard correction was pushed.
+
+Current development source `494f541860b2b047acbd9c78e5f8e88ad35b2e7f` is committed
+and pushed. Run [45686432603](https://github.com/phe-rus/linos/actions/runs/45686432603)
+passed shell preflight, userspace checks, retained base restoration, native package
+compilation, signed format 3 assembly/authentication and artifact upload. It then
+completed the OS vulnerability scan and failed final enforcement. The fresh report
+contains 85 package/advisory rows (82 HIGH, three CRITICAL), the same 26 advisory IDs
+as the earlier baseline and no fixed versions. No gate was relaxed. Security report
+SHA-256 is `34275de01d912b7e526bdc617c7b7d870077cf8c5f5d637d5d285e0e663387c2`;
+verified report and run metadata are under `target/layout2-ci/45686432603/`.
+
+The retained generic deployment ID is
+`7f3aa3c8cb650812c6986a15b364ea1f0b5d289fe87a6b1462c8e60bde541bdd`.
+GitHub artifact `layout2-deployment-amd64`, ID `15056043467`, has API ZIP digest
+`sha256:3cc7b03806161d65ca5bfc128f157750cbbd55e32728ee255bf393715d1bd995`.
+Its successful construction is development evidence, not a passing release run,
+bootable installer, independent Recovery or layout 2 VM qualification.
+The local deployment ZIP transfer was stopped because of low throughput and the
+incomplete file was removed. The deployment ZIP digest above is the API pin,
+not a completed local download verification. The small security ZIP did complete
+and matched its API digest; source/workflow/repository identity was also checked.
+Next build the three partition disposable guest installer and signed Recovery/
+offline media around these verified Server bytes. No layout 2 VM has booted.
 
 Early boot now calls candidate configuration preparation while holding the volume
 journal lock, before attaching the candidate root. It authenticates the selected
