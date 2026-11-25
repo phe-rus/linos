@@ -72,7 +72,7 @@ and exact exhausted-entry retirement/retry. Native retirement tests use supplied
 entry/firmware fixtures and do not perform host EFI writes.
 
 Native health now shares the locked mount/identity/configuration gate, verifies
-current enrolled administrator credentials/authorization and login readiness,
+current enrolled administrator identity/authorization and login readiness,
 persists approval before native systemd blessing and reconciles interrupted
 blessing. Version 2 approval receipts bind the older previous entry and its exact
 bytes before it becomes unreferenced, enabling receipt backed retirement/retry
@@ -88,6 +88,8 @@ before initial Healthy. Initial unclaimed readiness requires initialized device/
 hostname identity and the actual enrollment service process attached to its
 console; update trials instead require the existing enrolled owner, usable local
 administrator, setup marker, login service and native kernel readiness handshake.
+Health does not infer authentication success from password hash text or change
+current credential policy; actual PAM/SSH authentication remains a guest gate.
 The package wires a dedicated layout 2 health unit with a bounded deadline and
 reboot on failure. Layout 2 construction masks legacy A/B health in its image.
 

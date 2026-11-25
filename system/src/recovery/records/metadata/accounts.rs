@@ -262,7 +262,6 @@ struct User {
     uid: u32,
     gid: u32,
     interactive: bool,
-    unlocked: bool,
 }
 struct NativeGroup {
     gid: u32,
@@ -326,12 +325,14 @@ fn members(value: &str) -> io::Result<BTreeSet<String>> {
 
 impl NativeAccounts {
     pub fn require_administrator(&self, username: &str) -> io::Result<()> {
-        if self.users.get(username).is_none_or(|user| {
-            user.uid < 1000 || user.uid == 65534 || !user.interactive || !user.unlocked
-        }) || self
-            .groups
-            .get("sudo")
-            .is_none_or(|group| !group.members.contains(username))
+        if self
+            .users
+            .get(username)
+            .is_none_or(|user| user.uid < 1000 || user.uid == 65534 || !user.interactive)
+            || self
+                .groups
+                .get("sudo")
+                .is_none_or(|group| !group.members.contains(username))
         {
             return Err(invalid(
                 "Enrolled owner is not a usable local administrator",
@@ -359,7 +360,6 @@ impl NativeAccounts {
                         User {
                             uid,
                             gid,
-                            unlocked: false,
                             interactive: !matches!(
                                 row[6],
                                 "/usr/sbin/nologin"
@@ -394,9 +394,6 @@ impl NativeAccounts {
             has_unlocked_password |= !row[1].starts_with(['!', '*']);
             if !users.contains_key(row[0]) || !shadows.insert(row[0]) {
                 return Err(invalid("Shadow account reference is missing or duplicated"));
-            }
-            if let Some(user) = users.get_mut(row[0]) {
-                user.unlocked = !row[1].is_empty() && !row[1].starts_with(['!', '*']);
             }
             for value in &row[2..] {
                 if !matches!(*value, "" | "-1") {
@@ -671,14 +668,11 @@ mod tests {
         Contract::parse(format!("kind=linos-accounts\nformat=1\ncount=1\naccount.0000.name={account}\naccount.0000.uid={uid}\naccount.0000.gid={gid}\naccount.0000.primary_group={group}\naccount.0000.supplementary_count=0\n").as_bytes()).unwrap()
     }
     #[test]
-    fn native_health_requires_a_current_unlocked_interactive_administrator() {
+    fn native_health_requires_a_current_interactive_administrator() {
         let mut accounts = current();
         accounts.require_administrator("owner").unwrap();
         assert!(accounts.require_administrator("root").is_err());
         assert!(accounts.require_administrator("absent").is_err());
-        accounts.users.get_mut("owner").unwrap().unlocked = false;
-        assert!(accounts.require_administrator("owner").is_err());
-        accounts.users.get_mut("owner").unwrap().unlocked = true;
         accounts.users.get_mut("owner").unwrap().interactive = false;
         assert!(accounts.require_administrator("owner").is_err());
         accounts.users.get_mut("owner").unwrap().interactive = true;
