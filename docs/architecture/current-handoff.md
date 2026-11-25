@@ -103,6 +103,16 @@ three names/ranges/type codes, and rejects a device path as numeric plan input.
 Evidence is retained at `target/layout-v2-tests/`; the sparse disk is removed.
 Actionlint passes, and the lightweight `kernel:validate` workflow now runs this fixture.
 
+Source checkpoint `eed46c2474fedd874c18e6b5452a364400dfde4d` is committed and pushed.
+Lightweight validation run
+[45563935326](https://github.com/phe-rus/linos/actions/runs/45563935326) passed the
+artifact checks, disposable GPT fixture and 77 focused Rust tests. Kernel build,
+boot, OS integration and publication jobs were skipped. Logs are retained locally
+at `target/layout-v2-tests/ci-validation.log`. Repository security run
+[45563935348](https://github.com/phe-rus/linos/actions/runs/45563935348) passed both
+Rust advisories and repository scanning. This is separate from the existing failed
+OS package security gate.
+
 This is geometry evidence only. No filesystems, boot helper, layout 2 record
 parser, installation or VM boot is implemented by this slice. No host block device
 was written; no full kernel or OS image build ran locally. Build step 1 remains
