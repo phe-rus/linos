@@ -9,6 +9,10 @@ permissions:
   contents: read
   actions: read
 
+env:
+  CARGO_BUILD_JOBS: 1
+  TMPDIR: /var/tmp
+
 jobs:
   qemu:
     name: QEMU ${{ matrix.arch }}
@@ -110,7 +114,7 @@ jobs:
           timeout --signal=TERM --kill-after=5s 120s \
             "${qemu[@]}" -kernel "$image" -initrd "$RUNNER_TEMP/initramfs.gz" \
             -append "console=$console rdinit=/init loglevel=4" \
-            -smp 2 -m 1024 -display none -monitor none -serial stdio \
+            -smp 1 -m 1024 -display none -monitor none -serial stdio \
             -no-reboot -net none >"$RUNNER_TEMP/qemu.log" 2>&1 || true
           grep -Fq LINOS_BOOT_STATE_OK "$RUNNER_TEMP/qemu.log" || {
             tail -n 100 "$RUNNER_TEMP/qemu.log"

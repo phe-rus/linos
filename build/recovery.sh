@@ -174,6 +174,14 @@ printf '%s\n' \
     'base=debian-trixie' \
     > "$OUTPUT/manifest"
 
+# Carry the immutable Server identity into the signed payload manifest.
+# Older local development images remain usable without candidate metadata.
+if [[ -s "$BUILD_DIR/candidate-manifest" ]]; then
+    bash build/candidate.sh verify-payload "$BUILD_DIR" "$ARCH" "$(git rev-parse HEAD)"
+    printf 'candidate_manifest_sha256=%s\n' \
+        "$(sha256sum "$BUILD_DIR/candidate-manifest" | cut -d' ' -f1)" >> "$OUTPUT/manifest"
+fi
+
 (
     cd "$OUTPUT"
     sha256sum rootfs.tar.gz kernel initramfs manifest > SHA256SUMS

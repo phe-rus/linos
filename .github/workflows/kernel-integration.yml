@@ -1,6 +1,6 @@
 name: Linos Kernel · Installed OS Boot
 
-# Release-only gate. Reuses compiled kernel .deb; does not compile Linux again.
+# Native candidate qualification. Reuses compiled kernel .deb, never compiles Linux.
 on:
   workflow_call:
     inputs:
@@ -9,10 +9,21 @@ on:
         required: false
         type: number
         default: 0
+      source_sha:
+        description: "Expected source SHA of the reused kernel run"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
   actions: read
+
+env:
+  CARGO_BUILD_JOBS: 1
+  LINOS_QEMU_MEMORY: 1024
+  LINOS_QEMU_CPUS: 1
+  TMPDIR: /var/tmp
 
 jobs:
   installed-boot:
@@ -21,6 +32,7 @@ jobs:
     timeout-minutes: 50
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         include:
           - arch: amd64
@@ -31,7 +43,16 @@ jobs:
             qemu_package: qemu-system-arm
     steps:
       - uses: actions/checkout@v7
+      - name: Fetch and verify reused kernel identity
+        if: inputs.source_run_id != 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KERNEL_RUN: ${{ inputs.source_run_id }}
+          KERNEL_SHA: ${{ inputs.source_sha }}
+          ARCH: ${{ matrix.arch }}
+        run: bash build/fetch-artifact.sh "$KERNEL_RUN" "$KERNEL_SHA" "linos-kernel-$ARCH" kernel-package kernel
       - uses: actions/download-artifact@v7
+        if: inputs.source_run_id == 0
         with:
           name: linos-kernel-${{ matrix.arch }}
           path: kernel-package
@@ -106,6 +127,25 @@ jobs:
           grep -Eq '^release=[^[:space:]]+-linos$' "$image/kernel-manifest"
           test -s "$image/boot/kernel"
           test -s "$image/boot/initramfs"
+      - name: Capture immutable development candidate before guest tests
+        env:
+          LINOS_KERNEL_RUN_ID: ${{ inputs.source_run_id || github.run_id }}
+          LINOS_KERNEL_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          source kernel/source.conf
+          export LINOS_KERNEL_PACKAGE="$GITHUB_WORKSPACE/kernel-package/linos-kernel_${LINOS_KERNEL_VERSION}_${{ matrix.arch }}.deb"
+          export LINOS_KERNEL_PROVENANCE="$GITHUB_WORKSPACE/kernel-package/provenance.txt"
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          bash build/candidate.sh pack "images/server/builds/${{ matrix.arch }}/$build_id" ${{ matrix.arch }} target/candidate
+      - name: Retain development candidate even when later gates fail
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-candidate-${{ matrix.arch }}
+          path: target/candidate/
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Install native image vulnerability scanner
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
@@ -118,12 +158,17 @@ jobs:
           set -Eeuo pipefail
           scan_root="$RUNNER_TEMP/linos-native-security-rootfs"
           mkdir -p "$scan_root" security-results
+          cp target/candidate/candidate.tar.gz.sha256 security-results/
+          cp "$(find images/server/builds -name candidate-manifest -print -quit)" security-results/
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           tar --extract --file="images/server/builds/${{ matrix.arch }}/$build_id/rootfs.tar" \
             --directory="$scan_root" --no-same-owner \
             --exclude='./dev/*' --exclude='./proc/*' --exclude='./sys/*' --exclude='./run/*'
+          scan_status=0
           trivy rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
-            --format json --output security-results/native-os-vulnerabilities.json "$scan_root"
+            --format json --output security-results/native-os-vulnerabilities.json "$scan_root" || scan_status=$?
+          trivy --version --format json > security-results/scanner.json
+          exit "$scan_status"
       - name: Boot Linos 13 Server under QEMU
         run: bash tests/server.sh smoke ${{ matrix.arch }}
       - name: Verify disk recovery and persistent Linos identity across two boots
@@ -183,3 +228,45 @@ jobs:
             images/recovery/builds/**/*.log
           if-no-files-found: ignore
           retention-days: 7
+
+  candidate-handoff:
+    name: Development candidate handoff, amd64 media
+    needs: installed-boot
+    # This validates retained development bytes even if the security gate fails.
+    # It never changes the installed-boot result or permits release publication.
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: server-candidate-amd64
+          path: target/candidate
+      - name: Restore exact Server candidate from the producer job
+        run: |
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          bash build/candidate.sh restore target/candidate amd64 "$GITHUB_SHA" "images/server/builds/amd64/$build_id"
+      - name: Install media and firmware test tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            gdisk dosfstools mtools systemd-boot-efi ovmf qemu-system-x86 e2fsprogs
+      - name: Build payload and media from the restored candidate without rebuilding Server
+        run: |
+          bash build/recovery.sh payload amd64
+          bash build/media.sh amd64
+          bash tests/boot.sh uefi
+      - name: Retain candidate handoff evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: candidate-handoff-amd64
+          path: |
+            images/server/builds/**/candidate-manifest
+            images/server/builds/**/kernel-manifest
+            images/server/builds/**/uefi-*.log
+            images/install/payloads/**/manifest
+            images/install/payloads/**/SHA256SUMS
+          if-no-files-found: ignore
+          retention-days: 14

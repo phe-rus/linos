@@ -1,6 +1,41 @@
 # Linos current handoff
 
-Updated 24 November 2026. Start here and check the exact CI runs before making a release claim. This supersedes the 23 November handoff.
+Updated 25 November 2026. Start here and check the exact CI runs before making a release claim. This supersedes the 23 November handoff.
+
+## Planning checkpoint for the next conversation
+
+Read [the platform review and staged execution plan](../plans/2026-11-25-platform-contracts-and-execution.md)
+before implementation. The owner requested review, planning and staging, then a conversation clear.
+The agreed direction is USB `EFI/` plus `recovery.pherus.org/`, and installed `EFI`, `Recovery`,
+and `Linos` partitions. Linos has logical System, Applications, Users, State and Snapshots roles.
+These are target contracts, not implemented layout changes. Filesystem, extension format and
+rollback/data mappings still need design. Recovery owns install, repair and rollback.
+
+Kernel and full OS builds belong in CI; reuse verified artifacts for local VM acceptance.
+Use focused bounded local tests and sequential VMs, and do not duplicate expensive CI work.
+Publication must promote qualified bytes separately from test runs. No builds, boots, workflow
+dispatch, platform implementation or publication were performed for this planning checkpoint.
+
+The owner currently has no physical test machine. Continue VM development while retaining the
+physical qualification boundary. Start next with artifact provenance/reuse and execution routing,
+then the storage/recovery contract, following the staged plan. Server remains the first edition.
+
+## Stage 1 implementation checkpoint
+
+Stage 1 is in progress. See [candidate artifacts and execution](candidate-artifacts.md)
+for the implemented identity, archive, download and retention contract, exact local
+evidence, and remaining CI gate. Kernel selection now uses `kernel/candidate.conf`
+or an explicit manual run/source pair, with successful boot and artifact digest
+verification. Server candidates are captured before tests. Installer media consumes
+the captured OS archive instead of rebuilding Server. Compiler and VM caps are explicit.
+
+Local archive/API rejection tests, shell syntax, Actionlint, six kernel tooling tests
+and 42 library/Recovery tests pass. A real AMD64 kernel download passed artifact and
+package checksums and the existing provenance verifier against this checkout.
+The changed workflows still need a committed source and CI execution, followed by
+native candidate download/VM evidence. No full OS or kernel build, VM boot, workflow
+dispatch, commit, push or release was performed. The earlier planning documents
+remain staged; Stage 1 changes are unstaged. Storage and security policy are unchanged.
 
 ## Owner direction and sequence
 
@@ -49,14 +84,14 @@ The old full scan failed while tar attempted unprivileged device-node extraction
 | [45476639614](https://github.com/phe-rus/linos/actions/runs/45476639614), native installed kernel at `307defd` | Both AMD64 and ARM64 passed, including AMD64 Recovery |
 | [45477917782](https://github.com/phe-rus/linos/actions/runs/45477917782), repository security at `d54889c` | Passed |
 | [45476628685](https://github.com/phe-rus/linos/actions/runs/45476628685), full compatibility image CI at `307defd` | Both architectures completed functional checks and failed the OS vulnerability gate; downstream Recovery/installer media jobs were skipped |
-| [45479117710](https://github.com/phe-rus/linos/actions/runs/45479117710), final full compatibility image CI at `3996db4` | Dispatched, refresh before claiming its outcome |
-| [45479141286](https://github.com/phe-rus/linos/actions/runs/45479141286), final native image and package-security qualification at `3996db4` | Dispatched, includes the newly added native OS scan; refresh before claiming its outcome |
+| [45479117710](https://github.com/phe-rus/linos/actions/runs/45479117710), final full compatibility image CI at `3996db4` | Refreshed 25 November: both architectures failed final OS vulnerability enforcement; downstream Recovery/installer media jobs skipped |
+| [45479141286](https://github.com/phe-rus/linos/actions/runs/45479141286), final native image and package-security qualification at `3996db4` | Refreshed 25 November: both architectures failed final native OS vulnerability enforcement |
 
 The repaired AMD64 scan produced 85 package/CVE matches, 82 HIGH and three CRITICAL rows, covering 26 unique identifiers. All lack a fixed stable package version in the report. The three CRITICAL rows are the same OpenSSH source advisory, not three independent remotely exploitable server flaws. Exact binary reachability needs review. The image already includes stable updates and security repositories; this is not solved by adding the missing security repository.
 
 Raw report: `target/server-benchmark/ci-security-amd64/os-vulnerabilities.json`, SHA-256 `35ef43f1902364710782ddfee358e9ea4059d7d4c5afea3d3073a521d1243668`. `security-findings.psv` holds the per-row summary. Use [the vendor triage](../reviews/2026-11-24-server-security-triage.md) and [the proposed maintenance decision](../specs/0004-server-security-maintenance.md). Normal stable refresh cannot currently clear this strict gate. No advisory was suppressed, no ignore-unfixed option was added and no base distribution was changed.
 
-Native-kernel image qualification now includes the same OS package scan and retained reports, since full CI scans explicit compatibility images. This closes a coverage gap in configuration; the final run must prove it executes. It does not establish advisory coverage of the custom kernel itself. Functional tests still run after vulnerability findings, then the gate fails.
+Native-kernel image qualification now includes the same OS package scan and retained reports, since full CI scans explicit compatibility images. The final run reached and failed the enforcement step on both architectures. It does not establish advisory coverage of the custom kernel itself. Functional tests still run after vulnerability findings, then the gate fails.
 
 ## Remaining work
 
@@ -66,4 +101,4 @@ Native-kernel image qualification now includes the same OS package scan and reta
 4. Qualify actual named physical configurations and remaining installer/data/recovery guarantees. Physical installation remains disabled. Production signing, account/service-data migration, power-loss testing, sustained workloads and support lifecycle are not established by this turn.
 5. Release beta only with a supported matrix and explicit candidate evidence. Desktop and broader Assets/Store work remain outside this scope.
 
-The owner has pending questions about physical test-machine availability and the security-maintenance path. A target family is not an available device. Neither elapsed time nor no response grants a new maintenance-policy decision.
+The owner confirmed no physical test machine is currently available. The security-maintenance path remains unresolved. A target family is not an available device. Neither elapsed time nor no response grants a new maintenance-policy decision. The new platform plan governs future architectural work; the release/security gates above remain open.

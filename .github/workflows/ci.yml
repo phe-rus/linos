@@ -13,6 +13,12 @@ concurrency:
   group: linos-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_BUILD_JOBS: 1
+  LINOS_QEMU_MEMORY: 1024
+  LINOS_QEMU_CPUS: 1
+  TMPDIR: /var/tmp
+
 jobs:
   build-and-boot:
     name: ${{ matrix.arch }} · Rust, image, QEMU
@@ -53,6 +59,7 @@ jobs:
       - name: Validate shell scripts
         run: |
           for file in build/*.sh tests/*.sh; do bash -n "$file"; done
+          bash tests/candidate.sh
 
       - name: Install image-building dependencies
         run: |
@@ -88,6 +95,19 @@ jobs:
           ./build/package.sh
           LINOS_KERNEL_MODE=compat ./build/image.sh
 
+      - name: Capture immutable development candidate before guest tests
+        run: |
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          bash build/candidate.sh pack "images/server/builds/${{ matrix.arch }}/$build_id" ${{ matrix.arch }} target/candidate
+      - name: Retain development candidate even when later gates fail
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: server-candidate-${{ matrix.arch }}
+          path: target/candidate/
+          compression-level: 0
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Install OS vulnerability scanner
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
@@ -101,12 +121,17 @@ jobs:
           set -Eeuo pipefail
           scan_root="$RUNNER_TEMP/linos-security-rootfs"
           mkdir -p "$scan_root" security-results
+          cp target/candidate/candidate.tar.gz.sha256 security-results/
+          cp "$(find images/server/builds -name candidate-manifest -print -quit)" security-results/
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           tar --extract --file="images/server/builds/${{ matrix.arch }}/$build_id/rootfs.tar" \
             --directory="$scan_root" --no-same-owner \
             --exclude='./dev/*' --exclude='./proc/*' --exclude='./sys/*' --exclude='./run/*'
+          scan_status=0
           trivy rootfs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
-            --format json --output security-results/os-vulnerabilities.json "$scan_root"
+            --format json --output security-results/os-vulnerabilities.json "$scan_root" || scan_status=$?
+          trivy --version --format json > security-results/scanner.json
+          exit "$scan_status"
 
       - name: Boot smoke test
         run: ./tests/server.sh smoke ${{ matrix.arch }}
@@ -235,7 +260,7 @@ jobs:
           retention-days: 7
 
   installer-media:
-    needs: recovery-uefi
+    needs: [build-and-boot, recovery-uefi]
     if: ${{ always() && needs.recovery-uefi.result == 'success' }}
     name: amd64 · Offline installer media
     runs-on: ubuntu-24.04
@@ -283,10 +308,15 @@ jobs:
           cat "$keydir/archive.gpg" "$keydir/security.gpg" > "$keydir/trixie.gpg"
           echo "LINOS_KEYRING=$keydir/trixie.gpg" >> "$GITHUB_ENV"
 
-      - name: Build offline Server payload
+      - name: Download original Server candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: server-candidate-amd64
+          path: target/candidate
+      - name: Verify original Server candidate and build its offline payload
         run: |
-          ./build/package.sh
-          LINOS_KERNEL_MODE=compat ./build/image.sh
+          build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
+          bash build/candidate.sh restore target/candidate amd64 "$GITHUB_SHA" "images/server/builds/amd64/$build_id"
           ./build/recovery.sh payload amd64
 
       - name: Qualify signed image updates and firmware fallback
@@ -317,6 +347,7 @@ jobs:
         run: |
           build_id="$(sed -n 's/^BUILD_ID="\([^"]*\)"$/\1/p' system/release/usr/lib/linos/release)"
           LINOS_INSTALL_PAYLOAD_DIR="images/install/payloads/amd64/$build_id" ./build/recovery.sh image amd64
+          cp "images/server/builds/amd64/$build_id/candidate-manifest" "images/recovery/builds/amd64/$build_id/server-candidate-manifest"
           disk="images/recovery/builds/amd64/$build_id/disk.ext4"
           debugfs -R 'cat /usr/share/linos/install/manifest' "$disk" 2>/dev/null \
             | grep -qx 'edition=server'

@@ -5,6 +5,13 @@ name: Linos Kernel Release
 on:
   # Manual qualification only reuses existing kernels. It never publishes.
   workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Qualified kernel run, empty uses kernel/candidate.conf"
+        type: string
+      source_sha:
+        description: "Kernel source SHA, required with source_run_id"
+        type: string
   push:
     branches: [main]
     paths:
@@ -17,10 +24,19 @@ on:
       - 'system/services/**'
       - 'build/package.sh'
       - 'build/image.sh'
+      - 'build/candidate.sh'
+      - 'build/fetch-artifact.sh'
       - 'tests/server.sh'
+      - 'tests/candidate.sh'
 
 permissions:
   contents: read
+
+env:
+  CARGO_BUILD_JOBS: 1
+  LINOS_QEMU_MEMORY: 1024
+  LINOS_QEMU_CPUS: 1
+  TMPDIR: /var/tmp
 
 jobs:
   validate:
@@ -33,6 +49,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate Rust kernel tooling, initialization and recovery contracts
         run: |
+          bash tests/candidate.sh
           cargo test --locked --manifest-path kernel/tools/Cargo.toml
           cargo test --locked --bin init
           cargo test --locked --lib --bin recovery --bin linos-update-image --bin linos-update-health --test update_image
@@ -57,18 +74,51 @@ jobs:
       contents: read
       actions: read
 
-  # Reuse already verified packages instead of compiling them again.
-  # Pinned to successful AMD64+ARM64 QEMU qualification 44213747067.
+  kernel-candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'kernel:integration') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_id: ${{ steps.select.outputs.run_id }}
+      source_sha: ${{ steps.select.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select explicit kernel candidate
+        id: select
+        env:
+          REQUESTED_RUN: ${{ inputs.source_run_id }}
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          source kernel/candidate.conf
+          if [[ -n "$REQUESTED_RUN" || -n "$REQUESTED_SHA" ]]; then
+            LINOS_KERNEL_RUN_ID="$REQUESTED_RUN"
+            LINOS_KERNEL_SOURCE_SHA="$REQUESTED_SHA"
+          fi
+          [[ "$LINOS_KERNEL_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$LINOS_KERNEL_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          echo "run_id=$LINOS_KERNEL_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$LINOS_KERNEL_SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+  # Userspace qualification reuses verified packages, never builds Linux.
   integration-check:
+    needs: kernel-candidate
+    concurrency:
+      group: linos-native-${{ github.ref }}
+      cancel-in-progress: false
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'kernel:integration') }}
     uses: ./.github/workflows/kernel-integration.yml
     with:
-      source_run_id: 44213747067
+      source_run_id: ${{ fromJSON(needs.kernel-candidate.outputs.run_id) }}
+      source_sha: ${{ needs.kernel-candidate.outputs.source_sha }}
     permissions:
       contents: read
       actions: read
 
   integration:
+    concurrency:
+      group: linos-native-${{ github.ref }}
+      cancel-in-progress: false
     if: ${{ contains(github.event.head_commit.message, 'kernel:release') }}
     needs: boot
     uses: ./.github/workflows/kernel-integration.yml
