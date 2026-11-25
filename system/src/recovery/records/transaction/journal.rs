@@ -74,7 +74,21 @@ impl Journal {
         let current = self
             .read()?
             .ok_or_else(|| invalid("Missing format 3 journal"))?;
-        let observation = super::boot::inspect(layout, &current)?;
+        let approval = current.health_receipt_sha256().is_some()
+            && (current.phase() == super::Phase::Trial
+                || current.phase() == super::Phase::Healthy
+                    && current.operation() != super::Operation::Install
+                    && self.fallback_intent(&current)?.is_none());
+        let observation = if approval {
+            super::boot::inspect_intent(
+                layout,
+                &current,
+                &self.publication(&current)?,
+                &self.health_intent(&current)?,
+            )?
+        } else {
+            super::boot::inspect(layout, &current)?
+        };
         if self.read()?.as_ref() != Some(&current) {
             return Err(invalid("Journal changed during native boot inspection"));
         }

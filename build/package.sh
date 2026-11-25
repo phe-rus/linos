@@ -88,6 +88,7 @@ install -m 644 system/services/linos-first-boot.service "$UNIT_DIR/linos-first-b
 install -m 644 system/services/linos-enroll.service "$UNIT_DIR/linos-enroll.service"
 install -m 644 system/services/linos-ready.service "$UNIT_DIR/linos-ready.service"
 install -m 644 system/services/linos-layout2-verify.service "$UNIT_DIR/linos-layout2-verify.service"
+install -m 644 system/services/linos-layout2-health.service "$UNIT_DIR/linos-layout2-health.service"
 mkdir -p "$UNIT_DIR/sysinit.target.d"
 install -m 644 system/services/linos-layout2-sysinit.conf "$UNIT_DIR/sysinit.target.d/linos-layout2.conf"
 
@@ -110,6 +111,7 @@ for unit in getty@tty1.service serial-getty@ttyS0.service serial-getty@ttyAMA0.s
 done
 ln -s /usr/lib/systemd/system/linos-enroll.service "$WANTS_DIR/linos-enroll.service"
 ln -s /usr/lib/systemd/system/linos-ready.service "$WANTS_DIR/linos-ready.service"
+ln -s /usr/lib/systemd/system/linos-layout2-health.service "$WANTS_DIR/linos-layout2-health.service"
 
 mkdir -p system/dist
 dpkg-deb --root-owner-group --build "$STAGING_DIR/package" "$OUTPUT"

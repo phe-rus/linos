@@ -480,19 +480,28 @@ fn reconcile_impl(
         .get(&filename(&selectors.entry, running))
         .ok_or_else(|| invalid("Missing observed entry bytes"))?;
     let entry_sha256 = crate::recovery::records::deployment::sha256(observed_bytes)?;
-    let decision = if running == Counter::Stable
-        && approval.is_some_and(|receipt| receipt.candidate() == &selectors.entry)
-    {
-        if approval.is_none_or(|receipt| receipt.entry_sha256() != entry_sha256) {
-            return Err(invalid(
-                "Blessed entry bytes differ from approved health intent",
-            ));
-        }
+    let approved = running == Counter::Stable
+        && approval.is_some_and(|receipt| receipt.candidate() == &selectors.entry);
+    if approved && approval.is_none_or(|receipt| receipt.entry_sha256() != entry_sha256) {
+        return Err(invalid(
+            "Blessed entry bytes differ from approved health intent",
+        ));
+    }
+    let decision = if approved && journal.phase() == Phase::Trial {
         BootDecision::ResumeApproval
     } else {
         journal.check_boot(&selectors.entry, evidence)?
     };
     Ok(Observation {
+        previous_entry_sha256: journal
+            .previous()
+            .map(|entry| {
+                let bytes = entries
+                    .get(&filename(entry, Counter::Stable))
+                    .ok_or_else(|| invalid("Missing previous healthy entry"))?;
+                crate::recovery::records::deployment::sha256(bytes)
+            })
+            .transpose()?,
         entry_sha256,
         entry_path: format!("/loader/entries/{}", filename(&selectors.entry, running)),
         selectors,
@@ -503,6 +512,7 @@ fn reconcile_impl(
 
 #[derive(Debug)]
 pub struct Observation {
+    previous_entry_sha256: Option<String>,
     selectors: Selectors,
     decision: BootDecision,
     journal_generation: u64,
@@ -511,6 +521,9 @@ pub struct Observation {
 }
 
 impl Observation {
+    pub fn previous_entry_sha256(&self) -> Option<&str> {
+        self.previous_entry_sha256.as_deref()
+    }
     pub fn selectors(&self) -> &Selectors {
         &self.selectors
     }
@@ -536,6 +549,29 @@ pub fn inspect(layout: &Layout, journal: &Transaction) -> io::Result<Observation
     inspect_native(layout, journal, None)
 }
 
+pub(super) fn inspect_intent(
+    layout: &Layout,
+    journal: &Transaction,
+    publication: &super::receipts::Publication,
+    health: &super::receipts::HealthIntent,
+) -> io::Result<Observation> {
+    if journal.phase() == Phase::Healthy {
+        health.verify_completed(journal, publication)?;
+    } else {
+        health.verify(journal, publication)?;
+    }
+    if journal.health_receipt_sha256() != Some(health.digest()?.as_str()) {
+        return Err(invalid("Approval observation has no committed intent"));
+    }
+    let observed = inspect_native(layout, journal, Some(health))?;
+    if journal.phase() == Phase::Trial
+        && observed.previous_entry_sha256() != health.previous_entry_sha256()
+    {
+        return Err(invalid("Previous entry changed after approval intent"));
+    }
+    Ok(observed)
+}
+
 /// Resume only the precise health intent already committed in the locked
 /// journal, after verifying its publication against an authenticated manifest.
 pub fn inspect_approval(
@@ -554,6 +590,11 @@ pub fn inspect_approval(
     }
     verify_efi_artifacts(manifest)?;
     let observation = inspect_native(layout, journal, Some(health))?;
+    if observation.previous_entry_sha256() != health.previous_entry_sha256() {
+        return Err(invalid(
+            "Previous entry differs from approved retirement intent",
+        ));
+    }
     verify_efi_artifacts(manifest)?;
     Ok(observation)
 }
@@ -620,6 +661,31 @@ pub(super) fn sync_entries() -> io::Result<()> {
     open_directory(std::path::Path::new(ENTRIES))?.sync_all()
 }
 
+struct Retirement {
+    name: String,
+    bytes: Option<Vec<u8>>,
+    remaining: BTreeMap<String, Vec<u8>>,
+}
+
+fn retirement_inventory(
+    failed: &Entry,
+    expected_digest: &str,
+    mut entries: BTreeMap<String, Vec<u8>>,
+) -> io::Result<Retirement> {
+    let name = filename(failed, Counter::Last);
+    let bytes = entries.remove(&name);
+    if let Some(bytes) = &bytes
+        && crate::recovery::records::deployment::sha256(bytes)? != expected_digest
+    {
+        return Err(invalid("Exhausted entry changed before retirement"));
+    }
+    Ok(Retirement {
+        name,
+        bytes,
+        remaining: entries,
+    })
+}
+
 /// Retire only the failed exhausted entry named by a completed fallback receipt.
 /// A retry after the journal commit accepts its absence, never recreates trials.
 pub(super) fn retire_failed(
@@ -635,20 +701,14 @@ pub(super) fn retire_failed(
     publication.verify_software(layout, failed)?;
     verify_efi_artifacts(target)?;
     let directory = open_directory(std::path::Path::new(ENTRIES))?;
-    let mut entries = inventory(&directory)?;
-    let name = filename(receipt.failed(), Counter::Last);
-    let retired = entries.remove(&name);
-    if retired.as_ref().is_some_and(|bytes| {
-        crate::recovery::records::deployment::sha256(bytes)
-            .ok()
-            .as_deref()
-            != Some(publication.entry_sha256())
-    }) {
-        return Err(invalid("Exhausted entry changed before retirement"));
-    }
+    let retirement = retirement_inventory(
+        receipt.failed(),
+        publication.entry_sha256(),
+        inventory(&directory)?,
+    )?;
     let cmdline = native_file("/proc/cmdline", MAX_TEXT)?;
     let before = firmware()?;
-    let observation = reconcile(layout, journal, &cmdline, &before, &entries)?;
+    let observation = reconcile(layout, journal, &cmdline, &before, &retirement.remaining)?;
     if observation.decision() != BootDecision::Healthy
         || observation.entry_sha256() != receipt.entry_sha256()
     {
@@ -656,12 +716,12 @@ pub(super) fn retire_failed(
             "Completed fallback no longer boots its approved healthy entry",
         ));
     }
-    if retired.is_some() {
+    if retirement.bytes.is_some() {
         let current = inventory(&directory)?;
-        if current.get(&name) != retired.as_ref() || firmware()? != before {
+        if current.get(&retirement.name) != retirement.bytes.as_ref() || firmware()? != before {
             return Err(invalid("EFI changed during exhausted entry retirement"));
         }
-        fs::unlinkat(&directory, name.as_str(), fs::AtFlags::empty())?;
+        fs::unlinkat(&directory, retirement.name.as_str(), fs::AtFlags::empty())?;
     }
     directory.sync_all()?;
     inspect(layout, journal)?;
@@ -682,6 +742,85 @@ pub(super) fn sync_approved_entry(
     {
         return Err(invalid("Stable candidate changed during EFI sync"));
     }
+    Ok(())
+}
+
+/// Approval retains the old healthy pair as the new fallback. Only the older
+/// previous entry captured by the committed approval receipt may be retired.
+struct ApprovalRetirement {
+    remaining: BTreeMap<String, Vec<u8>>,
+    name: Option<String>,
+}
+
+fn approval_retirement_inventory(
+    journal: &Transaction,
+    health: &super::receipts::HealthIntent,
+    mut remaining: BTreeMap<String, Vec<u8>>,
+) -> io::Result<ApprovalRetirement> {
+    let mut retired = None;
+    if let Some(previous) = health.previous() {
+        if journal.healthy() == Some(previous) || journal.previous() == Some(previous) {
+            return Err(invalid(
+                "Approval retirement still references an active boot entry",
+            ));
+        }
+        let name = filename(previous, Counter::Stable);
+        if let Some(bytes) = remaining.remove(&name) {
+            if Some(crate::recovery::records::deployment::sha256(&bytes)?.as_str())
+                != health.previous_entry_sha256()
+            {
+                return Err(invalid("Previous entry changed before approval retirement"));
+            }
+            retired = Some(name);
+        }
+    }
+    Ok(ApprovalRetirement {
+        remaining,
+        name: retired,
+    })
+}
+
+pub(super) fn retire_previous(
+    layout: &Layout,
+    journal: &Transaction,
+    manifest: &crate::recovery::records::deployment::OfficialManifest,
+    publication: &super::receipts::Publication,
+    health: &super::receipts::HealthIntent,
+) -> io::Result<()> {
+    health.verify_completed(journal, publication)?;
+    publication.verify_software(layout, manifest)?;
+    verify_efi_artifacts(manifest)?;
+    let directory = open_directory(std::path::Path::new(ENTRIES))?;
+    let original = inventory(&directory)?;
+    let retirement = approval_retirement_inventory(journal, health, original.clone())?;
+    let cmdline = native_file("/proc/cmdline", MAX_TEXT)?;
+    let before = firmware()?;
+    let observed = reconcile_impl(
+        layout,
+        journal,
+        &cmdline,
+        &before,
+        &retirement.remaining,
+        Some(health),
+    )?;
+    if observed.decision() != BootDecision::Healthy
+        || observed.entry_sha256() != health.entry_sha256()
+    {
+        return Err(invalid("Completed approval boots a different entry"));
+    }
+    if let Some(name) = retirement.name {
+        if inventory(&directory)? != original
+            || firmware()? != before
+            || native_file("/proc/cmdline", MAX_TEXT)? != cmdline
+        {
+            return Err(invalid("EFI changed before approval retirement"));
+        }
+        fs::unlinkat(&directory, name.as_str(), fs::AtFlags::empty())?;
+    }
+    directory.sync_all()?;
+    // A blessing may leave LoaderBootCountPath present until the next reboot.
+    // Its exact match was already established by approval inspection.
+    inspect_intent(layout, journal, publication, health)?;
     Ok(())
 }
 

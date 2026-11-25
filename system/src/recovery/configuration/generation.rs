@@ -12,6 +12,7 @@ use std::{
 };
 
 pub struct Inputs<'a> {
+    pub volume: &'a Path,
     pub journal: &'a Transaction,
     pub configuration: &'a crate::recovery::records::state::Configuration,
     pub source: &'a Loaded,
@@ -22,6 +23,93 @@ pub struct Inputs<'a> {
     pub workspace: &'a Path,
 }
 
+/// Keep every published or reserved generation, including an unselected failed
+/// trial. Reuse only this exact source/target intent; otherwise allocate above
+/// all retained records. The caller holds the volume journal lock.
+fn allocation(
+    volume: &Path,
+    snapshot: &Transaction,
+    target_id: &str,
+    schema: u32,
+) -> io::Result<u64> {
+    use crate::recovery::{
+        records::{deployment::source, state::Configuration},
+        update::journal::open_directory,
+    };
+    use std::os::fd::AsRawFd;
+    let records = open_directory(&volume.join("State/var/lib/linos/configuration"))?;
+    let mut maximum = snapshot.selected_config_generation();
+    let mut matching = None;
+    for (count, entry) in
+        std::fs::read_dir(format!("/proc/self/fd/{}", records.as_raw_fd()))?.enumerate()
+    {
+        if count >= 4096 {
+            return Err(invalid("Configuration record inventory exceeds its bound"));
+        }
+        let name = entry?
+            .file_name()
+            .into_string()
+            .map_err(|_| invalid("Invalid configuration record filename"))?;
+        let Some(stem) = name.strip_suffix(".record") else {
+            continue;
+        };
+        let generation = if let Some(prepared) = stem.strip_prefix("prepared-") {
+            let Some((transaction, generation)) = prepared.split_once('-') else {
+                return Err(invalid("Invalid prepared generation filename"));
+            };
+            super::super::records::state::positive(transaction)?;
+            super::super::records::state::positive(generation)?
+        } else {
+            super::super::records::state::positive(stem)?
+        };
+        maximum = maximum.max(generation);
+        if generation <= snapshot.selected_config_generation() || !stem.starts_with("prepared-") {
+            continue;
+        }
+        let bytes = source::read_at(&records, &name, 64 * 1024)?;
+        let text = std::str::from_utf8(&bytes).map_err(invalid)?;
+        // Old and abandoned intents reserve their number but cannot supply the
+        // current selection. Matching fields still undergo the full parser.
+        let fields = [
+            format!("transaction={}", snapshot.transaction()),
+            format!("source_journal_generation={}", snapshot.generation()),
+            format!(
+                "source_config_generation={}",
+                snapshot.selected_config_generation()
+            ),
+            format!("source_deployment_id={}", snapshot.selected_deployment_id()),
+            format!("target_deployment_id={target_id}"),
+        ];
+        if !fields
+            .iter()
+            .all(|field| text.lines().any(|line| line == field))
+        {
+            continue;
+        }
+        if name != format!("prepared-{}-{generation}.record", snapshot.transaction()) {
+            return Err(invalid(
+                "Prepared generation filename disagrees with its receipt",
+            ));
+        }
+        let configuration = Configuration::selected(
+            generation,
+            target_id,
+            Some(snapshot.selected_config_generation()),
+            schema,
+            &sha256(&bytes)?,
+        )?;
+        configuration.verify_prepared_merge(&bytes, snapshot)?;
+        if matching.replace(generation).is_some() {
+            return Err(invalid("Multiple matching configuration preparations"));
+        }
+    }
+    matching.map(Ok).unwrap_or_else(|| {
+        maximum
+            .checked_add(1)
+            .ok_or_else(|| invalid("Configuration generation exhausted"))
+    })
+}
+
 pub struct Prepared {
     directory: PathBuf,
     generation: u64,
@@ -30,6 +118,42 @@ pub struct Prepared {
     configuration: crate::recovery::records::state::Configuration,
     source_digest: String,
     target_digest: String,
+}
+
+fn record(parent: &std::fs::File, name: &str, bytes: &[u8]) -> io::Result<()> {
+    use crate::recovery::records::deployment::source;
+    use rustix::fs::{self, Mode, OFlags};
+    use std::{fs::File, io::Write};
+    match source::read_at(parent, name, 64 * 1024) {
+        Ok(existing) if existing == bytes => return parent.sync_all(),
+        Ok(_) => {
+            return Err(invalid(
+                "Prepared generation record conflicts with existing intent",
+            ));
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    match fs::unlinkat(parent, "configuration.pending", fs::AtFlags::empty()) {
+        Ok(()) | Err(rustix::io::Errno::NOENT) => {}
+        Err(error) => return Err(error.into()),
+    }
+    let mut file = File::from(fs::openat(
+        parent,
+        "configuration.pending",
+        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::RUSR | Mode::WUSR,
+    )?);
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    fs::renameat_with(
+        parent,
+        "configuration.pending",
+        parent,
+        name,
+        fs::RenameFlags::NOREPLACE,
+    )?;
+    parent.sync_all()
 }
 
 fn database<'a>(tree: &'a Tree, name: &str) -> io::Result<&'a [u8]> {
@@ -75,6 +199,168 @@ pub fn digest(tree: &Tree) -> io::Result<String> {
     sha256(&bytes)
 }
 
+/// Recover publication interrupted before journal selection. Verify both trees
+/// while they are quiescent; never use this for an already selected generation.
+pub fn published(
+    volume: &Path,
+    snapshot: &Transaction,
+    target: &Loaded,
+    schema: u32,
+) -> io::Result<Option<crate::recovery::records::state::Configuration>> {
+    let expected_target = match snapshot.phase() {
+        Phase::Trial => snapshot.candidate(),
+        Phase::RollbackRequired => snapshot.healthy(),
+        _ => None,
+    }
+    .ok_or_else(|| invalid("Prepared configuration requires a trial or exhausted fallback"))?;
+    if expected_target.deployment_id() != target.manifest().id()
+        || snapshot.phase() == Phase::Trial
+            && snapshot.selected_deployment_id() == target.manifest().id()
+        || schema < target.manifest().deployment().config_schema_min
+        || schema > target.manifest().deployment().config_schema_max
+    {
+        return Err(invalid(
+            "Prepared configuration target or schema is incompatible",
+        ));
+    }
+    let configuration = published_configuration(volume, snapshot, target.manifest().id(), schema)?;
+    if let Some(configuration) = &configuration {
+        configuration.require_selection(
+            configuration.generation(),
+            target.manifest().id(),
+            target.manifest().deployment(),
+        )?;
+    }
+    Ok(configuration)
+}
+
+fn published_configuration(
+    volume: &Path,
+    snapshot: &Transaction,
+    target_id: &str,
+    schema: u32,
+) -> io::Result<Option<crate::recovery::records::state::Configuration>> {
+    let next = allocation(volume, snapshot, target_id, schema)?;
+    published_configuration_at(
+        volume,
+        snapshot,
+        target_id,
+        schema,
+        snapshot.generation(),
+        next,
+    )
+}
+
+/// Resume an already committed fallback intent. Its complete configuration
+/// record must predate the intent; absence is corruption, not a fresh merge.
+pub fn published_fallback(
+    volume: &Path,
+    snapshot: &Transaction,
+    target: &Loaded,
+    schema: u32,
+    receipt: &crate::recovery::records::transaction::receipts::FallbackReceipt,
+    publication: &crate::recovery::records::transaction::receipts::Publication,
+) -> io::Result<crate::recovery::records::state::Configuration> {
+    use crate::recovery::{
+        records::{deployment::source, state::Configuration},
+        update::journal::open_directory,
+    };
+    let next = receipt.configuration_generation();
+    let records = open_directory(&volume.join("State/var/lib/linos/configuration"))?;
+    let configuration = Configuration::parse(&source::read_at(
+        &records,
+        &format!("{next}.record"),
+        64 * 1024,
+    )?)?;
+    receipt.verify_committed(snapshot, publication, &configuration, target.manifest())?;
+    published_configuration_at(
+        volume,
+        snapshot,
+        target.manifest().id(),
+        schema,
+        receipt.preparation_generation(),
+        next,
+    )?
+    .ok_or_else(|| invalid("Committed fallback is missing its published configuration"))
+}
+
+fn published_configuration_at(
+    volume: &Path,
+    snapshot: &Transaction,
+    target_id: &str,
+    schema: u32,
+    source_generation: u64,
+    next: u64,
+) -> io::Result<Option<crate::recovery::records::state::Configuration>> {
+    use crate::recovery::records::state::Configuration;
+    use crate::recovery::{records::deployment::source, update::journal::open_directory};
+    let records = open_directory(&volume.join("State/var/lib/linos/configuration"))?;
+    let name = format!("{next}.record");
+    let (configuration, complete) = match source::read_at(&records, &name, 64 * 1024) {
+        Ok(bytes) => (Configuration::parse(&bytes)?, true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let intent = match source::read_at(
+                &records,
+                &format!("prepared-{}-{next}.record", snapshot.transaction()),
+                64 * 1024,
+            ) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => return Err(error),
+            };
+            let configuration = Configuration::selected(
+                next,
+                target_id,
+                Some(snapshot.selected_config_generation()),
+                schema,
+                &sha256(&intent)?,
+            )?;
+            configuration.verify_prepared_merge_at(&intent, snapshot, source_generation)?;
+            match tree::snapshot(&volume.join(format!("State/config/{next}"))) {
+                Ok(_) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => return Err(error),
+            }
+            (configuration, false)
+        }
+        Err(error) => return Err(error),
+    };
+    if configuration.generation() != next
+        || configuration.deployment_id() != target_id
+        || configuration.schema() != schema
+    {
+        return Err(invalid(
+            "Published configuration differs from expected target",
+        ));
+    }
+    let receipts = open_directory(&volume.join("State/var/lib/linos/configuration/receipts"))?;
+    let receipt = source::read_at(
+        &receipts,
+        &format!("{}.record", configuration.merge_receipt_sha256()),
+        64 * 1024,
+    )?;
+    let expected = configuration.verify_prepared_merge_at(&receipt, snapshot, source_generation)?;
+    let source_digest = digest(&tree::snapshot(&volume.join(format!(
+        "State/config/{}",
+        snapshot.selected_config_generation()
+    )))?)?;
+    if !receipt
+        .split(|byte| *byte == b'\n')
+        .any(|line| line == format!("source_tree_sha256={source_digest}").as_bytes())
+        || digest(&tree::snapshot(
+            &volume.join(format!("State/config/{next}")),
+        )?)? != expected
+    {
+        return Err(invalid(
+            "Published configuration no longer matches its merge receipt",
+        ));
+    }
+    if !complete {
+        record(&records, &name, configuration.encode().as_bytes())?;
+    }
+    Ok(Some(configuration))
+}
+
 impl Prepared {
     pub fn build(input: Inputs<'_>) -> io::Result<Self> {
         let journal = input.journal;
@@ -104,10 +390,7 @@ impl Prepared {
                 "Configuration source/target disagrees with journal, or selected trial must be reused",
             ));
         }
-        let generation = journal
-            .selected_config_generation()
-            .checked_add(1)
-            .ok_or_else(|| invalid("Configuration generation exhausted"))?;
+        let generation = allocation(input.volume, journal, input.target.manifest().id(), schema)?;
         let current_tree = tree::snapshot(input.current)?;
         let current_accounts = accounts(&current_tree)?;
         input
@@ -155,11 +438,12 @@ impl Prepared {
             return Err(invalid("Current configuration changed during preparation"));
         }
         let receipt = format!(
-            "kind=linos-configuration-merge\nformat=1\ntransaction={}\nsource_journal_generation={}\nsource_config_generation={}\nselected_config_generation={}\nsource_deployment_id={}\ntarget_deployment_id={}\nsource_tree_sha256={}\ntarget_tree_sha256={}\n",
+            "kind=linos-configuration-merge\nformat=1\ntransaction={}\nsource_journal_generation={}\nsource_config_generation={}\nselected_config_generation={}\nschema={}\nsource_deployment_id={}\ntarget_deployment_id={}\nsource_tree_sha256={}\ntarget_tree_sha256={}\n",
             journal.transaction(),
             journal.generation(),
             journal.selected_config_generation(),
             generation,
+            schema,
             input.source.manifest().id(),
             input.target.manifest().id(),
             digest(&current_tree)?,
@@ -201,12 +485,14 @@ impl Prepared {
         volume: &Path,
         journal: &crate::recovery::records::transaction::journal::Journal,
     ) -> io::Result<crate::recovery::records::state::Configuration> {
-        use crate::recovery::{records::deployment::source, update::journal::open_directory};
+        use crate::recovery::update::journal::open_directory;
         use rustix::fs::{self, Mode, OFlags};
-        use std::{fs::File, io::Write};
+        use std::fs::File;
         if journal.read()?.as_ref() != Some(&self.snapshot) {
             return Err(invalid("Stale configuration publication"));
         }
+        self.configuration
+            .verify_prepared_merge(self.receipt.as_bytes(), &self.snapshot)?;
         let current = volume.join(format!(
             "State/config/{}",
             self.snapshot.selected_config_generation()
@@ -220,38 +506,6 @@ impl Prepared {
         if receipt_digest != self.configuration.merge_receipt_sha256() {
             return Err(invalid("Prepared receipt identity mismatch"));
         }
-        fn record(parent: &File, name: &str, bytes: &[u8]) -> io::Result<()> {
-            match source::read_at(parent, name, 64 * 1024) {
-                Ok(existing) if existing == bytes => return parent.sync_all(),
-                Ok(_) => {
-                    return Err(invalid(
-                        "Prepared generation record conflicts with existing intent",
-                    ));
-                }
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error),
-            }
-            match fs::unlinkat(parent, "configuration.pending", fs::AtFlags::empty()) {
-                Ok(()) | Err(rustix::io::Errno::NOENT) => {}
-                Err(error) => return Err(error.into()),
-            }
-            let mut file = File::from(fs::openat(
-                parent,
-                "configuration.pending",
-                OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-                Mode::RUSR | Mode::WUSR,
-            )?);
-            file.write_all(bytes)?;
-            file.sync_all()?;
-            fs::renameat_with(
-                parent,
-                "configuration.pending",
-                parent,
-                name,
-                fs::RenameFlags::NOREPLACE,
-            )?;
-            parent.sync_all()
-        }
         record(
             &records,
             &format!(
@@ -259,6 +513,22 @@ impl Prepared {
                 self.snapshot.transaction(),
                 self.generation
             ),
+            self.receipt.as_bytes(),
+        )?;
+        match fs::mkdirat(&records, "receipts", Mode::RUSR | Mode::WUSR | Mode::XUSR) {
+            Ok(()) | Err(rustix::io::Errno::EXIST) => {}
+            Err(error) => return Err(error.into()),
+        }
+        records.sync_all()?;
+        let receipts = File::from(fs::openat(
+            &records,
+            "receipts",
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?);
+        record(
+            &receipts,
+            &format!("{receipt_digest}.record"),
             self.receipt.as_bytes(),
         )?;
         let destination = volume.join(format!("State/config/{}", self.generation));
@@ -377,7 +647,15 @@ mod tests {
             )
             .unwrap();
         assert_eq!(candidate, snapshot);
-        let receipt = "kind=fixture-merge\nformat=1\n".to_owned();
+        let source_digest = digest(&tree::snapshot(&current).unwrap()).unwrap();
+        let target_digest = digest(&tree::snapshot(&work).unwrap()).unwrap();
+        let receipt = format!(
+            "kind=linos-configuration-merge\nformat=1\ntransaction={}\nsource_journal_generation={}\nsource_config_generation=1\nselected_config_generation=2\nschema=1\nsource_deployment_id={}\ntarget_deployment_id={}\nsource_tree_sha256={source_digest}\ntarget_tree_sha256={target_digest}\n",
+            snapshot.transaction(),
+            snapshot.generation(),
+            id,
+            "c".repeat(64),
+        );
         let configuration = Configuration::selected(
             2,
             &"c".repeat(64),
@@ -392,11 +670,34 @@ mod tests {
             receipt,
             snapshot: snapshot.clone(),
             configuration: configuration.clone(),
-            source_digest: digest(&tree::snapshot(&current).unwrap()).unwrap(),
-            target_digest: digest(&tree::snapshot(&volume.join("State/config/work/etc")).unwrap())
-                .unwrap(),
+            source_digest,
+            target_digest,
         };
         assert_eq!(prepared.publish(&volume, &journal).unwrap(), configuration);
+        // An exhausted trial may have published generation 2 without selecting
+        // it. Its fallback reserves generation 3, preserving both source 1 and 2.
+        let exhausted = snapshot.exhausted().unwrap();
+        assert_eq!(allocation(&volume, &exhausted, &id, 1).unwrap(), 3);
+        assert_eq!(
+            allocation(&volume, &snapshot, &"c".repeat(64), 1).unwrap(),
+            2
+        );
+        let records = volume.join("State/var/lib/linos/configuration");
+        let duplicate = records.join(format!("prepared-{}-4.record", snapshot.transaction()));
+        std::fs::write(
+            &duplicate,
+            prepared.receipt.replace(
+                "selected_config_generation=2",
+                "selected_config_generation=4",
+            ),
+        )
+        .unwrap();
+        assert!(allocation(&volume, &snapshot, &"c".repeat(64), 1).is_err());
+        std::fs::remove_file(duplicate).unwrap();
+        let overflow = records.join(format!("{}.record", u64::MAX));
+        std::fs::write(&overflow, b"reserved").unwrap();
+        assert!(allocation(&volume, &exhausted, &id, 1).is_err());
+        std::fs::remove_file(overflow).unwrap();
         assert_eq!(journal.read().unwrap(), Some(snapshot.clone()));
         assert_eq!(
             std::fs::read(current.join("shadow")).unwrap(),
@@ -407,6 +708,53 @@ mod tests {
             b"synthetic merged credential"
         );
         assert_eq!(prepared.publish(&volume, &journal).unwrap(), configuration);
+        let published_record = volume.join("State/var/lib/linos/configuration/2.record");
+        std::fs::remove_file(&published_record).unwrap();
+        // Power loss after the tree rename but before its final record is
+        // recoverable without rerunning account creation or resetting attempts.
+        assert_eq!(
+            published_configuration(&volume, &snapshot, &"c".repeat(64), 1).unwrap(),
+            Some(configuration.clone()),
+        );
+        assert!(published_record.is_file());
+        assert_eq!(journal.read().unwrap(), Some(snapshot.clone()));
+        assert_eq!(
+            published_configuration(&volume, &snapshot, &"c".repeat(64), 1).unwrap(),
+            Some(configuration.clone()),
+        );
+        let target_file = volume.join("State/config/2/shadow");
+        std::fs::write(&target_file, b"tampered prepared credential").unwrap();
+        assert!(published_configuration(&volume, &snapshot, &"c".repeat(64), 1).is_err());
+        std::fs::write(&target_file, b"synthetic merged credential").unwrap();
+        std::fs::write(current.join("shadow"), b"changed source credential").unwrap();
+        assert!(published_configuration(&volume, &snapshot, &"c".repeat(64), 1).is_err());
+        std::fs::write(current.join("shadow"), b"synthetic current credential").unwrap();
+        // Once an intent advances the journal, its verified original merge
+        // generation still validates the published tree. Ordinary retry cannot
+        // reinterpret that prior receipt as belonging to a new generation.
+        assert_eq!(
+            published_configuration_at(
+                &volume,
+                &exhausted,
+                &"c".repeat(64),
+                1,
+                snapshot.generation(),
+                2
+            )
+            .unwrap(),
+            Some(configuration.clone()),
+        );
+        assert!(
+            published_configuration_at(
+                &volume,
+                &exhausted,
+                &"c".repeat(64),
+                1,
+                exhausted.generation(),
+                2
+            )
+            .is_err()
+        );
         journal
             .apply(
                 &snapshot,

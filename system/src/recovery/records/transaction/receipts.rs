@@ -4,7 +4,7 @@
 use super::{
     Entry, Phase, Transaction,
     boot::{self, Counter, Observation},
-    optional_entry,
+    optional_entry, optional_hash,
 };
 use crate::recovery::records::{
     Layout,
@@ -45,6 +45,27 @@ const HEALTH_KEYS: [&str; 16] = [
     "initramfs_sha256",
     "observed_entry_path",
     "decision",
+];
+const HEALTH_KEYS_V2: [&str; 19] = [
+    "kind",
+    "format",
+    "transaction",
+    "source_journal_generation",
+    "source_config_generation",
+    "selected_config_generation",
+    "healthy_id",
+    "healthy_entry_transaction",
+    "candidate_id",
+    "candidate_entry_transaction",
+    "publication_receipt_sha256",
+    "entry_sha256",
+    "kernel_sha256",
+    "initramfs_sha256",
+    "observed_entry_path",
+    "decision",
+    "previous_healthy_id",
+    "previous_entry_transaction",
+    "previous_entry_sha256",
 ];
 
 fn record<const N: usize>(keys: [&str; N], values: [String; N]) -> String {
@@ -222,6 +243,13 @@ pub struct FallbackReceipt {
 }
 
 impl FallbackReceipt {
+    pub fn preparation_generation(&self) -> u64 {
+        self.inner.source_journal_generation
+    }
+    pub fn configuration_generation(&self) -> u64 {
+        self.inner.selected_config_generation
+    }
+
     pub fn verify_completed(
         &self,
         journal: &Transaction,
@@ -268,6 +296,9 @@ impl FallbackReceipt {
             return Err(invalid("Unsupported fallback receipt"));
         }
         let inner = HealthIntent {
+            format: 1,
+            previous: None,
+            previous_entry_sha256: None,
             transaction: positive(f[2])?,
             source_journal_generation: decimal(f[3])?,
             source_config_generation: positive(f[4])?,
@@ -313,6 +344,9 @@ impl FallbackReceipt {
         }
         let receipt = Self {
             inner: HealthIntent {
+                format: 1,
+                previous: None,
+                previous_entry_sha256: None,
                 transaction: journal.transaction(),
                 source_journal_generation: journal.generation(),
                 source_config_generation: journal.selected_config_generation(),
@@ -406,9 +440,7 @@ impl FallbackReceipt {
         Ok(())
     }
     pub fn encode(&self) -> String {
-        self.inner
-            .encode()
-            .replace("decision=approve\n", "decision=fallback\n")
+        self.inner.encode_common("1", "fallback")
     }
     pub fn digest(&self) -> io::Result<String> {
         sha256(self.encode().as_bytes())
@@ -423,6 +455,9 @@ impl FallbackReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HealthIntent {
+    format: u8,
+    previous: Option<Entry>,
+    previous_entry_sha256: Option<String>,
     transaction: u64,
     source_journal_generation: u64,
     source_config_generation: u64,
@@ -437,12 +472,53 @@ pub struct HealthIntent {
 }
 
 impl HealthIntent {
+    /// An exhausted boot may supersede the exact earlier approval intent. Only
+    /// reverse the single typed exhaustion transition for this read only check.
+    pub fn verify_exhausted(
+        &self,
+        journal: &Transaction,
+        publication: &Publication,
+    ) -> io::Result<()> {
+        if journal.phase() != Phase::RollbackRequired
+            || journal.health_receipt_sha256() != Some(self.digest()?.as_str())
+        {
+            return Err(invalid("Approval supersession requires an exhausted trial"));
+        }
+        let mut trial = journal.clone();
+        trial.phase = Phase::Trial;
+        trial.generation = trial
+            .generation
+            .checked_sub(1)
+            .ok_or_else(|| invalid("Missing exhaustion source generation"))?;
+        if trial.exhausted()? != *journal {
+            return Err(invalid("Exhaustion changed approval authority"));
+        }
+        self.verify(&trial, publication)
+    }
+
     pub fn parse(bytes: &[u8]) -> io::Result<Self> {
-        let f = ordered(bytes, HEALTH_KEYS)?;
-        if f[0] != "linos-health" || f[1] != "1" || f[15] != "approve" {
+        let extended = bytes.starts_with(b"kind=linos-health\nformat=2\n");
+        let f = if extended {
+            ordered(bytes, HEALTH_KEYS_V2)?.to_vec()
+        } else {
+            ordered(bytes, HEALTH_KEYS)?.to_vec()
+        };
+        if f[0] != "linos-health" || f[1] != if extended { "2" } else { "1" } || f[15] != "approve"
+        {
             return Err(invalid("Unsupported health receipt or decision"));
         }
         let receipt = Self {
+            format: if extended { 2 } else { 1 },
+            previous: if extended {
+                optional_entry(f[16], f[17])?
+            } else {
+                None
+            },
+            previous_entry_sha256: if extended {
+                optional_hash(f[18])?
+            } else {
+                None
+            },
             transaction: positive(f[2])?,
             source_journal_generation: decimal(f[3])?,
             source_config_generation: positive(f[4])?,
@@ -461,6 +537,11 @@ impl HealthIntent {
             .ok_or_else(|| invalid("Health observation is outside managed EFI entries"))?;
         let (entry, counter) = boot::parse_filename(filename)?;
         if entry != receipt.candidate
+            || receipt.previous.is_some() != receipt.previous_entry_sha256.is_some()
+            || receipt
+                .previous
+                .as_ref()
+                .is_some_and(|entry| entry.transaction() >= receipt.healthy.transaction())
             || !matches!(counter, Counter::First | Counter::Last)
             || receipt.candidate.transaction() != receipt.transaction
             || receipt.healthy.transaction() >= receipt.transaction
@@ -490,6 +571,9 @@ impl HealthIntent {
             ));
         }
         let receipt = Self {
+            format: 2,
+            previous: journal.previous().cloned(),
+            previous_entry_sha256: observed.previous_entry_sha256().map(str::to_owned),
             transaction: journal.transaction(),
             source_journal_generation: journal.generation(),
             source_config_generation: journal.source_config_generation(),
@@ -508,6 +592,7 @@ impl HealthIntent {
 
     fn check_selection(&self, journal: &Transaction, publication: &Publication) -> io::Result<()> {
         if journal.phase() != Phase::Trial
+            || self.previous.as_ref() != journal.previous()
             || journal.transaction() != self.transaction
             || journal.healthy() != Some(&self.healthy)
             || journal.candidate() != Some(&self.candidate)
@@ -545,12 +630,12 @@ impl HealthIntent {
         Ok(())
     }
 
-    pub fn encode(&self) -> String {
+    fn encode_common(&self, format: &str, decision: &str) -> String {
         record(
             HEALTH_KEYS,
             [
                 "linos-health".into(),
-                "1".into(),
+                format.into(),
                 self.transaction.to_string(),
                 self.source_journal_generation.to_string(),
                 self.source_config_generation.to_string(),
@@ -564,9 +649,58 @@ impl HealthIntent {
                 self.kernel_sha256.clone(),
                 self.initramfs_sha256.clone(),
                 self.observed_entry_path.clone(),
-                "approve".into(),
+                decision.into(),
             ],
         )
+    }
+    pub fn encode(&self) -> String {
+        let mut text = self.encode_common(&self.format.to_string(), "approve");
+        if self.format == 2 {
+            text.push_str(&format!(
+                "previous_healthy_id={}\nprevious_entry_transaction={}\nprevious_entry_sha256={}\n",
+                self.previous.as_ref().map_or("none", Entry::deployment_id),
+                self.previous
+                    .as_ref()
+                    .map_or_else(|| "none".into(), |entry| entry.transaction().to_string()),
+                self.previous_entry_sha256.as_deref().unwrap_or("none"),
+            ));
+        }
+        text
+    }
+    pub fn previous(&self) -> Option<&Entry> {
+        self.previous.as_ref()
+    }
+    pub fn previous_entry_sha256(&self) -> Option<&str> {
+        self.previous_entry_sha256.as_deref()
+    }
+    pub fn verify_completed(
+        &self,
+        journal: &Transaction,
+        publication: &Publication,
+    ) -> io::Result<()> {
+        if journal.phase() != Phase::Healthy
+            || journal.healthy() != Some(&self.candidate)
+            || journal.previous() != Some(&self.healthy)
+            || journal.candidate().is_some()
+            || journal.transaction() != self.transaction
+            || journal.selected_deployment_id() != self.candidate.deployment_id()
+            || journal.selected_config_generation() != self.selected_config_generation
+            || journal.source_config_generation() != self.source_config_generation
+            || journal.health_receipt_sha256() != Some(self.digest()?.as_str())
+            || journal.publication_receipt_sha256() != Some(publication.digest()?.as_str())
+            || self.publication_receipt_sha256 != publication.digest()?
+            || publication.healthy != self.healthy
+            || publication.candidate != self.candidate
+            || self.entry_sha256 != publication.entry_sha256
+            || self.kernel_sha256 != publication.kernel_sha256
+            || self.initramfs_sha256 != publication.initramfs_sha256
+            || self.source_journal_generation.checked_add(2) != Some(journal.generation())
+        {
+            return Err(invalid(
+                "Completed approval differs from its durable intent",
+            ));
+        }
+        Ok(())
     }
     pub fn digest(&self) -> io::Result<String> {
         sha256(self.encode().as_bytes())
@@ -625,6 +759,9 @@ mod tests {
         let configuration = Configuration::parse(format!("kind=linos-configuration\nformat=1\ngeneration=2\ndeployment_id={new}\nparent_generation=1\nschema=1\nmerge_receipt_sha256={digest}\nphase=selected\n").as_bytes()).unwrap();
         let journal = journal.select_candidate(&configuration).unwrap();
         let health = HealthIntent {
+            format: 2,
+            previous: None,
+            previous_entry_sha256: None,
             transaction: journal.transaction(),
             source_journal_generation: journal.generation(),
             source_config_generation: 1,
@@ -703,6 +840,7 @@ mod tests {
         let (journal, _, publication, health) = fixture();
         let failed = journal.exhausted().unwrap();
         let mut inner = health.clone();
+        inner.format = 1;
         inner.source_journal_generation = failed.generation();
         inner.source_config_generation = failed.selected_config_generation();
         inner.selected_config_generation = 3;
@@ -741,12 +879,40 @@ mod tests {
     }
 
     #[test]
+    fn only_the_exact_approved_trial_can_be_superseded_after_exhaustion() {
+        let (trial, _, publication, health) = fixture();
+        let intent = trial.health_intent(&health.digest().unwrap()).unwrap();
+        health
+            .verify_exhausted(&intent.exhausted().unwrap(), &publication)
+            .unwrap();
+        assert!(health.verify_exhausted(&trial, &publication).is_err());
+        assert!(
+            health
+                .verify_exhausted(&trial.exhausted().unwrap(), &publication)
+                .is_err()
+        );
+        let mut unrelated = health.clone();
+        unrelated.selected_config_generation += 1;
+        assert!(
+            unrelated
+                .verify_exhausted(&intent.exhausted().unwrap(), &publication)
+                .is_err()
+        );
+        let later = intent
+            .exhausted()
+            .unwrap()
+            .fallback_intent(&"f".repeat(64))
+            .unwrap();
+        assert!(health.verify_exhausted(&later, &publication).is_err());
+    }
+
+    #[test]
     fn malformed_receipts_never_become_reconciliation_evidence() {
         let (_, _, publication, health) = fixture();
         let text = health.encode();
         for (from, to) in [
             ("decision=approve", "decision=fallback"),
-            ("format=1", "format=01"),
+            ("format=2", "format=02"),
             (
                 "selected_config_generation=2",
                 "selected_config_generation=1",

@@ -27,6 +27,8 @@ use std::{
     path::Path,
 };
 
+mod configuration;
+mod health;
 mod native;
 const VOLUME: &str = "/run/linos/volume";
 const KEY: &str = "/usr/lib/linos/trust/deployment.pem";
@@ -69,7 +71,7 @@ struct Context {
     key: Vec<u8>,
 }
 
-fn context(selectors: Selectors) -> io::Result<Context> {
+fn context(selectors: Selectors, allow_prepare: bool) -> io::Result<Context> {
     let storage = open_directory(Path::new(&format!("{VOLUME}/State/var/lib/linos/storage")))?;
     let layout = Layout::parse(&source::read_at(&storage, "layout", 64 * 1024)?)?;
     layout.require_plain()?;
@@ -94,7 +96,7 @@ fn context(selectors: Selectors) -> io::Result<Context> {
     let journal = Journal::open(Path::new(&format!(
         "{VOLUME}/State/var/lib/linos/updates/v3"
     )))?;
-    let snapshot = journal
+    let mut snapshot = journal
         .read()?
         .ok_or_else(|| invalid("Missing layout 2 transaction journal"))?;
     let key = source::trusted_key(Path::new(KEY))?;
@@ -119,39 +121,78 @@ fn context(selectors: Selectors) -> io::Result<Context> {
             .to_str()
             .map_err(|_| invalid("Invalid running kernel identity"))?,
     )?;
-    let observed = journal.inspect_boot(&layout)?;
+    if allow_prepare {
+        configuration::resume_retirement(&journal, &snapshot, &layout, &loaded, &key)?;
+    }
+    let mut observed = journal.inspect_boot(&layout)?;
     if observed.selectors() != &selectors {
         return Err(invalid(
             "Native boot selection changed during deployment authentication",
         ));
     }
+    if allow_prepare && observed.decision() == BootDecision::MergeFallback {
+        snapshot = configuration::select_fallback(
+            &journal, &snapshot, &layout, &loaded, &key, &selectors,
+        )?;
+        observed = journal.inspect_boot(&layout)?;
+    }
+    if allow_prepare && observed.decision() == BootDecision::ResumeApproval {
+        let configuration = selected_configuration(&snapshot, &loaded)?;
+        configuration::validate_target(&loaded, &key, &configuration)?;
+        snapshot = journal.resume_approval(&snapshot, &layout, loaded.manifest())?;
+        observed = journal.inspect_boot(&layout)?;
+    }
     if !matches!(
         observed.decision(),
-        BootDecision::InitialSetup | BootDecision::Healthy | BootDecision::Candidate
+        BootDecision::InitialSetup
+            | BootDecision::Healthy
+            | BootDecision::Candidate
+            | BootDecision::ResumeApproval
     ) {
         return Err(invalid(
             "Boot requires configuration/fallback reconciliation before root attachment",
         ));
     }
     if snapshot.selected_deployment_id() != selectors.entry.deployment_id() {
-        return Err(invalid(
-            "Candidate configuration must be prepared and durably selected before root attachment",
-        ));
+        if !allow_prepare || observed.decision() != BootDecision::Candidate {
+            return Err(invalid(
+                "Configuration selection requires early candidate preparation",
+            ));
+        }
+        snapshot = configuration::select_candidate(
+            &journal, &snapshot, &layout, &loaded, &key, &selectors,
+        )?;
     }
-    let configs = open_directory(Path::new(&format!(
-        "{VOLUME}/State/var/lib/linos/configuration"
-    )))?;
-    let configuration = Configuration::parse(&source::read_at(
-        &configs,
-        &format!("{}.record", snapshot.selected_config_generation()),
-        64 * 1024,
-    )?)?;
-    snapshot.require_selected_configuration(&configuration, loaded.manifest())?;
-    let current =
-        generation::accounts(&super::configuration::tree::snapshot(Path::new(&format!(
-            "{VOLUME}/State/config/{}",
-            snapshot.selected_config_generation()
-        )))?)?;
+    let configuration = selected_configuration(&snapshot, &loaded)?;
+    if snapshot.operation() == super::records::transaction::Operation::Install {
+        journal.initial_publication(&snapshot)?.verify(
+            &snapshot,
+            &layout,
+            loaded.manifest(),
+            &configuration,
+        )?;
+        if snapshot.phase() == super::records::transaction::Phase::Healthy {
+            journal.verify_initial_health(&snapshot, &layout, loaded.manifest(), &configuration)?;
+        }
+    }
+    require_accounts(&loaded, configuration.generation())?;
+    Registry::load(Path::new(VOLUME), &key)?.require_target(&loaded.requirements().services)?;
+    super::records::transaction::boot::verify_efi_artifacts(loaded.manifest())?;
+    Ok(Context {
+        layout,
+        journal,
+        snapshot,
+        loaded,
+        configuration,
+        selectors,
+        key,
+    })
+}
+
+fn require_accounts(loaded: &Loaded, generation: u64) -> io::Result<()> {
+    let current = generation::accounts(&super::configuration::tree::snapshot(Path::new(
+        &format!("{VOLUME}/State/config/{generation}"),
+    ))?)?;
     if !loaded
         .requirements()
         .accounts
@@ -162,7 +203,6 @@ fn context(selectors: Selectors) -> io::Result<Context> {
             "Selected configuration is missing required native accounts",
         ));
     }
-    Registry::load(Path::new(VOLUME), &key)?.require_target(&loaded.requirements().services)?;
     for service in loaded.requirements().services.services() {
         if service
             .paths()
@@ -174,16 +214,28 @@ fn context(selectors: Selectors) -> io::Result<Context> {
             ));
         }
     }
-    super::records::transaction::boot::verify_efi_artifacts(loaded.manifest())?;
-    Ok(Context {
-        layout,
-        journal,
-        snapshot,
-        loaded,
-        configuration,
-        selectors,
-        key,
-    })
+    Ok(())
+}
+
+fn selected_configuration(snapshot: &Transaction, loaded: &Loaded) -> io::Result<Configuration> {
+    let configs = open_directory(Path::new(&format!(
+        "{VOLUME}/State/var/lib/linos/configuration"
+    )))?;
+    let configuration = Configuration::parse(&source::read_at(
+        &configs,
+        &format!("{}.record", snapshot.selected_config_generation()),
+        64 * 1024,
+    )?)?;
+    snapshot.require_selected_configuration(&configuration, loaded.manifest())?;
+    let receipts = open_directory(Path::new(&format!(
+        "{VOLUME}/State/var/lib/linos/configuration/receipts"
+    )))?;
+    configuration.verify_merge_receipt(&source::read_at(
+        &receipts,
+        &format!("{}.record", configuration.merge_receipt_sha256()),
+        64 * 1024,
+    )?)?;
+    Ok(configuration)
 }
 
 fn receipt(context: &Context) -> io::Result<String> {
@@ -228,7 +280,7 @@ pub fn prepare_root() -> io::Result<()> {
         libc::MS_NODEV | libc::MS_NOSUID | libc::MS_NOEXEC,
         "umask=0077",
     )?;
-    let context = context(selected)?;
+    let context = context(selected, true)?;
     context.loaded.artifacts().revalidate()?;
     native::attach_readonly(context.loaded.artifacts().system_image())?;
     let directory = open_directory(Path::new("/run/linos"))?;
@@ -246,7 +298,7 @@ pub fn prepare_root() -> io::Result<()> {
 /// initramfs local-bottom. Debian then moves /run with these child mounts into
 /// the real root. Image package metadata is pinned before State covers /var.
 pub fn mount_state() -> io::Result<()> {
-    let context = context(selectors()?)?;
+    let context = context(selectors()?, false)?;
     let marker = std::fs::read("/root/usr/lib/linos/storage-layout")?;
     if marker != b"layout=2\n" {
         return Err(invalid(
@@ -283,9 +335,13 @@ pub fn mount_state() -> io::Result<()> {
 
 /// Real init gate, before identity, enrollment or service data writes.
 pub fn verify_running() -> io::Result<()> {
-    let context = context(selectors()?)?;
+    let context = context(selectors()?, false)?;
+    verify_context(&context)
+}
+
+fn verify_context(context: &Context) -> io::Result<()> {
     let runtime = open_directory(Path::new("/run/linos"))?;
-    if source::read_at(&runtime, RECEIPT, 4096)? != receipt(&context)?.as_bytes() {
+    if source::read_at(&runtime, RECEIPT, 4096)? != receipt(context)?.as_bytes() {
         return Err(invalid(
             "Runtime boot receipt disagrees with selected identity",
         ));
@@ -295,4 +351,8 @@ pub fn verify_running() -> io::Result<()> {
         context.loaded.artifacts(),
         context.configuration.generation(),
     )
+}
+
+pub fn approve_running_boot() -> io::Result<()> {
+    health::approve_running_boot()
 }

@@ -50,6 +50,7 @@ printf '/dev/linos-system / ext4 ro,noload 0 0\n' > "$STAGE/etc/fstab"
 mkdir -p "$STAGE/efi" "$STAGE/usr/local" "$STAGE/srv" "$STAGE/var/lib/apt"
 [[ -f "$STAGE/var/lib/apt/extended_states" ]] || : > "$STAGE/var/lib/apt/extended_states"
 ln -sfn /dev/null "$STAGE/etc/systemd/system/tmp.mount"
+ln -sfn /dev/null "$STAGE/etc/systemd/system/linos-update-health.service"
 # Machine identity, entropy and SSH host credentials belong to the installed
 # device, never to a generic image or CI's private signing key workspace.
 : > "$STAGE/etc/machine-id"
@@ -58,7 +59,7 @@ chroot "$STAGE" update-initramfs -u -k "$VERSION"
 cmp "$BASE/boot/kernel" "$STAGE/boot/vmlinuz-$VERSION"
 grep -Fxq CONFIG_BLK_DEV_LOOP=y "$STAGE/boot/config-$VERSION"
 lsinitramfs "$STAGE/boot/initrd.img-$VERSION" > "$WORK/initramfs-files"
-for member in usr/lib/linos/linos-layout2 usr/lib/linos/trust/deployment.pem scripts/local-top/linos-layout2 scripts/local-bottom/linos-layout2; do
+for member in usr/lib/linos/linos-layout2 usr/lib/linos/trust/deployment.pem scripts/local-top/linos-layout2 scripts/local-bottom/linos-layout2 usr/sbin/groupadd usr/sbin/useradd; do
     grep -Fxq "$member" "$WORK/initramfs-files" || { echo "Missing initramfs member: $member" >&2; exit 1; }
 done
 TARGET_DIR="${LINOS_TARGET_DIR:?verified userspace output directory}"

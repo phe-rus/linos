@@ -47,11 +47,15 @@ fn trial() -> Transaction {
 fn inventory_fixture(journal: &Transaction, counter: Counter) -> BTreeMap<String, Vec<u8>> {
     let mut entries = BTreeMap::new();
     let layout = layout();
-    let healthy = journal.healthy().unwrap();
-    entries.insert(
-        filename(healthy, Counter::Stable),
-        render(&layout, healthy, false).into_bytes(),
-    );
+    for healthy in [journal.healthy(), journal.previous()]
+        .into_iter()
+        .flatten()
+    {
+        entries.insert(
+            filename(healthy, Counter::Stable),
+            render(&layout, healthy, false).into_bytes(),
+        );
+    }
     if let Some(candidate) = journal.candidate() {
         entries.insert(
             filename(candidate, counter),
@@ -323,6 +327,182 @@ fn stable_initial_and_healthy_boots_and_strict_efi_decoding() {
 }
 
 #[test]
+fn initial_health_commits_only_the_exact_authenticated_installation_and_retries_receipt_publication()
+ {
+    use crate::recovery::records::{
+        signing_fixture::Signer, state::Configuration, transaction::journal::Journal,
+    };
+    use std::os::unix::fs::PermissionsExt;
+    let signer = Signer::new();
+    let manifest = signer.deployment();
+    let recovery = signer.recovery();
+    let installed_layout = Layout::parse(
+        layout()
+            .encode()
+            .replace(
+                &format!("baseline_manifest_sha256={}", "b".repeat(64)),
+                &format!("baseline_manifest_sha256={}", manifest.id()),
+            )
+            .as_bytes(),
+    )
+    .unwrap();
+    let (configuration, _) = Configuration::initial(manifest.id(), 1, &"c".repeat(64)).unwrap();
+    let path = std::env::current_dir()
+        .unwrap()
+        .join("target/initial-health-tests")
+        .join(std::process::id().to_string());
+    std::fs::create_dir_all(&path).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let journal = Journal::open(&path).unwrap();
+    let initial = journal
+        .initialize_install(&installed_layout, &manifest, &configuration, &recovery, 1)
+        .unwrap();
+    let publication = journal.initial_publication(&initial).unwrap();
+    let entry = Entry::new(manifest.id(), 1).unwrap();
+    let entries = BTreeMap::from([(
+        filename(&entry, Counter::Stable),
+        render(&layout(), &entry, false).into_bytes(),
+    )]);
+    let observed = reconcile(
+        &layout(),
+        &initial,
+        &options(&entry, false),
+        &firmware_fixture(&entry, Counter::Stable),
+        &entries,
+    )
+    .unwrap();
+    let other_entry = Entry::new(&"f".repeat(64), 1).unwrap();
+    let other_initial =
+        Transaction::installed(other_entry.deployment_id(), 1, &"b".repeat(64)).unwrap();
+    let other_entries = BTreeMap::from([(
+        filename(&other_entry, Counter::Stable),
+        render(&layout(), &other_entry, false).into_bytes(),
+    )]);
+    let wrong = reconcile(
+        &layout(),
+        &other_initial,
+        &options(&other_entry, false),
+        &firmware_fixture(&other_entry, Counter::Stable),
+        &other_entries,
+    )
+    .unwrap();
+    assert!(
+        journal
+            .approve_initial(
+                &initial,
+                &installed_layout,
+                &manifest,
+                &configuration,
+                &wrong
+            )
+            .is_err()
+    );
+    assert_eq!(journal.read().unwrap(), Some(initial.clone()));
+    journal
+        .persist_receipt(&initial, publication.health_receipt().unwrap().as_bytes())
+        .unwrap();
+    let healthy = journal
+        .approve_initial(
+            &initial,
+            &installed_layout,
+            &manifest,
+            &configuration,
+            &observed,
+        )
+        .unwrap();
+    assert_eq!(healthy.healthy(), Some(&entry));
+    assert_eq!(healthy.generation(), 1);
+    journal
+        .verify_initial_health(&healthy, &installed_layout, &manifest, &configuration)
+        .unwrap();
+    assert!(
+        journal
+            .initialize_install(&installed_layout, &manifest, &configuration, &recovery, 1)
+            .is_err()
+    );
+    assert!(
+        journal
+            .approve_initial(
+                &healthy,
+                &installed_layout,
+                &manifest,
+                &configuration,
+                &observed
+            )
+            .is_err()
+    );
+    let file = path.join(format!(
+        "receipts/1/{}.record",
+        healthy.health_receipt_sha256().unwrap()
+    ));
+    std::fs::write(file, b"tampered initial health").unwrap();
+    assert!(
+        journal
+            .verify_initial_health(&healthy, &installed_layout, &manifest, &configuration)
+            .is_err()
+    );
+    drop(journal);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn completed_fallback_retires_only_exact_exhausted_bytes_and_retries_after_removal() {
+    use crate::recovery::records::{deployment::sha256, state::Configuration};
+    let journal = trial();
+    let failed = journal.candidate().unwrap();
+    let good = journal.healthy().unwrap();
+    let entries = inventory_fixture(&journal, Counter::Last);
+    let expected = sha256(render(&layout(), failed, true).as_bytes()).unwrap();
+    let configuration =
+        Configuration::selected(2, good.deployment_id(), Some(1), 1, &"f".repeat(64)).unwrap();
+    let digest = "b".repeat(64);
+    let completed = journal
+        .exhausted()
+        .unwrap()
+        .fallback_intent(&digest)
+        .unwrap()
+        .fallback(&configuration, &digest)
+        .unwrap();
+    let observe = |entries: &BTreeMap<String, Vec<u8>>| {
+        reconcile(
+            &layout(),
+            &completed,
+            &options(good, false),
+            &firmware_fixture(good, Counter::Stable),
+            entries,
+        )
+    };
+    assert!(observe(&entries).is_err());
+    let retirement = retirement_inventory(failed, &expected, entries.clone()).unwrap();
+    assert_eq!(retirement.name, filename(failed, Counter::Last));
+    assert!(retirement.bytes.is_some());
+    assert_eq!(
+        observe(&retirement.remaining).unwrap().decision(),
+        BootDecision::Healthy
+    );
+    let retry = retirement_inventory(failed, &expected, retirement.remaining).unwrap();
+    assert!(retry.bytes.is_none());
+    assert_eq!(
+        observe(&retry.remaining).unwrap().decision(),
+        BootDecision::Healthy
+    );
+    let mut corrupted = entries;
+    corrupted.get_mut(&retirement.name).unwrap().push(b' ');
+    assert!(retirement_inventory(failed, &expected, corrupted).is_err());
+    let early = retirement_inventory(
+        failed,
+        &expected,
+        inventory_fixture(&journal, Counter::First),
+    )
+    .unwrap();
+    assert!(early.bytes.is_none());
+    assert!(observe(&early.remaining).is_err());
+    let mut missing = retry.remaining;
+    missing.remove(&filename(good, Counter::Stable));
+    assert!(observe(&missing).is_err());
+}
+
+#[test]
 fn interrupted_blessing_resumes_only_matching_persisted_intent_and_unchanged_bytes() {
     use crate::recovery::records::{
         deployment::sha256,
@@ -387,6 +567,20 @@ fn interrupted_blessing_resumes_only_matching_persisted_intent_and_unchanged_byt
     assert_eq!(approved.previous(), journal.healthy());
     assert_eq!(approved.healthy(), journal.candidate());
     assert_eq!(approved.selected_config_generation(), 2);
+    health.verify_completed(&approved, &publication).unwrap();
+    assert_eq!(
+        reconcile_impl(
+            &layout,
+            &approved,
+            &options(candidate, true),
+            &firmware,
+            &stable,
+            Some(&health)
+        )
+        .unwrap()
+        .decision(),
+        BootDecision::Healthy
+    );
     // Rebooted after native blessing has no volatile count variable.
     let rebooted = firmware_fixture(candidate, Counter::Stable);
     assert_eq!(
@@ -430,5 +624,129 @@ fn interrupted_blessing_resumes_only_matching_persisted_intent_and_unchanged_byt
             Some(&health)
         )
         .is_err()
+    );
+}
+
+#[test]
+fn repeated_approval_binds_and_retires_only_the_older_previous_entry() {
+    use crate::recovery::records::{
+        deployment::sha256,
+        state::Configuration,
+        transaction::receipts::{HealthIntent, Publication},
+    };
+    let digest = "b".repeat(64);
+    let oldest = Entry::new(&"d".repeat(64), 8).unwrap();
+    let initial = Transaction::installed(oldest.deployment_id(), 8, &digest)
+        .unwrap()
+        .approve(&oldest, &digest)
+        .unwrap();
+    let first = initial
+        .prepare(Operation::Update, &"a".repeat(64))
+        .unwrap()
+        .staged()
+        .unwrap()
+        .begin_trial()
+        .unwrap()
+        .published(&digest)
+        .unwrap();
+    let first_config = Configuration::selected(2, &"a".repeat(64), Some(1), 1, &digest).unwrap();
+    let healthy = first
+        .select_candidate(&first_config)
+        .unwrap()
+        .approve(first.candidate().unwrap(), &digest)
+        .unwrap();
+    let trial = healthy
+        .prepare(Operation::Update, &"e".repeat(64))
+        .unwrap()
+        .staged()
+        .unwrap()
+        .begin_trial()
+        .unwrap();
+    let candidate = trial.candidate().unwrap();
+    let good = trial.healthy().unwrap();
+    let entry_digest = sha256(render(&layout(), candidate, true).as_bytes()).unwrap();
+    let publication = Publication::parse(format!("kind=linos-publication\nformat=1\ntransaction={}\nsource_journal_generation={}\nsource_config_generation=2\nhealthy_id={}\nhealthy_entry_transaction={}\ncandidate_id={}\ncandidate_entry_transaction={}\nentry_sha256={entry_digest}\nkernel_sha256={digest}\ninitramfs_sha256={digest}\n", trial.transaction(), trial.generation(), good.deployment_id(), good.transaction(), candidate.deployment_id(), candidate.transaction()).as_bytes()).unwrap();
+    let published = trial.published(&publication.digest().unwrap()).unwrap();
+    let configuration =
+        Configuration::selected(3, candidate.deployment_id(), Some(2), 1, &digest).unwrap();
+    let selected = published.select_candidate(&configuration).unwrap();
+    let mut entries = inventory_fixture(&selected, Counter::First);
+    let firmware = firmware_fixture(candidate, Counter::First);
+    let observed = reconcile(
+        &layout(),
+        &selected,
+        &options(candidate, true),
+        &firmware,
+        &entries,
+    )
+    .unwrap();
+    let health = HealthIntent::new(&selected, &publication, &observed).unwrap();
+    assert_eq!(health.previous(), Some(&oldest));
+    let parsed = HealthIntent::parse(health.encode().as_bytes()).unwrap();
+    assert_eq!(parsed, health);
+    let intent = selected.health_intent(&health.digest().unwrap()).unwrap();
+    let completed = intent
+        .approve(candidate, &health.digest().unwrap())
+        .unwrap();
+    health.verify_completed(&completed, &publication).unwrap();
+    let bytes = entries
+        .remove(&filename(candidate, Counter::First))
+        .unwrap();
+    entries.insert(filename(candidate, Counter::Stable), bytes);
+    assert!(
+        reconcile_impl(
+            &layout(),
+            &completed,
+            &options(candidate, true),
+            &firmware,
+            &entries,
+            Some(&health)
+        )
+        .is_err()
+    );
+    let retirement = approval_retirement_inventory(&completed, &health, entries.clone()).unwrap();
+    assert_eq!(retirement.name, Some(filename(&oldest, Counter::Stable)));
+    assert_eq!(
+        reconcile_impl(
+            &layout(),
+            &completed,
+            &options(candidate, true),
+            &firmware,
+            &retirement.remaining,
+            Some(&health)
+        )
+        .unwrap()
+        .decision(),
+        BootDecision::Healthy
+    );
+    assert!(
+        retirement
+            .remaining
+            .contains_key(&filename(good, Counter::Stable))
+    );
+    assert!(
+        approval_retirement_inventory(&completed, &health, retirement.remaining)
+            .unwrap()
+            .name
+            .is_none()
+    );
+    let mut tampered = entries;
+    tampered
+        .get_mut(&filename(&oldest, Counter::Stable))
+        .unwrap()
+        .push(b' ');
+    assert!(approval_retirement_inventory(&completed, &health, tampered).is_err());
+    let legacy = health
+        .encode()
+        .replace("format=2\n", "format=1\n")
+        .lines()
+        .take(16)
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    assert!(
+        HealthIntent::parse(legacy.as_bytes())
+            .unwrap()
+            .verify(&selected, &publication)
+            .is_err()
     );
 }

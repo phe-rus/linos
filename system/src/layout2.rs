@@ -3,9 +3,10 @@ fn main() {
         [command] if command == "prepare-root" => linos::recovery::boot::prepare_root(),
         [command] if command == "mount-state" => linos::recovery::boot::mount_state(),
         [command] if command == "verify" => linos::recovery::boot::verify_running(),
+        [command] if command == "health" => linos::recovery::boot::approve_running_boot(),
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "Usage: linos-layout2 prepare-root|mount-state|verify",
+            "Usage: linos-layout2 prepare-root|mount-state|verify|health",
         )),
     };
     if let Err(error) = result {

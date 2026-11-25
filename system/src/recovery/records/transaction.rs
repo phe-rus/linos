@@ -2,6 +2,7 @@
 //! These checks do not authenticate firmware, receipts or deployment contents.
 
 pub mod boot;
+pub mod install;
 pub mod journal;
 pub mod receipts;
 

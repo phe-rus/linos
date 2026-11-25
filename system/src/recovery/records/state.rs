@@ -14,7 +14,7 @@ pub(super) fn decimal(value: &str) -> io::Result<u64> {
     value.parse().map_err(invalid)
 }
 
-pub(super) fn positive(value: &str) -> io::Result<u64> {
+pub(crate) fn positive(value: &str) -> io::Result<u64> {
     let value = decimal(value)?;
     if value == 0 {
         return Err(invalid("Configuration generations start at one"));
@@ -44,6 +44,126 @@ pub struct Configuration {
 }
 
 impl Configuration {
+    /// Verify an unselected prepared tree against the still authoritative source.
+    /// Once selected, the current tree is mutable and must not be compared to its
+    /// creation digest during ordinary boot.
+    pub fn verify_prepared_merge<'a>(
+        &self,
+        bytes: &'a [u8],
+        journal: &super::transaction::Transaction,
+    ) -> io::Result<&'a str> {
+        self.verify_prepared_merge_at(bytes, journal, journal.generation())
+    }
+
+    /// A committed fallback intent advances the journal once after its merge.
+    /// Callers must verify that receipt before supplying its source generation.
+    pub(crate) fn verify_prepared_merge_at<'a>(
+        &self,
+        bytes: &'a [u8],
+        journal: &super::transaction::Transaction,
+        source_generation: u64,
+    ) -> io::Result<&'a str> {
+        self.verify_merge_receipt(bytes)?;
+        let text = std::str::from_utf8(bytes).map_err(invalid)?;
+        let value = |key: &str| {
+            text.lines()
+                .find_map(|line| line.strip_prefix(key))
+                .ok_or_else(|| invalid("Missing prepared configuration receipt field"))
+        };
+        if positive(value("transaction=")?)? != journal.transaction()
+            || decimal(value("source_journal_generation=")?)? != source_generation
+            || positive(value("source_config_generation=")?)?
+                != journal.selected_config_generation()
+            || value("source_deployment_id=")? != journal.selected_deployment_id()
+        {
+            return Err(invalid("Prepared configuration has a stale merge source"));
+        }
+        value("target_tree_sha256=")
+    }
+
+    pub fn initial(
+        deployment_id: &str,
+        schema: u32,
+        tree_sha256: &str,
+    ) -> io::Result<(Self, String)> {
+        hash(deployment_id)?;
+        hash(tree_sha256)?;
+        let receipt = format!(
+            "kind=linos-configuration-initial\nformat=1\ngeneration=1\ndeployment_id={deployment_id}\nschema={schema}\ntree_sha256={tree_sha256}\n"
+        );
+        let configuration = Self::selected(
+            1,
+            deployment_id,
+            None,
+            schema,
+            &super::deployment::sha256(receipt.as_bytes())?,
+        )?;
+        Ok((configuration, receipt))
+    }
+    /// Check creation provenance. Current credentials and keys remain mutable.
+    pub fn verify_merge_receipt(&self, bytes: &[u8]) -> io::Result<()> {
+        if super::deployment::sha256(bytes)? != self.merge_receipt_sha256 {
+            return Err(invalid("Configuration receipt digest mismatch"));
+        }
+        if self.generation == 1 {
+            let f = ordered(
+                bytes,
+                [
+                    "kind",
+                    "format",
+                    "generation",
+                    "deployment_id",
+                    "schema",
+                    "tree_sha256",
+                ],
+            )?;
+            if f[0] != "linos-configuration-initial"
+                || f[1] != "1"
+                || f[2] != "1"
+                || f[3] != self.deployment_id
+                || schema(f[4])? != self.schema
+            {
+                return Err(invalid(
+                    "Initial configuration receipt does not bind its record",
+                ));
+            }
+            hash(f[5])?;
+        } else {
+            let f = ordered(
+                bytes,
+                [
+                    "kind",
+                    "format",
+                    "transaction",
+                    "source_journal_generation",
+                    "source_config_generation",
+                    "selected_config_generation",
+                    "schema",
+                    "source_deployment_id",
+                    "target_deployment_id",
+                    "source_tree_sha256",
+                    "target_tree_sha256",
+                ],
+            )?;
+            if f[0] != "linos-configuration-merge"
+                || f[1] != "1"
+                || Some(positive(f[4])?) != self.parent_generation
+                || positive(f[5])? != self.generation
+                || schema(f[6])? != self.schema
+                || f[8] != self.deployment_id
+            {
+                return Err(invalid(
+                    "Merged configuration receipt does not bind current record lineage",
+                ));
+            }
+            positive(f[2])?;
+            decimal(f[3])?;
+            for value in &f[7..] {
+                hash(value)?;
+            }
+        }
+        Ok(())
+    }
     pub fn selected(
         generation: u64,
         deployment_id: &str,
@@ -262,6 +382,69 @@ mod tests {
             "kind=linos-service-state\nformat=1\nservice_id={id}\nschema={schema}\nattachment={attachment}\ncontract_sha256={}\nmigration_receipt_sha256={receipt}\n",
             "c".repeat(64)
         )
+    }
+
+    #[test]
+    fn creation_receipts_bind_lineage_schema_and_exact_bytes() {
+        let id = "a".repeat(64);
+        let (initial, receipt) = Configuration::initial(&id, 1, &"c".repeat(64)).unwrap();
+        initial.verify_merge_receipt(receipt.as_bytes()).unwrap();
+        assert!(
+            initial
+                .verify_merge_receipt(receipt.replace("schema=1", "schema=2").as_bytes())
+                .is_err()
+        );
+        let wrong_owner =
+            Configuration::selected(1, &"d".repeat(64), None, 1, initial.merge_receipt_sha256())
+                .unwrap();
+        assert!(
+            wrong_owner
+                .verify_merge_receipt(receipt.as_bytes())
+                .is_err()
+        );
+        let journal =
+            super::super::transaction::Transaction::installed(&id, 1, &"b".repeat(64)).unwrap();
+        let merged = format!(
+            "kind=linos-configuration-merge\nformat=1\ntransaction=1\nsource_journal_generation=0\nsource_config_generation=1\nselected_config_generation=2\nschema=1\nsource_deployment_id={id}\ntarget_deployment_id={}\nsource_tree_sha256={}\ntarget_tree_sha256={}\n",
+            "d".repeat(64),
+            "c".repeat(64),
+            "e".repeat(64),
+        );
+        let selected = Configuration::selected(
+            2,
+            &"d".repeat(64),
+            Some(1),
+            1,
+            &super::super::deployment::sha256(merged.as_bytes()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            selected
+                .verify_prepared_merge(merged.as_bytes(), &journal)
+                .unwrap(),
+            "e".repeat(64)
+        );
+        for (from, to) in [
+            ("source_journal_generation=0", "source_journal_generation=1"),
+            ("schema=1", "schema=2"),
+            ("source_config_generation=1", "source_config_generation=2"),
+            ("transaction=1", "transaction=2"),
+        ] {
+            let changed = merged.replace(from, to);
+            let record = Configuration::selected(
+                2,
+                &"d".repeat(64),
+                Some(1),
+                1,
+                &super::super::deployment::sha256(changed.as_bytes()).unwrap(),
+            )
+            .unwrap();
+            assert!(
+                record
+                    .verify_prepared_merge(changed.as_bytes(), &journal)
+                    .is_err()
+            );
+        }
     }
 
     #[test]

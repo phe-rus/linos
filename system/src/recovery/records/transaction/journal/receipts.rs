@@ -62,6 +62,102 @@ fn read(directory: &File, name: &str) -> io::Result<Vec<u8>> {
 }
 
 impl Journal {
+    /// The installer has verified and synced all target artifacts and Recovery.
+    /// Store publication evidence before making InstallPending authoritative.
+    pub fn initialize_install(
+        &self,
+        layout: &Layout,
+        manifest: &OfficialManifest,
+        configuration: &crate::recovery::records::state::Configuration,
+        recovery: &crate::recovery::records::recovery::OfficialRecovery,
+        transaction: u64,
+    ) -> io::Result<Transaction> {
+        if self.read()?.is_some() {
+            return Err(invalid("Installation journal already exists"));
+        }
+        let receipt = super::super::install::Installation::new(
+            layout,
+            manifest,
+            configuration,
+            recovery,
+            transaction,
+        )?;
+        let digest = self.store_receipt(transaction, receipt.encode().as_bytes())?;
+        self.initialize(manifest.id(), transaction, &digest)
+    }
+
+    pub fn initial_publication(
+        &self,
+        expected: &Transaction,
+    ) -> io::Result<super::super::install::Installation> {
+        self.require_current(expected)?;
+        let digest = expected
+            .publication_receipt_sha256()
+            .ok_or_else(|| invalid("Missing initial publication receipt"))?;
+        super::super::install::Installation::parse(
+            &self.load_receipt(expected.transaction(), digest)?,
+        )
+    }
+
+    /// Native identity/setup readiness and mount checks must precede this call.
+    /// Initial publication uses a stable entry, so no counted blessing is needed.
+    pub fn approve_initial(
+        &self,
+        expected: &Transaction,
+        layout: &Layout,
+        manifest: &OfficialManifest,
+        configuration: &crate::recovery::records::state::Configuration,
+        observed: &boot::Observation,
+    ) -> io::Result<Transaction> {
+        let publication = self.initial_publication(expected)?;
+        publication.verify(expected, layout, manifest, configuration)?;
+        if expected.phase() != super::super::Phase::InstallPending
+            || observed.decision() != BootDecision::InitialSetup
+            || observed.journal_generation() != expected.generation()
+            || observed.selectors().entry.deployment_id() != publication.deployment_id()
+            || observed.selectors().entry.transaction() != publication.transaction()
+            || observed.entry_sha256() != publication.entry_sha256()
+        {
+            return Err(invalid(
+                "Initial health observation differs from installation",
+            ));
+        }
+        let digest = self.store_receipt(
+            expected.transaction(),
+            publication.health_receipt()?.as_bytes(),
+        )?;
+        self.apply(
+            expected,
+            Event::Approve {
+                observed: &observed.selectors().entry,
+                receipt: &digest,
+            },
+        )
+    }
+
+    pub fn verify_initial_health(
+        &self,
+        expected: &Transaction,
+        layout: &Layout,
+        manifest: &OfficialManifest,
+        configuration: &crate::recovery::records::state::Configuration,
+    ) -> io::Result<()> {
+        let publication = self.initial_publication(expected)?;
+        publication.verify(expected, layout, manifest, configuration)?;
+        if expected.phase() != super::super::Phase::Healthy {
+            return Err(invalid("Initial baseline is not healthy"));
+        }
+        let digest = expected
+            .health_receipt_sha256()
+            .ok_or_else(|| invalid("Missing initial health receipt"))?;
+        if self.load_receipt(expected.transaction(), digest)?
+            != publication.health_receipt()?.as_bytes()
+        {
+            return Err(invalid("Initial health receipt differs from installation"));
+        }
+        Ok(())
+    }
+
     pub(crate) fn persist_receipt(
         &self,
         expected: &Transaction,
@@ -84,13 +180,41 @@ impl Journal {
         self.require_current(expected)?;
         let publication = self.publication(expected)?;
         publication.verify(expected, layout, failed)?;
-        if expected.health_receipt_sha256() == Some(receipt.digest()?.as_str()) {
+        if let Some(existing) = self.fallback_intent(expected)? {
+            if existing != *receipt {
+                return Err(invalid("Conflicting durable fallback intent"));
+            }
             receipt.verify_committed(expected, &publication, configuration, target)?;
             return Ok(expected.clone());
         }
         receipt.verify_before_intent(expected, &publication, configuration, target)?;
         let digest = self.store_receipt(expected.transaction(), receipt.encode().as_bytes())?;
         self.apply(expected, Event::FallbackIntent { receipt: &digest })
+    }
+
+    /// Distinguish a prior approval from an actual fallback decision. Corrupt,
+    /// missing or unknown pointed receipts never mean absence of intent.
+    pub fn fallback_intent(&self, expected: &Transaction) -> io::Result<Option<FallbackReceipt>> {
+        self.require_current(expected)?;
+        let Some(digest) = expected.health_receipt_sha256() else {
+            return Ok(None);
+        };
+        let bytes = self.load_receipt(expected.transaction(), digest)?;
+        if let Ok(receipt) = FallbackReceipt::parse(&bytes) {
+            return Ok(Some(receipt));
+        }
+        let approval = HealthIntent::parse(&bytes)?;
+        match expected.phase() {
+            super::super::Phase::Trial => {
+                approval.verify(expected, &self.publication(expected)?)?
+            }
+            super::super::Phase::RollbackRequired => {
+                approval.verify_exhausted(expected, &self.publication(expected)?)?
+            }
+            super::super::Phase::Healthy => {}
+            _ => return Err(invalid("Unexpected approval receipt phase")),
+        }
+        Ok(None)
     }
 
     pub fn resume_fallback(
@@ -270,6 +394,10 @@ impl Journal {
         self.require_current(expected)?;
         let publication = self.publication(expected)?;
         let health = self.health_intent(expected)?;
+        if expected.phase() == super::super::Phase::Healthy {
+            boot::retire_previous(layout, expected, manifest, &publication, &health)?;
+            return Ok(expected.clone());
+        }
         let observed = boot::inspect_approval(layout, expected, manifest, &publication, &health)?;
         if observed.decision() != BootDecision::ResumeApproval {
             return Err(invalid(
@@ -277,13 +405,15 @@ impl Journal {
             ));
         }
         boot::sync_approved_entry(layout, expected, manifest, &publication, &health)?;
-        self.apply(
+        let completed = self.apply(
             expected,
             Event::Approve {
                 observed: health.candidate(),
                 receipt: &health.digest()?,
             },
-        )
+        )?;
+        boot::retire_previous(layout, &completed, manifest, &publication, &health)?;
+        Ok(completed)
     }
 
     fn require_current(&self, expected: &Transaction) -> io::Result<()> {
@@ -301,6 +431,110 @@ mod tests {
         os::unix::fs::PermissionsExt,
         sync::atomic::{AtomicU64, Ordering},
     };
+
+    #[test]
+    fn pointed_receipts_distinguish_approval_exhaustion_and_fallback_without_ignoring_damage() {
+        use crate::recovery::records::{
+            state::Configuration,
+            transaction::{Entry, Operation},
+        };
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("target/transaction-receipt-tests")
+            .join(format!("fallback-{}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let journal = Journal::open(&path).unwrap();
+        let old = "a".repeat(64);
+        let new = "c".repeat(64);
+        let hash = "b".repeat(64);
+        let initial = journal.initialize(&old, 1, &hash).unwrap();
+        let healthy = journal
+            .apply(
+                &initial,
+                Event::Approve {
+                    observed: &Entry::new(&old, 1).unwrap(),
+                    receipt: &hash,
+                },
+            )
+            .unwrap();
+        let preparing = journal
+            .apply(
+                &healthy,
+                Event::Prepare {
+                    operation: Operation::Update,
+                    deployment_id: &new,
+                },
+            )
+            .unwrap();
+        let staged = journal.apply(&preparing, Event::Staged).unwrap();
+        let trial = journal.apply(&staged, Event::BeginTrial).unwrap();
+        let publication = Publication::parse(format!(
+            "kind=linos-publication\nformat=1\ntransaction=2\nsource_journal_generation={}\nsource_config_generation=1\nhealthy_id={old}\nhealthy_entry_transaction=1\ncandidate_id={new}\ncandidate_entry_transaction=2\nentry_sha256={hash}\nkernel_sha256={hash}\ninitramfs_sha256={hash}\n", trial.generation()
+        ).as_bytes()).unwrap();
+        let digest = journal
+            .persist_receipt(&trial, publication.encode().as_bytes())
+            .unwrap();
+        let published = journal
+            .apply(&trial, Event::Published { receipt: &digest })
+            .unwrap();
+        let config = Configuration::selected(2, &new, Some(1), 1, &hash).unwrap();
+        let selected = journal
+            .apply(
+                &published,
+                Event::SelectCandidate {
+                    configuration: &config,
+                },
+            )
+            .unwrap();
+        let approval = HealthIntent::parse(format!(
+            "kind=linos-health\nformat=1\ntransaction=2\nsource_journal_generation={}\nsource_config_generation=1\nselected_config_generation=2\nhealthy_id={old}\nhealthy_entry_transaction=1\ncandidate_id={new}\ncandidate_entry_transaction=2\npublication_receipt_sha256={digest}\nentry_sha256={hash}\nkernel_sha256={hash}\ninitramfs_sha256={hash}\nobserved_entry_path=/loader/entries/linos-2-{new}+1-1.conf\ndecision=approve\n", selected.generation()
+        ).as_bytes()).unwrap();
+        let approval_digest = journal
+            .persist_receipt(&selected, approval.encode().as_bytes())
+            .unwrap();
+        let intent = journal
+            .apply(
+                &selected,
+                Event::HealthIntent {
+                    receipt: &approval_digest,
+                },
+            )
+            .unwrap();
+        assert!(journal.fallback_intent(&intent).unwrap().is_none());
+        let exhausted = journal.apply(&intent, Event::Exhausted).unwrap();
+        assert!(journal.fallback_intent(&exhausted).unwrap().is_none());
+        assert!(journal.fallback_intent(&intent).is_err());
+        let fallback = FallbackReceipt::parse(format!(
+            "kind=linos-health\nformat=1\ntransaction=2\nsource_journal_generation={}\nsource_config_generation=2\nselected_config_generation=3\nhealthy_id={old}\nhealthy_entry_transaction=1\ncandidate_id={new}\ncandidate_entry_transaction=2\npublication_receipt_sha256={digest}\nentry_sha256={hash}\nkernel_sha256={hash}\ninitramfs_sha256={hash}\nobserved_entry_path=/loader/entries/linos-1-{old}.conf\ndecision=fallback\n", exhausted.generation()
+        ).as_bytes()).unwrap();
+        let fallback_digest = journal
+            .persist_receipt(&exhausted, fallback.encode().as_bytes())
+            .unwrap();
+        let recorded = journal
+            .apply(
+                &exhausted,
+                Event::FallbackIntent {
+                    receipt: &fallback_digest,
+                },
+            )
+            .unwrap();
+        assert_eq!(journal.fallback_intent(&recorded).unwrap(), Some(fallback));
+        let record = path.join(format!("receipts/2/{fallback_digest}.record"));
+        std::fs::write(&record, b"tampered fallback").unwrap();
+        assert!(journal.fallback_intent(&recorded).is_err());
+        std::fs::remove_file(&record).unwrap();
+        assert!(journal.fallback_intent(&recorded).is_err());
+        let unknown = journal
+            .persist_receipt(&recorded, b"kind=unknown\nformat=1\n")
+            .unwrap();
+        let unknown_intent = journal
+            .apply(&recorded, Event::FallbackIntent { receipt: &unknown })
+            .unwrap();
+        assert!(journal.fallback_intent(&unknown_intent).is_err());
+        drop(journal);
+        std::fs::remove_dir_all(path).unwrap();
+    }
 
     #[test]
     fn durable_receipts_are_immutable_digest_checked_and_private() {

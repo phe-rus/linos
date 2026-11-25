@@ -15,6 +15,10 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        Self::with_block_size("1024")
+    }
+
+    fn with_block_size(block_size: &str) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         // Sparse filesystem images stay on disk backed workspace storage.
         let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/deployment-artifact-tests");
@@ -41,6 +45,8 @@ impl Fixture {
                 "ext4",
                 "-F",
                 "-q",
+                "-b",
+                block_size,
                 "-E",
                 "lazy_itable_init=0,lazy_journal_init=0",
             ],
@@ -238,23 +244,47 @@ fn refuses_authentic_unclean_and_recovery_required_images_without_repair() {
 
 #[test]
 fn refuses_authentic_structural_corruption_even_with_a_clean_header() {
-    let fixture = Fixture::new();
-    // Mark an otherwise free block as allocated without allocating it to a file.
-    fixture.native("/usr/sbin/debugfs", &["-w", "-R", "setb 30000"]);
-    let header = Command::new("/usr/sbin/dumpe2fs")
-        .args(["-h"])
-        .arg(fixture.image())
-        .env("LC_ALL", "C")
-        .output()
-        .unwrap();
-    clean_header(std::str::from_utf8(&header.stdout).unwrap()).unwrap();
-    let manifest = fixture.authenticated();
-    let before = sha256_file(&File::open(fixture.image()).unwrap()).unwrap();
-    assert!(manifest.verify_artifacts(&fixture.directory()).is_err());
-    assert_eq!(
-        sha256_file(&File::open(fixture.image()).unwrap()).unwrap(),
-        before
-    );
+    for block_size in ["1024", "4096"] {
+        let fixture = Fixture::with_block_size(block_size);
+        // debugfs can exit successfully after an invalid block operation. Select
+        // an actual free block instead of assuming the host's filesystem geometry.
+        let free = Command::new("/usr/sbin/debugfs")
+            .args(["-R", "ffb"])
+            .arg(fixture.image())
+            .env("LC_ALL", "C")
+            .output()
+            .unwrap();
+        assert!(free.status.success());
+        let block: u64 = std::str::from_utf8(&free.stdout)
+            .unwrap()
+            .trim()
+            .strip_prefix("Free blocks found: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        fixture.native("/usr/sbin/debugfs", &["-w", "-R", &format!("setb {block}")]);
+        let check = Command::new("/usr/sbin/e2fsck")
+            .args(["-f", "-n"])
+            .arg(fixture.image())
+            .env("LC_ALL", "C")
+            .output()
+            .unwrap();
+        assert_eq!(check.status.code(), Some(4), "Fixture must contain errors");
+        let header = Command::new("/usr/sbin/dumpe2fs")
+            .args(["-h"])
+            .arg(fixture.image())
+            .env("LC_ALL", "C")
+            .output()
+            .unwrap();
+        clean_header(std::str::from_utf8(&header.stdout).unwrap()).unwrap();
+        let manifest = fixture.authenticated();
+        let before = sha256_file(&File::open(fixture.image()).unwrap()).unwrap();
+        assert!(manifest.verify_artifacts(&fixture.directory()).is_err());
+        assert_eq!(
+            sha256_file(&File::open(fixture.image()).unwrap()).unwrap(),
+            before
+        );
+    }
 }
 
 #[test]

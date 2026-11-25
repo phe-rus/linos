@@ -34,6 +34,79 @@ qualification stay separate. No push was requested for this commit checkpoint.
 
 ### Active implementation continuation after commit 7730bc1
 
+The continuation after `bc9abd4` includes native health and initial publication
+receipt coordination in addition to candidate/fallback preparation. CI run
+[45621702289](https://github.com/phe-rus/linos/actions/runs/45621702289)
+failed before construction in the authentic ext4 corruption fixture. Its fixed
+block 30000 is outside a 32 MiB filesystem with 4 KiB blocks, and `debugfs` returns
+success despite that invalid operation. The fixture now selects a real free block,
+asserts native checker exit 4 and exercises both 1 KiB and 4 KiB block sizes.
+Production filesystem verification remains strict and unchanged.
+
+Early boot now calls candidate configuration preparation while holding the volume
+journal lock, before attaching the candidate root. It authenticates the selected
+source and candidate, verifies source creation receipts, mounts vendor roots through
+temporary read only/no replay loop devices, composes the current configuration,
+publishes its tree and receipts, rechecks firmware/assets/accounts/service compatibility
+and selects the candidate generation. Initramfs includes native account tools.
+Interrupted publication after tree rename can reconstruct the final configuration
+record from matching durable intent; retries check both quiescent tree digests.
+Ordinary selected configuration checks verify creation provenance without requiring
+current passwords or keys to match their original tree digest.
+
+Exhausted fallback now also runs in early boot before root attachment. It requires
+the exact native exhausted observation, authenticates the failed publication and
+healthy target, merges from the latest journal selected configuration and checks
+current accounts/services before committing fallback intent and selection. A prior
+approval can be superseded only if its exact digest was committed before exhaustion.
+Conflicting fallback intents refuse. Retry verifies the original merge generation
+across the intent's journal advance; completed selection resumes exact failed-entry
+retirement before ordinary inventory inspection. No trial entry is recreated.
+
+Generation allocation preserves published but unselected trial generations and
+reserves a new monotonic number for fallback. It reuses only one matching source/
+target intent, bounds the record inventory and refuses ambiguity or overflow.
+New tests cover approval/fallback receipt distinction, missing/tampered pointed
+receipts, source generation binding, unselected publication, allocation conflicts
+and exact exhausted-entry retirement/retry. Native retirement tests use supplied
+entry/firmware fixtures and do not perform host EFI writes.
+
+Native health now shares the locked mount/identity/configuration gate, verifies
+current enrolled administrator credentials/authorization and login readiness,
+persists approval before native systemd blessing and reconciles interrupted
+blessing. Version 2 approval receipts bind the older previous entry and its exact
+bytes before it becomes unreferenced, enabling receipt backed retirement/retry
+after a subsequent successful trial. Existing version 1 approvals are readable
+only where they can supply complete authority, with no missing previous pair.
+The exact volatile firmware count path is accepted after rename only under its
+committed approval, including after the Healthy commit in the same boot.
+
+Initial installation publication receipts bind layout/baseline, authenticated
+Server/Recovery identities, configuration record and EFI entry/boot hashes. The
+journal stores publication before InstallPending and stores a setup ready receipt
+before initial Healthy. Initial unclaimed readiness requires initialized device/
+hostname identity and the actual enrollment service process attached to its
+console; update trials instead require the existing enrolled owner, usable local
+administrator, setup marker, login service and native kernel readiness handshake.
+The package wires a dedicated layout 2 health unit with a bounded deadline and
+reboot on failure. Layout 2 construction masks legacy A/B health in its image.
+
+Validation passed all 152 library/init/Recovery/update integration tests, strict
+library/init/Recovery/layout2 Clippy including tests, formatting, diff checks and
+changed shell syntax checks. Compiler jobs and test threads were limited to one.
+The latest test log is `target/layout2-health-integration-tests.log`. The health
+unit dependency graph passed local systemd verification with only ExecStart
+substituted by `/usr/bin/true`; the real binary is not installed on the host.
+
+Candidate preparation, exhausted fallback, interrupted approval and native health
+are connected. The three partition target installer still must verify/copy
+artifacts, seed persistent trees/configuration generation 1 and invoke initial
+publication; independent Recovery/offline CI assembly remains unfinished.
+Temporary loop mounts, native account tools, health/blessing and enrollment
+process checks compile but have not run in a layout 2 guest. No local OS build,
+VM boot or release occurred. The next CI run constructs a generic signed Server
+deployment, not completed installer media or local VM qualification.
+
 The owner explicitly requested completing the four prerequisites for local layout
 2 VM qualification, not merely another planning/status pass. Work after the
 commit is ongoing and uncommitted. Keep building toward that journey, with
@@ -44,17 +117,18 @@ generic deployment builder. `linos-layout2` implements fixed-path local-top
 partition/layout/signature preflight, exact read only loop attachment,
 local-bottom persistent binds and real-init receipt/mount verification. The
 package installs conditional initramfs hooks and a sysinit gate; a legacy image
-without the explicit layout marker/trust key keeps its existing path. A candidate
-needing a new configuration selection or fallback reconciliation still refuses
-in the top-level helper; the generation/publication coordinator is unfinished.
-Do not call those integration paths implemented just because the libraries exist.
+without the explicit layout marker/trust key keeps its existing path. At the initial
+`163a0e4` checkpoint, candidate selection and fallback still refused; the latest
+continuation above supersedes that limitation. Native guest qualification remains
+outstanding despite the new top level calls.
 
 Recovery and offline signing-role authenticators and bounded sequential chunk
 reconstruction now compile; real ephemeral Ed25519 tests reject substituted
 domains/keys and malformed signed metadata. New native service registry loading
 checks retained signed source metadata, exact descriptor hashes and observed path
 ownership. Prepared generation composition joins merge/account planning and native
-offline account creation, but durable tree/record publication remains to be wired.
+offline account creation. Durable publication and candidate/fallback early boot
+coordination are connected in the latest uncommitted continuation above.
 
 `build/layout2-deployment.sh` runs OS construction only in CI. It restores the
 verified native base at source `717b45066d47c7509e1054f2b2d232e5aff5ceac`, installs
@@ -78,8 +152,8 @@ constant UTF16 chunk iterators that local Clippy 1.96 accepted. Both were correc
 without changing the bounded decoding rules. Prepared configuration tree/receipt
 publication now has a real filesystem test proving source preservation, durable
 publication without premature journal selection, idempotent retry and stale writer
-refusal. It passed locally. Candidate/fallback top-level boot coordination still
-needs to call this new publication API; no local VM qualification is implied.
+refusal. It passed locally. Candidate/fallback top-level calls were pending at that
+checkpoint and are now connected as described above; no local VM qualification is implied.
 
 Current additions: strict signed account/service list parsers and authenticated
 metadata reads; native passwd/shadow/group/gshadow cross checks; collision and

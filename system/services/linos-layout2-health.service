@@ -1,0 +1,23 @@
+[Unit]
+Description=Verify Linos layout 2 boot health and approve its exact deployment
+ConditionPathExists=/usr/lib/linos/storage-layout
+Requires=linos-layout2-verify.service linos-first-boot.service
+Wants=linos-enroll.service
+After=linos-layout2-verify.service linos-first-boot.service
+Before=multi-user.target
+RequiresMountsFor=/var/lib/linos /efi
+FailureAction=reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linos/linos-layout2 health
+TimeoutStartSec=125
+User=root
+Group=root
+NoNewPrivileges=yes
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
