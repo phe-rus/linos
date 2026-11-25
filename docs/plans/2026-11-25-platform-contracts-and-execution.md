@@ -154,6 +154,14 @@ bytes. Failed jobs retain usable diagnostics. No release happens as a side effec
 
 ### Stage 2: storage, application ownership and recovery contract
 
+25 November design checkpoint: [spec 0005](../specs/0005-storage-recovery-contract/index.md)
+records the owner selected ext4 image deployment, current data preservation,
+managed APT, optional encryption boundary and ownership model. The independent
+review findings and revision alignment issues are closed in the written contracts.
+The owner accepted the assembled specification and authorized proceeding on
+25 November. Stage 2 design is complete. No new image behavior is established by
+this design review; Stage 3 implementation and qualification remain separate.
+
 Write a buildable spec before changing disk code. Decide filesystem and encryption boundaries,
 Linux path mappings, System/Applications package ownership, direct APT behavior, snapshot
 retention and disk full behavior. Define account/configuration/database migrations, application

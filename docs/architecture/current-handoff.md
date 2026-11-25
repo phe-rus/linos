@@ -55,6 +55,36 @@ three CRITICAL), ARM64 83 (80 HIGH, three CRITICAL). No fixed package versions a
 reported. The existing security maintenance decision remains unresolved; no gate
 was relaxed. Stage 2 storage/recovery design is next, before any layout changes.
 
+## Stage 2 accepted storage and Recovery contract
+
+The [assembled Stage 2 specification](../specs/0005-storage-recovery-contract/index.md)
+has owner design approval, with four implementation contracts and a source/alternatives
+record. The owner explicitly selected ext4 deployment images, current data preservation
+with incompatible rollback blocked, managed APT deployment transactions, optional
+Linos volume encryption with the plain path first, and the five record ownership model.
+
+The proposal specifies 1 GiB EFI, 4 GiB Recovery and the rest Linos on a 32 GiB
+minimum development virtual disk, read only loop mounted system images, current
+configuration generations, service schema checks, versioned signed records and
+owner local package provenance. It defines USB Recovery without a third root folder,
+offline image chunking, EFI transfer, retention/space reserves and an interruption
+matrix. These details are design, not behavior implemented in the existing images.
+
+The independent cross check completed and found six gaps: durable fallback/trial
+authority, service registry consistency, keyed account/configuration merging,
+Recovery/transport trust and installation ordering, owner packages across official
+upgrades, and package files hidden by writable mounts. The owner approved all six
+recommended fixes. The four child contracts and index include them. An independent
+closure check identified five alignment issues, which were resolved and checked
+again with no direct contradiction found among the revised rules. The rationale
+retains the findings/resolutions. The owner accepted the assembled spec on
+25 November 2026 and authorized proceeding. Stage 2 design is complete; the spec
+status tracks the still unbuilt Stage 3 implementation.
+No storage code, kernel input, disk image or VM was changed or
+built for this design. The five partition development baseline stays active.
+Security maintenance and physical qualification remain open. Begin Stage 3 only
+from the reviewed specification and retain the current baseline until parity passes.
+
 ## Owner direction and sequence
 
 Server only. First assess Linos against its product promise, Apple's published quality principles and established server platforms, then improve the demonstrated gaps. Run security and image qualification in CI, fix and rerun. Only after those gates pass, qualify a fresh native image locally, complete the beta support/recovery gates and publish an explicitly supported Server beta. Desktop and broader Assets/Store work are deferred until afterward.
