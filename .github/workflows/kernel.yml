@@ -47,9 +47,12 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v7
+      - name: Install GPT fixture tool
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gdisk
       - name: Validate Rust kernel tooling, initialization and recovery contracts
         run: |
           bash tests/candidate.sh
+          bash tests/layout-v2.sh
           cargo test --locked --manifest-path kernel/tools/Cargo.toml
           cargo test --locked --bin init
           cargo test --locked --lib --bin recovery --bin linos-update-image --bin linos-update-health --test update_image

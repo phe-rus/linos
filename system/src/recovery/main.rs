@@ -138,7 +138,7 @@ fn run(args: &[String]) -> io::Result<()> {
         [] => interactive(),
         [flag] if flag == "--help" || flag == "-h" => {
             println!(
-                "Usage: linos-recovery [status|disks|profile|payload|updates|plan /dev/DEVICE|--help]"
+                "Usage: linos-recovery [status|disks|profile|payload|updates|plan /dev/DEVICE|plan-v2 DISK_BYTES SECTOR_BYTES|--help]"
             );
             println!("Linos Server recovery console. All commands are read-only.");
             Ok(())
@@ -154,6 +154,34 @@ fn run(args: &[String]) -> io::Result<()> {
             update::inspect_journal(Path::new("/var/lib/linos/update-state"))
         }
         [command, device] if command == "plan" => planner::inspect(device, Path::new("/sys/block")),
+        [command, bytes, sector] if command == "plan-v2" => {
+            let number = |value: &str| {
+                value.parse::<u64>().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Expected a disk or sector size in bytes",
+                    )
+                })
+            };
+            let plan = layout::v2::server(number(bytes)?, number(sector)?)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+            println!("Linos Server layout 2 geometry (not applied)");
+            println!("Logical sector bytes: {}", plan.sector_bytes);
+            println!("Number Name First-LBA Last-LBA GPT-Type");
+            for (i, part) in plan.partitions.iter().enumerate() {
+                println!(
+                    "{} {} {} {} {}",
+                    i + 1,
+                    part.name,
+                    part.first_lba,
+                    part.last_lba,
+                    part.gpt_type
+                );
+            }
+            println!("Installation status: DISABLED");
+            println!("Geometry preview only. No device was opened or changed.");
+            Ok(())
+        }
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Unknown recovery command. Use --help.",

@@ -178,6 +178,11 @@ state machine and failure matrix cover interrupted writes, incompatible data and
 
 ### Stage 3: storage and unified Recovery implementation
 
+25 November first slice: the pure layout 2 geometry planner and explicit numeric
+Recovery preview are implemented, with boundary tests and disposable GPT file
+verification. Existing layout 1 remains active. No layout 2 installation, filesystems
+or boot has been implemented/qualified; see the current handoff for source/checks.
+
 Implement the agreed three partition design on disposable virtual disks. Adapt layout validation,
 updater, health approval, fallback and offline payload handling together. Recovery provides install,
 repair and rollback from one environment. Preserve Linux paths, credentials and user data per spec.

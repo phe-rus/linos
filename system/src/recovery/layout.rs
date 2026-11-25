@@ -1,3 +1,5 @@
+pub mod v2;
+
 pub struct PartitionPlan {
     pub label: &'static str,
     pub size_mib: u64,

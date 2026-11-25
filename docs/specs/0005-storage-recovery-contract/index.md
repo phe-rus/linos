@@ -1,8 +1,8 @@
 # 0005. Storage ownership and unified Recovery
 
 **Date**: 2026-11-25
-**Status**: Proposed
-**Design approval**: Accepted by the owner on 25 November 2026. Implementation has not started.
+**Status**: In Progress
+**Design approval**: Accepted by the owner on 25 November 2026. Stage 3 implementation is in progress.
 
 ## Summary
 

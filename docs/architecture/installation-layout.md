@@ -1,5 +1,12 @@
 # Linos 13 Server installation layout v1 (provisional)
 
+This remains the working development baseline. The owner accepted the separate
+[layout 2 contract](../specs/0005-storage-recovery-contract/index.md). Its first
+implementation slice adds only a pure geometry planner, available through
+`cargo run --locked --bin recovery -- plan-v2 34359738368 512`. That command accepts
+capacity/sector byte counts, never a device, and cannot apply the plan. Its GPT
+fixture is `bash tests/layout-v2.sh`; file based validation does not qualify an installer.
+
 The installer is not enabled. This specification defines a testable layout for
 an AMD64 UEFI Server image and can change before the first installable alpha.
 

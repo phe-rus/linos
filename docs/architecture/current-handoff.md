@@ -85,6 +85,30 @@ built for this design. The five partition development baseline stays active.
 Security maintenance and physical qualification remain open. Begin Stage 3 only
 from the reviewed specification and retain the current baseline until parity passes.
 
+## Stage 3 first slice: layout 2 geometry
+
+The accepted Stage 2 design is committed and pushed at `3b1ba72`.
+Stage 3 implementation has begun with `system/src/recovery/layout/v2.rs` and the
+read only `recovery plan-v2 DISK_BYTES SECTOR_BYTES` command. The planner computes
+three aligned inclusive sector ranges for 1 GiB EFI, 4 GiB Recovery and the Linos
+remainder, retaining 16 MiB for alignment/GPT at a 32 GiB development minimum.
+Geometry supports 512/4096 byte logical sectors; neither proves installation support.
+The old `plan /dev/DEVICE` and five partition calculation remain unchanged.
+
+Nineteen Recovery Rust tests pass, including four new boundary/overflow/alignment
+tests. Strict Recovery Clippy, formatting and shell syntax pass. The new
+`tests/layout-v2.sh` creates a fresh sparse regular file under disk backed `target/`,
+uses the Rust plan to write GPT with `sgdisk`, validates both GPT copies and all
+three names/ranges/type codes, and rejects a device path as numeric plan input.
+Evidence is retained at `target/layout-v2-tests/`; the sparse disk is removed.
+Actionlint passes, and the lightweight `kernel:validate` workflow now runs this fixture.
+
+This is geometry evidence only. No filesystems, boot helper, layout 2 record
+parser, installation or VM boot is implemented by this slice. No host block device
+was written; no full kernel or OS image build ran locally. Build step 1 remains
+partial: strict records/signatures and observed loop/bind ancestry are next.
+Security, physical installation and release gates remain open.
+
 ## Owner direction and sequence
 
 Server only. First assess Linos against its product promise, Apple's published quality principles and established server platforms, then improve the demonstrated gaps. Run security and image qualification in CI, fix and rerun. Only after those gates pass, qualify a fresh native image locally, complete the beta support/recovery gates and publish an explicitly supported Server beta. Desktop and broader Assets/Store work are deferred until afterward.
