@@ -8,7 +8,7 @@ use std::{
     io::{self, Read},
     os::{
         fd::AsRawFd,
-        unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt},
+        unix::fs::{FileExt, FileTypeExt, MetadataExt, OpenOptionsExt},
     },
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -264,6 +264,10 @@ fn node(name: &str, expected: Device) -> io::Result<File> {
     if !metadata.file_type().is_block_device() || Device::from_dev(metadata.rdev()) != expected {
         return Err(invalid("Block node differs from sysfs identity"));
     }
+    // O_NONBLOCK can open an empty optical drive successfully. Force a native
+    // media check so the caller can distinguish ENOMEDIUM/ENXIO from probe
+    // failures without interpreting tool error text or ignoring I/O errors.
+    file.read_at(&mut [0u8; 1], 0)?;
     Ok(file)
 }
 
