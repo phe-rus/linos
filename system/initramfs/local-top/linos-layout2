@@ -3,6 +3,12 @@ set -eu
 PREREQ=""
 case "${1:-}" in prereqs) echo "$PREREQ"; exit 0;; esac
 case " $(cat /proc/cmdline) " in *" linos.layout=2 "*) ;; *) exit 0;; esac
+# The loader identity is checked before systemd can mount EFI variables.
+if ! modprobe efivarfs || ! mount -t efivarfs -o nosuid,nodev,noexec efivarfs /sys/firmware/efi/efivars; then
+    echo 'Linos requires Recovery: EFI variable setup failed.' >&2
+    reboot -f
+    exit 1
+fi
 if ! /usr/lib/linos/linos-layout2 prepare-root; then
     echo 'Linos requires Recovery: early deployment validation failed.' >&2
     reboot -f

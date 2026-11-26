@@ -12,3 +12,4 @@ copy_file config /usr/lib/linos/trust/deployment.pem
 manual_add_modules loop
 manual_add_modules ext4
 manual_add_modules vfat
+manual_add_modules efivarfs

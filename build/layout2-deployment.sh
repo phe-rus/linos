@@ -61,6 +61,14 @@ lsinitramfs "$STAGE/boot/initrd.img-$VERSION" > "$WORK/initramfs-files"
 for member in usr/lib/linos/linos-layout2 usr/lib/linos/trust/deployment.pem scripts/local-top/linos-layout2 scripts/local-bottom/linos-layout2 usr/sbin/groupadd usr/sbin/useradd; do
     grep -Fxq "$member" "$WORK/initramfs-files" || { echo "Missing initramfs member: $member" >&2; exit 1; }
 done
+if grep -Fxq CONFIG_EFIVAR_FS=m "$STAGE/boot/config-$VERSION"; then
+    grep -Eq "(^|/)lib/modules/$VERSION/kernel/fs/efivarfs/efivarfs[.]ko([.](xz|gz|zst))?$" "$WORK/initramfs-files" || {
+        echo 'Missing initramfs EFI variable filesystem module' >&2
+        exit 1
+    }
+else
+    grep -Fxq CONFIG_EFIVAR_FS=y "$STAGE/boot/config-$VERSION"
+fi
 TARGET_DIR="${LINOS_TARGET_DIR:?verified userspace output directory}"
 TOOL="$TARGET_DIR/release/recovery"
 "$TOOL" accounts-v1 "$STAGE/etc" > "$WORK/deployment/accounts"
